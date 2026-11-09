@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+#
+# «يومي»: تقييم الملخصات العربية (T-Y06). ثلاثون حالة مجهّلة في cases.jsonl.
+#
+# التشغيل الفعلي على الخادم، بيد عبدالله أو بموافقته، والمفتاح في بيئة حاوية yawmi-api وحدها:
+#   ANTHROPIC_API_KEY=<من البيئة> npx promptfoo@latest eval -c api/eval/promptfooconfig.yaml
+# المعيار: لا أقل من 28 حالة من 30 لكل نموذج، ولا source_id خارج الحمولة في أي مخرج،
+# ثم يقرأ عبدالله خمس مخرجات ويحكم على عربيتها. لا مفتاح هنا ولا في أي ملف: اسم المتغير فقط.
+#
+# يقيس هذا التقييم سلوك البرومبت الحاكم (yawmi/ai/prompts/ar_system.md) كما هو، بلا مخرجات
+# مقيّدة بمخطط وبلا إعادة محاولة؛ فهو أشدّ من المسار الحقيقي الذي يضيف المخطط وإصلاحاً واحداً.
+# الحالات اصطناعية بالكامل، فلا بيانات صحية حقيقية تغادر الجهاز.
+description: "يومي: تقييم الملخصات العربية (30 حالة)"
+
+prompts:
+  - |-
+    [
+      {"role": "system", "content": {{ system_prompt | dump }}},
+      {"role": "user", "content": {{ request_json | dump }}}
+    ]
+
+providers:
+  - id: anthropic:messages:claude-haiku-5-5
+    label: haiku-5-5 (يومي)
+    config:
+      apiKeyEnvar: ANTHROPIC_API_KEY
+      max_tokens: 1024
+  - id: anthropic:messages:claude-sonnet-5-5
+    label: sonnet-5-5 (أسبوعي)
+    config:
+      apiKeyEnvar: ANTHROPIC_API_KEY
+      max_tokens: 1024
+  # DeepSeek معطّل افتراضياً. لتقييمه أزِل التعليق وضع DEEPSEEK_API_KEY في البيئة وحدها:
+  # - id: deepseek:deepseek-chat
+  #   label: deepseek-chat
+  #   config:
+  #     apiKeyEnvar: DEEPSEEK_API_KEY
+  #     max_tokens: 1024
+
+# الحالات والتأكيدات من cases.jsonl: كل حالة تحمل قائمة must_pass تُنفَّذ في promptfoo_support.js.
+tests: file://promptfoo_support.js:generate
+
+evaluateOptions:
+  maxConcurrency: 2
