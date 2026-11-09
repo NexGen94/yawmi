@@ -34,7 +34,7 @@ configs:
       until pg_isready -q; do n=$$((n+1)); [ $$n -lt 60 ] || { echo "yawmi-loader: database not ready"; exit 1; }; sleep 2; done
       PSQL="psql -v ON_ERROR_STOP=1 -v VERBOSITY=terse --no-psqlrc -q"
       base64 -d /yawmi/in/0001.b64 | gunzip -c > /tmp/0001.sql
-      printf '%s  %s\n' 477d9773ddc517479e19458cb5e71dfd6ebc451ea2635028f6209306e6a2d84d /tmp/0001.sql | sha256sum -c -
+      printf '%s  %s\n' 28eb6a9e01096c1e349a7faa3926f0826bacbc14cc5fe366e46351d58f14dad1 /tmp/0001.sql | sha256sum -c -
       sha256sum /tmp/0001.sql
       sed -i -e '/^[[:space:]]*BEGIN;[[:space:]]*$$/d' -e '/^[[:space:]]*COMMIT;[[:space:]]*$$/d' /tmp/0001.sql
       if [ ! -s /run/yawmi/yawmi_api_pw ]; then
@@ -50,7 +50,7 @@ configs:
       \if :todo
       BEGIN;
       \i /tmp/0001.sql
-      INSERT INTO yawmi.schema_migrations (filename) VALUES ('0001_yawmi_schema.sql');
+      INSERT INTO yawmi.schema_migrations (filename) VALUES ('0001_yawmi_schema.sql') ON CONFLICT DO NOTHING;
       COMMIT;
       \echo yawmi-loader: applied 0001_yawmi_schema.sql
       \else
@@ -64,36 +64,36 @@ configs:
       echo "yawmi-loader: schema step done"
   p0001:
     content: |
-      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
-      5H9603dm6dLpkfWlbNNmq9cn/wVjGz1xRh8AAA==
+      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
 volumes:
   raqib_secrets:
     name: raqib_secrets

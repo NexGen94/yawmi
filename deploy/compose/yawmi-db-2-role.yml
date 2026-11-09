@@ -21,12 +21,12 @@ services:
         target: /yawmi/load.sh
       - source: p0002
         target: /yawmi/in/0002.b64
+      - source: pseed
+        target: /yawmi/in/seed.b64
 configs:
   load:
     content: |
       #!/bin/sh
-      echo "yawmi-loader: api/db/seed/habits.sql is not embedded in this file: regenerate with deploy/tools/build_loaders.py once the seed exists"
-      exit 1
       set -e
       umask 077
       trap 'rm -f /tmp/*.sql' EXIT
@@ -36,9 +36,13 @@ configs:
       until pg_isready -q; do n=$$((n+1)); [ $$n -lt 60 ] || { echo "yawmi-loader: database not ready"; exit 1; }; sleep 2; done
       PSQL="psql -v ON_ERROR_STOP=1 -v VERBOSITY=terse --no-psqlrc -q"
       base64 -d /yawmi/in/0002.b64 | gunzip -c > /tmp/0002.sql
-      printf '%s  %s\n' 94eef12d6702662727259358752776bfcc19b26a7a4a925c5de64fd531141dac /tmp/0002.sql | sha256sum -c -
+      printf '%s  %s\n' c16a8acfda4249b870f8c336e6bf55f958f15b208b10bd482654d3baf6121918 /tmp/0002.sql | sha256sum -c -
       sha256sum /tmp/0002.sql
       sed -i -e '/^[[:space:]]*BEGIN;[[:space:]]*$$/d' -e '/^[[:space:]]*COMMIT;[[:space:]]*$$/d' /tmp/0002.sql
+      base64 -d /yawmi/in/seed.b64 | gunzip -c > /tmp/seed.sql
+      printf '%s  %s\n' 08842d984811df32452a13042d0d3f9c95ddd5af23c6ecff00eeab00a4567e6f /tmp/seed.sql | sha256sum -c -
+      sha256sum /tmp/seed.sql
+      sed -i -e '/^[[:space:]]*BEGIN;[[:space:]]*$$/d' -e '/^[[:space:]]*COMMIT;[[:space:]]*$$/d' /tmp/seed.sql
       [ -s /run/yawmi/yawmi_api_pw ] || { echo "yawmi-loader: yawmi_api_pw is missing: run loader 1 first"; exit 1; }
       $$PSQL -At <<'SQL'
       DO $$$$
@@ -58,7 +62,7 @@ configs:
       BEGIN;
       SET LOCAL yawmi_migrate.yawmi_api_pw TO :'yawmi_api_pw';
       \i /tmp/0002.sql
-      INSERT INTO yawmi.schema_migrations (filename) VALUES ('0002_yawmi_role.sql');
+      INSERT INTO yawmi.schema_migrations (filename) VALUES ('0002_yawmi_role.sql') ON CONFLICT DO NOTHING;
       COMMIT;
       \echo yawmi-loader: applied 0002_yawmi_role.sql
       \else
@@ -66,6 +70,10 @@ configs:
       \endif
       ALTER ROLE yawmi_api PASSWORD :'yawmi_api_pw';
       \unset yawmi_api_pw
+      BEGIN;
+      \i /tmp/seed.sql
+      COMMIT;
+      \echo yawmi-loader: system habits upserted
       SELECT 'yawmi-verify migrations=' || string_agg(filename, ',' ORDER BY filename) FROM yawmi.schema_migrations;
       SELECT 'yawmi-verify system_habits=' || count(*) FROM yawmi.habits WHERE system;
       SELECT 'yawmi-verify api_role=' || concat_ws(',', rolsuper, rolcreatedb, rolcreaterole, rolconnlimit, rolpassword IS NOT NULL) FROM pg_authid WHERE rolname = 'yawmi_api';
@@ -101,16 +109,32 @@ configs:
       echo "yawmi-loader: role step done"
   p0002:
     content: |
-      H4sIAAAAAAAC/61US2+bQBC+8yvm4AhbsqJWVXuIlQOGTYKKwWWhSU9oAxt7G17dXZL433eAGNuJmzZST/uYme+b95xcuv7McAIY
-      jYx5+zAA3AvwgwjIjUsjCmNKPGJH8BEuwmAB9SqRVc4VXF+RkADeS1ZwOAdzwx4LkbBamBOIrkiLBGCHxIoIhIFHYFAAL0AmJKHx
-      koQxJSHee01nPlw7Gz8IydJzbStygx4R8G/+Y2lRGnoU7MD30TsUgucu3Ag+z1CL+A5GMTPwNEajmWF5CPe/nPgb/VEySiJQnMl0
-      ndRMrzFfnewtbc00L3ipEy0KXjW6zfGnD8p8w0ZkOU9EmWjJSsVSLaoyUVyp9txD+dKh9EV3iO1ZIcGkqaauc8Ez0PxJw9k5lE2e
-      i7tx2kjZuqG41qJcjZ8LXYiVRA9PBw+S+tGcgpYNn0zBNCez/YYawF0Kfux5uw4JLZe2KY5cm+w10RmUFdRMqcdKZoP5DPSat03H
-      IWVlWWnIqxWIEqoHLjtZyTVa3MOGa7NrBY+SjofcEDvGVryrZMH02DyaxLau10HowImHsWxZJ8d6KiTfg68ELIwFq98ekTX3CAVs
-      KmpfkYXV4/ZjM1AcM6TkW0x8+92276R55Z9kv8Ttv3EcVz3cGy8zfBlafrQdkRbLsdAFC6t94kIU7IAw1dsmy5hmt0zx8WSyS3UP
-      FFPrkrwKex9nq9lvrClGilONZ7x02iX0dpkOgQ6T0AlOVbrmBXtufBwp9SofPb2D9D1db1czIXFwkrTKuJpuPxu1TlRzq1Ip6h7t
-      WCgvg+7r8OegUdXodE5xONqxLwQua12VyHwoSJnMhr9VxfLhkW7SfKd+X4v9eyI5yzCa4e8h+Vk1smQ51k7kG+PQNztY4FqcGb8B
-      6OHMgmkGAAA=
+      H4sIAAAAAAAC/61US2+bQBC+8yvmkAhbsqJWVXuIlQOGTYKKwQXcpCe0gY29Da/uLkn97zsLNrZj12mknvYxj2++eU3IjeuPDSeA
+      szNjoh8GgHsNfhADuXejOIJBRDxix/ARrsNgCvUiEVXOJNzdkpAA3ktaMLgCc0VfCp7QmptDiG+J9gRgh8SKCYSBR6BXAC9AJASJ
+      5jMSziMS4r3TdCb9tbXxg5DMPNe2YjfoPAL+TX7MrCgKvQjswPcxOhSC507dGD6PUYv4DrIYG3gaZ2djw/LQ3f8K4i34o2ARiUEy
+      KtJlUlO1xHy1slPaiipWsFIlihesapTO8acP0jxhw7OcJbxMlKClpKniVZlIJqU+d7x8ab10RXeI7VkhwaTJpq5zzjJQ7LeCyyso
+      mzznj4O0EUKHIZlSvFwM1oUu+EJghBd9BEn9Yo5AiYYNR2Caw/FuQ/XO3Qj8uedtOyS03EinOHZtstNEl1BWUFMpXyqR9eZjUEum
+      m45BSsuyUpBXC+AlVM9MtLKSKbR4ghVTZtsKXkRaHHJP7Dm24mMlCqoG5tEk6rreBaED5x5y2aAOj/VUSL4HXwlYyAWrr4/Ymngk
+      AmyqyL4lU6vz241ND3HMMCLf5sS33237TpiD+AT9xR/+DeO46v7eeJ3hm9Dy482IaF+OhSFYWO1zF+Jg6whTvWmyjCr6QCUbDIfb
+      VHeO5pF1Qw5o7/rZaHYba4RMcarxnM8cvYROl2nf0X4SWsGFTJesoOvGx5GSB/no4B2E7+A6u5pygYOTpFXG5Gjz2chlIpsHmQpe
+      d96OUXlNuqvD30mjqtHqXOBw6LEvOC5rVZWIvBYsKpr3j3SV5lvRU837+3Pys2pESXOsCc9XxgnMARa/pgtcPRkuAK5yNmrXV4Ns
+      ceWkVcE25NdRsYwrliVUjeCRC6mXCyvbp1yVaSsxhpr2HpeUikzCG4HoGJBHCzgCwWimc499ha9nmjc6NiSW4pmiVB2AaeO12Wsw
+      O5jikh8bfwBHi0+xNwcAAA==
+  pseed:
+    content: |
+      H4sIAAAAAAAC/9WWz0/bMBTH7/0rfGsrVR0tQ0xMO1Qlkyp17QRlh10iN3Fbr2mCEgfW3YaAIW78CQhtDMYPMYbQ/hP7v9mznXQu
+      FMQ2NrRDE9fv+fl9/Bz7W2ssWgstVGu0mmiIVwe02MNtyiKUyyDkBC4pIEaZR2wcFlA3wJ4dkk4BBTFzggEYsaM7+tR3Cyj2KYMB
+      OOwSZi+TUP5oAIbkDTEjp0fcGALqEauE9F08tAc46hcQWSHh0PYhrO/0gtAGS9ouoAjiMt1FfFc3omHEyEDGdUKCGXHtthzhMLpC
+      MvnMq0p9yVrMSJbsgLiUYUYDP1tAWX7I98SG2BHrqDSF+KlY4/v8k1gDW2OpXgePZln6Varl4qxstIPAI9gf2WegTyYvbTptSCgr
+      M9F285nFHQaLsYr7BNxzfrCay6NKC7VqLyz0utmwYJ6I4kcLdIjdXjY/N+cCSzq6tbBkQYyIEFfFl/8z+YKmWqFRjD36zgQ7EdsK
+      jJ/wS7EFXIeI74t16N0SG2jmz2jlpAbvfdMmfCPecdo3QRz6sAcHQehTvysz1VRimx8oSH7BPwPbsUE2rcmmi4//AzJI4AYyscHP
+      gWz375C1SScIiR15hCzfNxvxux6NevaA+jEjkdqloy2oq/ZRbPIjuUX5VwlsMM5qxlnN6MbhaKdDOHiVn/wKp37+1hcog99GFy0T
+      3E9KJ1mgWgcIinYMnKf8i6ziXSmdIPZZVq1mFGnaspp/woFzX5C3l7CDB9Qb2j3sdZJps8ById6j5FRRVdwD5rMxrlJJg5VKxdKk
+      PVp62NpFgUPho6NwbVEs7wwFtqGOkFOJAlz8iB9C1z7/fqVmBlv5xqo9KB4LMWV20IHz0mc9zaZQztTmlPVLj81v4gM/M+GmErip
+      yYeLLFx64f17sLa87Hvpx3YoNsV7scPPERTuEqq0e+VeS9oTCjTCmABx5Sq/x0s8gck0G6jabDyv16otlJNiK4/mm2jp5XylZaFF
+      qwUZpOILPUPkrePFLnGLI0EG9lSSmfaRTAN7ItRMc6rdwKrVm2lM9BzYpD4zLUqvQb/UeGa/0nwy06uqbyzla5IQRlx3u0Emmi7j
+      +hE8TQVpOo4pS/BLtKXpkspNuRIjwTm2Gj9lqMxJic2xZCbIT9NuiFI5PhWw4FJtVurWYtXKmaK7aEjcu26wvKrJsqvmwbIyauDT
+      zA8o/cQH2gsAAA==
 volumes:
   raqib_secrets:
     name: raqib_secrets

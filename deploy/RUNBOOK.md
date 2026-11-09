@@ -103,7 +103,7 @@ docker inspect <حاوية n8n> --format '{{json .Config.Labels}}' | tr ',' '\n'
 
 **يحتاج موافقة عبدالله المستقلة.** المشروع `yawmi-loader` نفسه، من الملف `deploy/compose/yawmi-db-2-role.yml`، ومتغيره `YAWMI_DB_HOST`.
 
-ما يفعله، بالترتيب: يرفض التشغيل إن غاب السر (فالمحمّل 1 قبله) أو غابت البذرة من الملف ← يتحقق من تطبيق `0001` ومن وجود جداول المرآة في `raqib` ← يطبّق `0002` وكلمة المرور تُقرأ من الملف إلى متغير `psql` ومنه إلى إعداد محلي للمعاملة (لا تظهر في وسيط ولا في SQL مكتوب) ← يضبط كلمة مرور الدور على ما في الملف في كل تشغيل ← يحمّل بذرة العادات إن لم توجد عادات `system` ← يتصل بحساب `yawmi_api` نفسه عبر الشبكة ويجرّب المسموح والمرفوض.
+ما يفعله، بالترتيب: يرفض التشغيل إن غاب السر (فالمحمّل 1 قبله) أو غابت البذرة من الملف ← يتحقق من تطبيق `0001` ومن وجود جداول المرآة في `raqib` ← يطبّق `0002` وكلمة المرور تُقرأ من الملف إلى متغير `psql` ومنه إلى إعداد محلي للمعاملة (لا تظهر في وسيط ولا في SQL مكتوب) ← يضبط كلمة مرور الدور على ما في الملف في كل تشغيل ← يطبّق بذرة العادات (إدراج مع تحديث يحفظ المرسى والتذكيرات وتاريخ البداية، فتكراره آمن) ← يتصل بحساب `yawmi_api` نفسه عبر الشبكة ويجرّب المسموح والمرفوض.
 
 - **المطبوع المتوقع:**
 
@@ -113,7 +113,7 @@ docker inspect <حاوية n8n> --format '{{json .Config.Labels}}' | tr ',' '\n'
   /tmp/seed.sql: OK
   <64 خانة سداسية>  /tmp/seed.sql
   yawmi-loader: applied 0002_yawmi_role.sql
-  yawmi-loader: seeded the system habits
+  yawmi-loader: system habits upserted
   yawmi-verify migrations=0001_yawmi_schema.sql,0002_yawmi_role.sql
   yawmi-verify system_habits=10
   yawmi-verify api_role=false,false,false,5,true
@@ -129,7 +129,7 @@ docker inspect <حاوية n8n> --format '{{json .Config.Labels}}' | tr ',' '\n'
 - **إن فشل:**
   - `raqib objects missing: …` ← الخطوة 2 ناقصة.
   - `yawmi_api_pw is missing` ← الخطوة 3 لم تُنفَّذ.
-  - `is not embedded in this file` ← ملف المحمّل وُلّد قبل وجود `api/db/seed/habits.sql`: يُعاد توليده بـ`python -I deploy/tools/build_loaders.py` ثم يُفحص بـ`--check`.
+  - `is not embedded in this file` ← ملف المحمّل وُلّد قبل وجود `api/db/seed/habits.sql`: يُعاد توليده بـ`python -I deploy/tools/build_loaders.py` ثم يُفحص بـ`--check` (ملحق ب).
   - `DENIED=NO` ← صلاحية زائدة للدور: يُوقف النشر ويُسجَّل في `FAILURES.md`.
 - **التراجع** (موافقة مستقلة): `DROP OWNED BY yawmi_api; DROP ROLE yawmi_api;` ثم `DELETE FROM yawmi.schema_migrations WHERE filename = '0002_yawmi_role.sql';`. والبذرة: `DELETE FROM yawmi.habits WHERE system;` (لا سجلات عادات قبل نشر الواجهة).
 

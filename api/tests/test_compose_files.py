@@ -565,7 +565,14 @@ def test_loader_2_passes_the_password_by_file_and_env_never_by_argument(tmp_path
     assert admin_sql.index("SET LOCAL yawmi_migrate.yawmi_api_pw") < admin_sql.index(r"\i ")
     assert "ALTER ROLE yawmi_api PASSWORD :'yawmi_api_pw';" in admin_sql
     assert r"\unset yawmi_api_pw" in admin_sql
-    assert "habits" in admin_sql  # the seed step
+    # the seed goes in after the role is set up, in a transaction of its own
+    seed_at = admin_sql.index("seed.sql")
+    assert (
+        admin_sql.index("ALTER ROLE yawmi_api")
+        < admin_sql.rindex("BEGIN;", 0, seed_at)
+        < seed_at
+        < admin_sql.index("COMMIT;", seed_at)
+    )
     # the second psql run logs in as yawmi_api, with the password from the environment
     assert "PGUSER=yawmi_api" in box.meta(2)
     assert f"PGPASSWORD={secret}" in box.meta(2)

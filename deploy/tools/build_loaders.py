@@ -80,7 +80,7 @@ SELECT count(*) = 0 AS todo FROM yawmi.schema_migrations WHERE filename = '@SCHE
 \if :todo
 BEGIN;
 \i /tmp/0001.sql
-INSERT INTO yawmi.schema_migrations (filename) VALUES ('@SCHEMA@');
+INSERT INTO yawmi.schema_migrations (filename) VALUES ('@SCHEMA@') ON CONFLICT DO NOTHING;
 COMMIT;
 \echo yawmi-loader: applied @SCHEMA@
 \else
@@ -99,15 +99,12 @@ _NO_SEED_GUARD = r"""echo "yawmi-loader: api/db/seed/habits.sql is not embedded 
 exit 1
 """
 
-_SEED_STEP = r"""SELECT count(*) = 0 AS todo FROM yawmi.habits WHERE system \gset
-\if :todo
-BEGIN;
+# The seed is an upsert (ON CONFLICT (code) DO UPDATE that keeps anchor, reminders and start_day),
+# so it runs every time: a changed seed is picked up by regenerating and re-running loader 2.
+_SEED_STEP = r"""BEGIN;
 \i /tmp/seed.sql
 COMMIT;
-\echo yawmi-loader: seeded the system habits
-\else
-\echo yawmi-loader: system habits already present, seed skipped
-\endif
+\echo yawmi-loader: system habits upserted
 """
 
 _LOADER_2 = (
@@ -132,7 +129,7 @@ SELECT count(*) = 0 AS todo FROM yawmi.schema_migrations WHERE filename = '@ROLE
 BEGIN;
 SET LOCAL yawmi_migrate.yawmi_api_pw TO :'yawmi_api_pw';
 \i /tmp/0002.sql
-INSERT INTO yawmi.schema_migrations (filename) VALUES ('@ROLE@');
+INSERT INTO yawmi.schema_migrations (filename) VALUES ('@ROLE@') ON CONFLICT DO NOTHING;
 COMMIT;
 \echo yawmi-loader: applied @ROLE@
 \else
