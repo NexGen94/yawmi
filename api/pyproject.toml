@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "yawmi-api"
+version = "0.1.0"
+description = "خدمة «يومي»: واجهة FastAPI لمتابعة الأهداف والعادات اليومية"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "asyncpg",
+    "pydantic-settings",
+    "pyjwt[crypto]",
+    "httpx",
+    "pywebpush",
+    "cryptography",
+]
+
+[project.scripts]
+yawmi-api = "yawmi.main:run"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "respx",
+    "ruff",
+    "sqlfluff",
+    "freezegun",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["yawmi"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"

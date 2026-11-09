@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Swift / SwiftPM
+.build/
+
+# Web
+node_modules/
+web/dist/
+
+# Secrets and local environment
+.env
+*.pem
+
+# Generated caches
+openapi/.cache/
+
+# OS
+.DS_Store
+Thumbs.db
