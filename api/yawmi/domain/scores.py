@@ -16,8 +16,8 @@ WINDOW_DAYS = 28
 MIN_NIGHTS = 7
 """أقل من هذا العدد: لا خط أساس."""
 
-FULL_NIGHTS = 14
-"""من هذا العدد فصاعداً: خط الأساس «كامل»، وما دونه (من 7) «أولي»."""
+FULL_NIGHTS = 28
+"""من هذا العدد فصاعداً: خط الأساس «كامل» (المواصفة § 3.3)، وما دونه (من 7) «أولي»."""
 
 WEIGHT_HRV = 0.5
 WEIGHT_RHR = 0.3
@@ -34,6 +34,15 @@ MIN_HRV_SAMPLES = 3
 
 BaselineQuality = Literal["provisional", "full"]
 DataQuality = Literal["missing", "low", "ok"]
+
+_LOG_POSITIVE_MESSAGE = "log scale requires strictly positive values"
+
+
+def _require_finite(**values: float) -> None:
+    """يرفع `ValueError` إن كانت أي قيمة مسمّاة غير منتهية (NaN أو ±inf)."""
+    for name, value in values.items():
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must be finite, got {value!r}")
 
 
 @dataclass(frozen=True)
@@ -52,17 +61,22 @@ class Baseline:
 def baseline(values: Sequence[float], log: bool = False) -> Baseline | None:
     """خط الأساس على آخر 28 قيمة (مرتبة من الأقدم إلى الأحدث).
 
-    المعادلة: n = عدد القيم المستخدمة؛ `None` إن كان n < 7؛ `provisional` إن كان n < 14؛
+    النافذة هي آخر 28 *قيمة* لا آخر 28 يوماً تقويمياً: على المستدعي أن يمرّر الليالي الصالحة
+    داخل النافذة وحدها (بلا قيم فارغة ولا أصفار).
+
+    المعادلة: n = عدد القيم المستخدمة؛ `None` إن كان n < 7؛ `provisional` إن كان n < 28؛
     وإلا `full`. المتوسط والانحراف المعياري للعيّنة (قسمة على n−1)، وعلى ln(x) إن كان `log`
-    (لـHRV). في وضع `log` تُرفض القيم غير الموجبة بـ`ValueError`.
+    (لـHRV). تُرفض القيم غير المنتهية بـ`ValueError`، وكذلك غير الموجبة في وضع `log`.
     """
     window = list(values[-WINDOW_DAYS:])
     n = len(window)
     if n < MIN_NIGHTS:
         return None
+    for v in window:
+        _require_finite(value=v)
     if log:
         if any(v <= 0 for v in window):
-            raise ValueError("log baseline requires strictly positive values")
+            raise ValueError(_LOG_POSITIVE_MESSAGE)
         window = [math.log(v) for v in window]
     quality: BaselineQuality = "provisional" if n < FULL_NIGHTS else "full"
     return Baseline(
@@ -76,9 +90,16 @@ def baseline(values: Sequence[float], log: bool = False) -> Baseline | None:
 def zscore(value: float, baseline: Baseline, log: bool = False) -> float:
     """الدرجة المعيارية: z = (x − mean) / sd، وx = ln(value) إن كان `log`.
 
-    إن كان sd = 0 فالنتيجة 0 (لا تباين في خط الأساس، فلا انحراف يُقاس).
+    في وضع `log` يُرفض `value ≤ 0` بـ`ValueError` (بالرسالة نفسها كما في `baseline`) قبل أي
+    لوغاريتم، وتُرفض القيمة غير المنتهية. إن كان sd = 0 فالنتيجة 0 (لا تباين في خط الأساس).
     """
-    x = math.log(value) if log else value
+    _require_finite(value=value)
+    if log:
+        if value <= 0:
+            raise ValueError(_LOG_POSITIVE_MESSAGE)
+        x = math.log(value)
+    else:
+        x = value
     if baseline.sd == 0:
         return 0.0
     return (x - baseline.mean) / baseline.sd
@@ -92,11 +113,14 @@ def _phi(x: float) -> float:
 def recovery(z_hrv: float, z_rhr: float, z_sleep: float, penalty: float = 0.0) -> int:
     """التعافي من 0 إلى 100.
 
-    المعادلة: round(100·Φ(0.5·z_hrv + 0.3·z_rhr + 0.2·z_sleep) − penalty)، ثم يُقصّ إلى [0, 100].
-    العقوبة (انحراف التنفس أو الحرارة) تُطرح قبل القصّ. إشارة كل z مسؤولية المستدعي.
+    المعادلة: ⌊100·Φ(0.5·z_hrv + 0.3·z_rhr + 0.2·z_sleep) − penalty + 0.5⌋ (تقريب نحو الأعلى
+    عند المنتصف، لا تقريب المصرفيين في بايثون، ليتطابق مع منفَّذَي TypeScript وSwift)، ثم يُقصّ
+    إلى [0, 100]. العقوبة (انحراف التنفس أو الحرارة) تُطرح قبل القصّ. إشارة كل z مسؤولية
+    المستدعي. تُرفض المدخلات غير المنتهية بـ`ValueError`.
     """
+    _require_finite(z_hrv=z_hrv, z_rhr=z_rhr, z_sleep=z_sleep, penalty=penalty)
     combined = WEIGHT_HRV * z_hrv + WEIGHT_RHR * z_rhr + WEIGHT_SLEEP * z_sleep
-    score = round(100.0 * _phi(combined) - penalty)
+    score = math.floor(100.0 * _phi(combined) - penalty + 0.5)
     return max(0, min(100, score))
 
 
@@ -104,19 +128,23 @@ def trimp(minutes: float, hr_reserve: float, female: bool = False) -> float:
     """حمل Banister (TRIMP) لمقطع واحد من التمرين.
 
     المعادلة: minutes · r · a · exp(b·r)، وr احتياطي النبض (0 إلى 1)، و(a, b) = (0.64, 1.92)
-    للذكور و(0.86, 1.67) للإناث. تُقصّ الدقائق السالبة إلى 0 وr إلى [0, 1].
+    للذكور و(0.86, 1.67) للإناث. تُقصّ الدقائق السالبة إلى 0 وr إلى [0, 1]، وتُرفض المدخلات
+    غير المنتهية (NaN وinf) بـ`ValueError`.
     """
+    _require_finite(minutes=minutes, hr_reserve=hr_reserve)
     a, b = TRIMP_FEMALE if female else TRIMP_MALE
     minutes = max(0.0, minutes)
-    r = max(0.0, min(1.0, hr_reserve))
+    r = min(1.0, max(0.0, hr_reserve))
     return minutes * r * a * math.exp(b * r)
 
 
 def strain(trimp_total: float) -> float:
     """الإجهاد من 0 إلى 21 بمنحنى مشبِع.
 
-    المعادلة: 21·(1 − exp(−TRIMP/120))؛ يقترب من 21 ولا يتجاوزه. الحمل السالب يُعامَل صفراً.
+    المعادلة: 21·(1 − exp(−TRIMP/120))؛ يقترب من 21 ولا يتجاوزه. الحمل السالب يُعامَل صفراً،
+    ويُرفض الحمل غير المنتهي (NaN وinf) بـ`ValueError`.
     """
+    _require_finite(trimp_total=trimp_total)
     total = max(0.0, trimp_total)
     return STRAIN_MAX * (1.0 - math.exp(-total / STRAIN_SCALE))
 
