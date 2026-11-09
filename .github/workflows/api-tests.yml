@@ -1,0 +1,74 @@
+name: api-tests
+
+on:
+  pull_request:
+    paths:
+      - "api/**"
+      - ".github/workflows/api-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - ".github/workflows/api-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      # Throwaway Postgres for the migration tests. The database is named raqib because
+      # the yawmi schema lives inside the Raqib database in production. `trust` keeps any
+      # password out of the repository; the container is only reachable from this job.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: raqib
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d raqib"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      TEST_DATABASE_URL: postgresql://postgres@localhost:5432/raqib
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+
+      - name: Install dependencies
+        working-directory: api
+        run: uv sync --locked
+
+      - name: Ruff lint
+        working-directory: api
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        working-directory: api
+        run: uv run ruff format --check .
+
+      - name: SQL lint
+        run: uv run --project api sqlfluff lint api/db/migrations --dialect postgres
+
+      # The tests apply api/tests/fixtures/raqib_stub.sql (idempotent) to the raqib
+      # database before each test, so the GRANTs in 0002 resolve as they do in production.
+      - name: Tests
+        working-directory: api
+        run: uv run pytest -q -ra
