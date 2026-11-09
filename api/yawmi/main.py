@@ -27,11 +27,22 @@ access_log = logging.getLogger("yawmi.access")
 _REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
 
+def printable(text: str) -> str:
+    """`text` with every non-printable character replaced by `?`.
+
+    `scope["path"]` is percent-decoded, so a request for `/x%0Afake` carries a real newline: logged
+    as is, it would forge a second log line. `str.isprintable` is false for all control characters
+    and for the Unicode line/paragraph separators, so it covers more than line feeds.
+    """
+    return text if text.isprintable() else "".join(c if c.isprintable() else "?" for c in text)
+
+
 class RequestIdMiddleware:
     """Tag every response with `X-Request-Id` and write one access-log line per request.
 
     The line carries method, path, status, duration and request id: never query strings,
-    headers, cookies or bodies (request bodies are not logged anywhere).
+    headers, cookies or bodies (request bodies are not logged anywhere). The path is logged with
+    its non-printable characters neutralised (see `printable`), so it cannot forge log lines.
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -64,7 +75,7 @@ class RequestIdMiddleware:
             access_log.info(
                 "%s %s -> %s %.1fms id=%s",
                 scope["method"],
-                scope["path"],
+                printable(scope["path"]),
                 status,
                 elapsed_ms,
                 request_id,
