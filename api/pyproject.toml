@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 yawmi-api = "yawmi.main:run"
+yawmi-admin = "yawmi.admin:main"
 
 [dependency-groups]
 dev = [
