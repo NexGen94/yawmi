@@ -1,0 +1,25 @@
+/* Plumbing only: resets, viewport height, safe areas and the system font.
+   No colors, sizes or layout decisions until the design is approved (D-061).
+   Logical properties only (RTL): never left/right. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  padding-block-start: env(safe-area-inset-top);
+  padding-block-end: env(safe-area-inset-bottom);
+  /* Safe-area insets are physical, so use the larger of the two on both sides: it is
+     correct in either direction without naming left or right as a style side. */
+  padding-inline: max(env(safe-area-inset-left), env(safe-area-inset-right));
+  font-family: system-ui, sans-serif;
+}
