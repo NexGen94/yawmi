@@ -31,8 +31,17 @@ function normalizeDigits(text) {
     .replace(new RegExp('\\u066B', 'g'), '.');
 }
 
+// An Arabic conjunction/preposition may be glued to the word ("وقم", "فاحرص", "بتذكر").
+// Words of three letters or fewer take only the conjunctions و/ف: allowing ل/ب/ك there would
+// turn the very common "لكن" into the imperative "كن".
+const PREFIX_SHORT = '[وف]?';
+const PREFIX_LONG = '[وفبلك]?';
+
 function wordPattern(word) {
-  return new RegExp(`(?<![${LETTER}])${stripMarks(word)}(?![${LETTER}])`, 'u');
+  const bare = stripMarks(word);
+  const letters = bare.replace(new RegExp('[^' + LETTER + ']', 'g'), '').length;
+  const prefix = letters <= 3 ? PREFIX_SHORT : PREFIX_LONG;
+  return new RegExp(`(?<![${LETTER}])${prefix}${bare}(?![${LETTER}])`, 'u');
 }
 
 function findWord(text, words) {
@@ -65,6 +74,10 @@ const GENDERED_WORDS = [
   'قم', 'قومي', 'افعل', 'افعلي', 'فعّل', 'فعّلي', 'ابدأ', 'ابدئي', 'حاول', 'حاولي',
   'تذكّر', 'تذكر', 'تذكري', 'اشرب', 'اشربي', 'اذهب', 'اذهبي', 'خذ', 'خذي', 'كن', 'كوني',
   'اجعل', 'اجعلي', 'ركّز', 'ركزي', 'احرص', 'احرصي', 'تنس', 'تنسي',
+  'جرّب', 'جرب', 'جرّبي', 'جربي', 'راجع', 'راجعي', 'سجّل', 'سجل', 'سجّلي', 'سجلي',
+  'أكمل', 'اكمل', 'أكملي', 'اكملي', 'حافظ', 'حافظي', 'استمر', 'استمري',
+  'خصّص', 'خصص', 'خصّصي', 'خصصي', 'فكّر', 'فكر', 'فكّري', 'فكري',
+  'توقف', 'توقفي', 'اكتب', 'اكتبي', 'نم', 'نامي',
 ];
 const GREETINGS = [
   'مرحبا', 'مرحباً', 'أهلا', 'اهلا', 'أهلاً', 'أهلين', 'السلام عليكم', 'صباح الخير',
@@ -118,16 +131,20 @@ const visibleText = (v) => [...linesOf(v), questionOf(v), ...priorityTitles(v)].
 function requestIds(request) {
   return new Set((request.sources || []).map((s) => s.id));
 }
+// Every string and number VALUE of a JSON structure. Key names ("sleep_avg_7d") are
+// identifiers, not data: they must not widen what a reply is allowed to say.
+function scalarValues(value) {
+  if (typeof value === 'string') return [value];
+  if (typeof value === 'number') return [String(value)];
+  if (Array.isArray(value)) return value.flatMap(scalarValues);
+  if (value && typeof value === 'object') return Object.values(value).flatMap(scalarValues);
+  return [];
+}
+const stringValues = (value) => scalarValues(value).filter((x) => typeof x === 'string');
 function requestText(request, { withQuestion }) {
-  const parts = [canonical(request.context || {}), ...(request.sources || []).map((s) => s.text)];
+  const parts = [...scalarValues(request.context || {}), ...(request.sources || []).map((s) => s.text)];
   if (withQuestion) parts.push(request.question || '', request.day || '');
   return parts.join('\n');
-}
-function stringValues(value) {
-  if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.flatMap(stringValues);
-  if (value && typeof value === 'object') return Object.values(value).flatMap(stringValues);
-  return [];
 }
 function numbersIn(text) {
   const found = normalizeDigits(text).match(/\d+(?:\.\d+)?/g) || [];
@@ -173,7 +190,8 @@ const CHECKS = {
     return hit ? `closing offer: ${hit}` : null;
   },
   no_gendered_forms(v) {
-    const hit = findWord(visibleText(v), GENDERED_WORDS);
+    const ownVoice = visibleText(v).replace(new RegExp('«[^»]*»', 'g'), ' ');
+    const hit = findWord(ownVoice, GENDERED_WORDS);
     return hit ? `gendered form: ${hit}` : null;
   },
   no_preaching(v) {

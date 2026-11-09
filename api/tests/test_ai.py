@@ -780,31 +780,92 @@ def test_eval_assertions_accept_good_and_reject_bad_outputs() -> None:
     def variant(**changes: Any) -> str:
         return json.dumps({**good, **changes}, ensure_ascii=False)
 
-    scenarios: list[tuple[str, bool]] = [
-        (variant(), True),
-        ("ليس JSON", False),
-        (variant(lines=["أ", "ب", "ج"]), False),
-        (variant(lines=["مرحباً بك، هذا ملخص اليوم."]), False),
-        (variant(lines=["الخلاصة جاهزة. هل تريد المزيد؟"]), False),
-        (variant(lines=["قم بإكمال المهام."]), False),
-        (variant(lines=["أنتَ متأخر عن الخطة."]), False),
-        (variant(lines=["يجب أن يكتمل الهدف اليوم."]), False),
-        (variant(lines=["أحسنت، أُنجزت المهام."]), False),
-        (variant(question="هل نمت جيداً؟", lines=["ما الجديد؟", "لا جديد."]), False),
-        (variant(priorities=[{"title": "هدف", "source_id": "ghost:2"}]), False),
-        (variant(lines=["تم إنجاز 987654 مهمة."]), False),
-        (variant(source_ids=["ghost:1"]), False),
-        (variant(source_ids=[]), False),
-        (variant(lines=["Great progress today."]), False),
+    def sc(
+        output: str,
+        expected: bool,
+        only: list[str] | None = None,
+        request: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        config = {**context["config"], "checks": only or checks}
+        if request is not None:
+            config["request"] = request
+        return {"output": output, "expected": expected, "context": {"config": config}}
+
+    gender = ["no_gendered_forms"]
+    numbers = ["numbers_in_context"]
+    value_only_request = {
+        "context": {"sleep_avg_7d": 6.8, "streak_14d": 3},
+        "sources": [{"id": "s:1", "kind": "sleep", "text": "النوم: 6.8 ساعات"}],
+    }
+
+    scenarios: list[dict[str, Any]] = [
+        sc(variant(), True),
+        sc("ليس JSON", False),
+        sc(variant(lines=["أ", "ب", "ج"]), False),
+        sc(variant(lines=["مرحباً بك، هذا ملخص اليوم."]), False),
+        sc(variant(lines=["الخلاصة جاهزة. هل تريد المزيد؟"]), False),
+        sc(variant(lines=["قم بإكمال المهام."]), False),
+        sc(variant(lines=["أنتَ متأخر عن الخطة."]), False),
+        sc(variant(lines=["يجب أن يكتمل الهدف اليوم."]), False),
+        sc(variant(lines=["أحسنت، أُنجزت المهام."]), False),
+        sc(variant(question="هل نمت جيداً؟", lines=["ما الجديد؟", "لا جديد."]), False),
+        sc(variant(priorities=[{"title": "هدف", "source_id": "ghost:2"}]), False),
+        sc(variant(lines=["تم إنجاز 987654 مهمة."]), False),
+        sc(variant(source_ids=["ghost:1"]), False),
+        sc(variant(source_ids=[]), False),
+        sc(variant(lines=["Great progress today."]), False),
     ]
+
+    # Imperatives glued to a conjunction/preposition prefix, and the wider imperative list.
+    for phrase in (
+        "وقم بإكمال المهام.",
+        "فاحرص على النوم المبكر.",
+        "وتذكر موعد الغد.",
+        "جرّب المشي صباحاً.",
+        "راجع الأهداف.",
+        "سجّل العادات.",
+        "حافظ على الروتين.",
+        "استمر في القراءة.",
+        "خصّص وقتاً للمراجعة.",
+        "فكّر في الأولويات.",
+        "توقف عن السهر.",
+        "اكتب الملاحظات.",
+        "نم مبكراً.",
+        "أكمل الجلسة.",
+        "ابدأ اليوم بالمشي.",
+        "ولا تنس الموعد.",
+    ):
+        scenarios.append(sc(variant(lines=[phrase]), False, only=gender))
+    # Neutral phrasing must pass, including "لكن" (which contains "كن") and a verbatim quote.
+    for phrase in (
+        "يُستحسن إكمال المهام.",
+        "الاستمرار على النوم المبكر.",
+        "لكن المتوسط أقل من الهدف.",
+        "ولكن الأرقام ثابتة.",
+        "السبب العميق: «كن صبوراً مع أسرتي».",
+        "المراجعة اليومية مكتملة، والسجل محدّث.",
+    ):
+        scenarios.append(sc(variant(lines=[phrase]), True, only=gender))
+
+    # Allowed numbers come from the request's VALUES, never from its key names.
+    def numeric(line: str, expected: bool) -> dict[str, Any]:
+        return sc(variant(lines=[line]), expected, only=numbers, request=value_only_request)
+
+    scenarios += [
+        numeric("النوم 7 ساعات.", False),  # the 7 exists only inside the key `sleep_avg_7d`
+        numeric("النوم 14 يوماً.", False),  # the 14 exists only inside the key `streak_14d`
+        numeric("النوم 6.8 ساعات.", True),
+        numeric("السلسلة 3 أيام.", True),
+    ]
+
     run = subprocess.run(
         ["node", "-e", script, module],
-        input=json.dumps([{"output": out, "context": context} for out, _ in scenarios]),
+        input=json.dumps([{"output": x["output"], "context": x["context"]} for x in scenarios]),
         capture_output=True,
         text=True,
         encoding="utf-8",
         check=True,
     )
     results = json.loads(run.stdout)
-    for (output, expected), result in zip(scenarios, results, strict=True):
-        assert result["pass"] is expected, (output, result)
+    for scenario, result in zip(scenarios, results, strict=True):
+        assert result["pass"] is scenario["expected"], (scenario["output"], result)
