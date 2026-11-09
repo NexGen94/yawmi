@@ -1,0 +1,16 @@
+# Lint config for api/db/migrations (CI runs: sqlfluff lint api/db/migrations --dialect postgres).
+[sqlfluff]
+dialect = postgres
+max_line_length = 100
+
+[sqlfluff:rules:capitalisation.literals]
+capitalisation_policy = upper
+
+[sqlfluff:indentation]
+tab_space_size = 2
+indent_unit = space
+
+# Column names such as "system" or "day" are legal non-reserved words in Postgres and
+# match the specified schema.
+[sqlfluff:rules:references.keywords]
+ignore_words = system,day,type,value,name,kind,unit,code,period,anchor,active,source,status,auth,stream,question,lines,model,provider,priorities
