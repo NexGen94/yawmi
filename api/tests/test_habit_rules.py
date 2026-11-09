@@ -990,6 +990,27 @@ def test_prorated_target_rounds_up_and_ignores_float_noise():
     assert period_progress(tiny, [], date(2026, 11, 14), "sun").target == 1.0
 
 
+def test_prorated_target_never_exceeds_the_habit_target():
+    # هدف 0.5 ساعة أسبوعياً في أسبوع جزئي: التناسب لا يرفعه إلى 1
+    half = spec(
+        kind="duration",
+        unit="hour",
+        target_per_period=0.5,
+        period="week",
+        start_day=THURSDAY,
+    )
+    p = period_progress(half, [done(THURSDAY, 0.5)], date(2026, 11, 14), "sun")
+    assert p.target == 0.5
+    assert p.reached is True
+    assert adherence(half, [done(THURSDAY, 0.5)], date(2026, 11, 15), "sun") == 1.0
+    # وهدف 1 أو أكثر لا يتغير بالسقف: ceil(2 · 1/7) = 1 ≤ 2، وceil(5 · 3/7) = 3 ≤ 5
+    assert (
+        period_progress(count_spec(1.0, "week", start_day=THURSDAY), [], THURSDAY, "sun").target
+        == 1.0
+    )
+    assert period_progress(weekly_bool(start_day=THURSDAY), [], THURSDAY, "sun").target == 3.0
+
+
 def test_full_and_daily_periods_keep_the_raw_target():
     full = count_spec(2.5, "week", start_day=date(2026, 11, 1))
     assert period_progress(full, [], date(2026, 11, 11), "sun").target == 2.5  # بلا تقريب
