@@ -1,0 +1,36 @@
+{
+  "name": "yawmi-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.sw.json",
+    "test": "vitest run",
+    "check:budget": "node scripts/check-budget.mjs",
+    "icons": "pwa-assets-generator && node scripts/move-icons.mjs"
+  },
+  "dependencies": {
+    "preact": "11.2.0",
+    "preact-iso": "2.12.2"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "2.10.6",
+    "@types/node": "24.19.2",
+    "@vite-pwa/assets-generator": "2.0.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.7",
+    "vite-plugin-pwa": "2.0.0",
+    "vitest": "5.1.0",
+    "workbox-build": "7.4.1",
+    "workbox-core": "7.4.1",
+    "workbox-precaching": "7.4.1",
+    "workbox-routing": "7.4.1",
+    "workbox-window": "7.4.1"
+  }
+}
