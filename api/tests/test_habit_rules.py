@@ -3,6 +3,7 @@
 هذه الاختبارات هي المرجع الذي تُشتق منه متجهات المهمة 11، فكل حالة حدّية هنا مقصودة.
 """
 
+import itertools
 import math
 from dataclasses import FrozenInstanceError
 from datetime import date, timedelta
@@ -306,9 +307,16 @@ def test_strength_challenge_is_frozen_after_end_day():
     assert math.isclose(after, 1 - M13**10, abs_tol=1e-12)
 
 
-def _rolling_expected(target: float, window: int, logs: dict[date, float], until: date) -> float:
-    """مرجع مستقل: تحديث يومي بنافذة متحركة، و f = T / النافذة."""
-    m = 0.5 ** (math.sqrt(target / window) / 13)
+def _rolling_expected(
+    target: float,
+    window: int,
+    logs: dict[date, float],
+    until: date,
+    frequency: float | None = None,
+) -> float:
+    """مرجع مستقل: تحديث يومي بنافذة متحركة، و f = min(1, T / النافذة) ما لم تُمرَّر."""
+    f = min(1.0, target / window) if frequency is None else frequency
+    m = 0.5 ** (math.sqrt(f) / 13)
     s = 0.0
     day = START
     while day < until:
@@ -367,9 +375,10 @@ def test_strength_ignores_future_dated_logs_and_input_order():
 def test_period_progress_daily_boolean_not_yet_done():
     p = period_progress(spec(), [], START, "sun")
     assert (p.done, p.completion, p.reached) == (0.0, 0.0, False)
-    assert p.expected == 1.0
-    assert p.on_track is False
-    assert p.need_per_day == 1.0
+    assert p.target == 1.0
+    assert p.expected == 0.0  # صباحاً قبل التسجيل: اليوم لا يُحسب منقضياً بعد
+    assert p.on_track is True
+    assert p.need_per_day == 1.0  # لكنه ما زال بين الأيام الباقية
 
 
 def test_period_progress_daily_boolean_done():
@@ -427,7 +436,7 @@ def test_period_progress_weekly_mid_week():
     assert p.done == 3.0
     assert p.completion == pytest.approx(0.6)
     assert p.reached is False
-    assert p.expected == pytest.approx(5 * 4 / 7)  # أحد، اثنين، ثلاثاء، أربعاء
+    assert p.expected == pytest.approx(5 * 3 / 7)  # أحد، اثنين، ثلاثاء؛ والأربعاء بلا سجل
     assert p.on_track is True
     assert p.need_per_day == pytest.approx(2 / 4)  # الأربعاء إلى السبت شاملاً
 
@@ -440,14 +449,14 @@ def test_period_progress_weekly_vacation_day_lowers_expected_not_need():
         done(date(2026, 11, 10)),
     ]
     p = period_progress(s, logs, date(2026, 11, 11), "sun")
-    assert p.expected == pytest.approx(5 * 3 / 7)  # يوم الإجازة لا يُحسب منقضياً
+    assert p.expected == pytest.approx(5 * 2 / 7)  # الأحد والثلاثاء؛ الإجازة لا تُحسب منقضية
     assert p.need_per_day == pytest.approx((5 - 2) / 4)  # والمطلوب اليومي لا يرتفع بسببه
 
 
 def test_period_progress_weekly_behind_schedule():
     s = count_spec(7.0, "week", start_day=date(2026, 11, 1))
     p = period_progress(s, [done(date(2026, 11, 8))], date(2026, 11, 13), "sun")  # الجمعة
-    assert p.expected == pytest.approx(7 * 6 / 7)
+    assert p.expected == pytest.approx(7 * 5 / 7)  # من الأحد إلى الخميس؛ والجمعة بلا سجل
     assert p.on_track is False
     assert p.need_per_day == pytest.approx(6 / 2)  # الجمعة والسبت
 
@@ -465,7 +474,8 @@ def test_period_progress_ignores_logs_before_start_day():
     logs = [done(date(2026, 11, 8)), done(START)]
     p = period_progress(s, logs, date(2026, 11, 10), "sun")
     assert p.done == 1.0
-    assert p.expected == pytest.approx(5 * 2 / 6)  # الأيام المجدولة في الفترة 6 (من الاثنين)
+    assert p.target == 5.0  # 6 من 7 أيام: ceil(5 · 6/7) = 5
+    assert p.expected == pytest.approx(5 * 1 / 6)  # الاثنين فقط؛ الأيام المجدولة في الفترة 6
 
 
 def test_period_progress_week_start_changes_the_period():
@@ -482,7 +492,7 @@ def test_period_progress_monthly_in_leap_february():
     logs = [done(date(2028, 2, i + 1)) for i in range(10)]
     p = period_progress(s, logs, date(2028, 2, 29), "sun")
     assert p.done == 10.0
-    assert p.expected == pytest.approx(29.0)  # 29 يوماً منقضياً من 29
+    assert p.expected == pytest.approx(28.0)  # 28 يوماً منقضياً من 29؛ واليوم الأخير بلا سجل
     assert p.on_track is False
     assert p.need_per_day == pytest.approx(19.0)  # اليوم الأخير وحده
 
@@ -490,7 +500,7 @@ def test_period_progress_monthly_in_leap_february():
 def test_period_progress_monthly_prorates_expected():
     s = count_spec(30.0, "month", start_day=date(2026, 11, 1))
     p = period_progress(s, [], date(2026, 11, 15), "sun")
-    assert p.expected == pytest.approx(30 * 15 / 30)
+    assert p.expected == pytest.approx(30 * 14 / 30)  # 14 يوماً منقضياً؛ واليوم 15 بلا سجل
     assert p.need_per_day == pytest.approx(30 / 16)  # من 15 إلى 30 نوفمبر شاملاً
 
 
@@ -851,3 +861,267 @@ def test_functions_do_not_mutate_inputs_and_are_deterministic():
 def test_functions_accept_any_iterable_of_logs():
     gen = (done(d(i)) for i in range(3))
     assert streak(spec(), gen, d(3), "sun") == 3
+
+
+# ---------------------------------------------------------------- اليوم الحالي قبل التسجيل (R3)
+
+
+def test_period_progress_today_enters_expected_only_with_a_log():
+    s = count_spec(5.0, "week", start_day=date(2026, 11, 1))
+    earlier = [done(date(2026, 11, 8)), done(date(2026, 11, 9)), done(date(2026, 11, 10))]
+    today = date(2026, 11, 11)  # الأربعاء
+    without = period_progress(s, earlier, today, "sun")
+    assert without.expected == pytest.approx(5 * 3 / 7)
+    with_done = period_progress(s, [*earlier, done(today)], today, "sun")
+    assert with_done.expected == pytest.approx(5 * 4 / 7)
+    with_missed = period_progress(s, [*earlier, status(today, "missed")], today, "sun")
+    assert with_missed.expected == pytest.approx(5 * 4 / 7)  # أي سجل يكفي
+    with_skip = period_progress(s, [*earlier, status(today, "skip")], today, "sun")
+    assert with_skip.expected == pytest.approx(5 * 3 / 7)  # والمتخطّى لا يُحسب
+    # والباقي شاملاً اليوم في كل الحالات
+    assert without.need_per_day == pytest.approx((5 - 3) / 4)
+    assert with_missed.need_per_day == pytest.approx((5 - 3) / 4)
+
+
+def test_period_progress_daily_partial_log_today_is_expected_to_finish():
+    s = spec(kind="duration", unit="min", target_per_period=30.0)
+    p = period_progress(s, [done(START, 15.0)], START, "sun")
+    assert p.expected == 30.0  # للسجل اليوم صار منقضياً
+    assert p.on_track is False
+    assert p.need_per_day == 15.0
+
+
+# ---------------------------------------------------------------- الفترات الجزئية (R1)
+
+THURSDAY = date(2026, 11, 12)  # أسبوع الأحد 11-08 .. 11-14: المجدول منه الخميس والجمعة والسبت
+
+
+def weekly_bool(**kw) -> HabitSpec:
+    return spec(kind="boolean", target_per_period=5.0, period="week", **kw)
+
+
+def test_partial_first_week_has_prorated_target_and_is_reached():
+    s = weekly_bool(start_day=THURSDAY)
+    logs = [done(date(2026, 11, 12)), done(date(2026, 11, 13)), done(date(2026, 11, 14))]
+    p = period_progress(s, logs, date(2026, 11, 14), "sun")
+    assert p.target == 3.0  # ceil(5 · 3/7)
+    assert p.reached is True
+    assert p.completion == 1.0
+    short = period_progress(s, logs[:2], date(2026, 11, 14), "sun")
+    assert short.reached is False
+    assert short.completion == pytest.approx(2 / 3)
+
+
+def test_partial_first_week_adherence_and_streak_after_a_full_second_week():
+    s = weekly_bool(start_day=THURSDAY)
+    week1 = [done(date(2026, 11, i)) for i in (12, 13, 14)]
+    week2 = [done(date(2026, 11, i)) for i in (15, 16, 17, 18, 19)]
+    # أول فترة منتهية: الأسبوع الجزئي محقق بهدفه المتناسب
+    assert adherence(s, week1, date(2026, 11, 15), "sun") == 1.0
+    # بعد أسبوع كامل ثانٍ
+    assert adherence(s, [*week1, *week2], date(2026, 11, 22), "sun") == 1.0
+    assert streak(s, [*week1, *week2], date(2026, 11, 22), "sun") == 2
+    # أسبوع ثانٍ ناقص يخفض الالتزام ويقطع السلسلة
+    short2 = week2[:4]
+    assert adherence(s, [*week1, *short2], date(2026, 11, 22), "sun") == 0.5
+    assert streak(s, [*week1, *short2], date(2026, 11, 22), "sun") == 0
+
+
+def test_thirty_day_weekly_challenge_from_sunday_is_fully_met():
+    start = date(2026, 11, 8)  # الأحد
+    last = end_day(start, 30)  # 2026-12-07
+    s = weekly_bool(start_day=start, end_day=last)
+    logs = [done(d(i, start)) for i in range(30)]
+    today = date(2026, 12, 8)
+    assert streak(s, logs, today, "sun") == 5
+    assert adherence(s, logs, today, "sun") == 1.0
+    c = challenge_progress(s, logs, today, "sun")
+    assert c is not None
+    assert (c.achieved, c.total, c.completion, c.remaining_days) == (5, 5, 1.0, 0)
+    # الفترة الأخيرة (12-06 و12-07) مقصوصة بالنهاية: ceil(5 · 2/7) = 2
+    p = period_progress(s, logs, last, "sun")
+    assert (p.target, p.done, p.reached) == (2.0, 2.0, True)
+
+
+def test_partial_end_period_is_judged_strictly_by_its_prorated_target():
+    start = date(2026, 11, 8)
+    s = weekly_bool(start_day=start, end_day=end_day(start, 30))
+    logs = [done(d(i, start)) for i in range(29)]  # ينقص يوم النهاية 12-07
+    today = date(2026, 12, 8)
+    assert streak(s, logs, today, "sun") == 0  # الفترة الأخيرة فائتة (1 من 2)
+    assert adherence(s, logs, today, "sun") == pytest.approx(4 / 5)
+    c = challenge_progress(s, logs, today, "sun")
+    assert c is not None
+    assert (c.achieved, c.total) == (4, 5)
+
+
+def test_monthly_partial_start_prorates_by_month_length():
+    s = count_spec(10.0, "month", start_day=date(2026, 11, 21))  # 10 من 30 يوماً
+    logs = [done(date(2026, 11, 21 + i)) for i in range(4)]
+    p = period_progress(s, logs, date(2026, 11, 30), "sun")
+    assert p.target == 4.0  # ceil(10 · 10/30)
+    assert p.reached is True
+    # والشهر الكامل التالي بهدفه كاملاً
+    assert period_progress(s, [], date(2026, 12, 5), "sun").target == 10.0
+
+
+def test_monthly_challenge_partial_months_use_prorated_targets():
+    s = count_spec(10.0, "month", start_day=date(2026, 11, 21), end_day=date(2027, 1, 10))
+    logs = [
+        *[done(date(2026, 11, 21 + i)) for i in range(4)],  # نوفمبر: 4 من 4
+        *[done(date(2026, 12, 1 + i)) for i in range(10)],  # ديسمبر: 10 من 10
+        *[done(date(2027, 1, 1 + i)) for i in range(4)],  # يناير 10 من 31: ceil(3.2) = 4
+    ]
+    c = challenge_progress(s, logs, date(2027, 1, 12), "sun")
+    assert c is not None
+    assert (c.achieved, c.total) == (3, 3)
+
+
+def test_prorated_target_rounds_up_and_ignores_float_noise():
+    duration = spec(
+        kind="duration", unit="min", target_per_period=285.0, period="week", start_day=THURSDAY
+    )
+    p = period_progress(duration, [], date(2026, 11, 12), "sun")
+    assert p.target == 123.0  # ceil(285 · 3/7) = ceil(122.14)
+    noisy = count_spec(14.000000001, "week", start_day=THURSDAY)
+    # 14.000000001 · 3/7 = 6.0000000004 → 6 لا 7
+    assert period_progress(noisy, [], date(2026, 11, 12), "sun").target == 6.0
+    tiny = count_spec(2.0, "week", start_day=date(2026, 11, 14))  # يوم واحد من 7
+    assert period_progress(tiny, [], date(2026, 11, 14), "sun").target == 1.0
+
+
+def test_full_and_daily_periods_keep_the_raw_target():
+    full = count_spec(2.5, "week", start_day=date(2026, 11, 1))
+    assert period_progress(full, [], date(2026, 11, 11), "sun").target == 2.5  # بلا تقريب
+    daily = count_spec(3.0, "day", start_day=THURSDAY)  # الهدف يسري على كل يوم مجدول
+    assert period_progress(daily, [], date(2026, 11, 12), "sun").target == 3.0
+    outside = count_spec(5.0, "week", start_day=date(2026, 11, 22))  # الفترة قبل البداية كلياً
+    assert period_progress(outside, [], date(2026, 11, 11), "sun").target == 5.0
+
+
+def test_partial_week_with_all_days_skipped_stays_neutral():
+    s = weekly_bool(start_day=THURSDAY)
+    logs = [status(date(2026, 11, i), "vacation") for i in (12, 13, 14)]
+    assert adherence(s, logs, date(2026, 11, 15), "sun") is None
+
+
+# ---------------------------------------------------------------- سرعة القوة لا تتبع الوحدة (R2)
+
+
+def test_strength_weekly_duration_speed_is_unit_independent():
+    # 285 دقيقة في أسبوع كامل: السرعة كاليومية (f = 1) لا 285/7
+    s = spec(kind="duration", unit="min", target_per_period=285.0, period="week")
+    got = strength(s, [done(START, 285.0)], d(7), "sun")
+    assert math.isclose(got, 1 - M13**7, abs_tol=1e-12)
+    hours = spec(kind="duration", unit="hour", target_per_period=5.0, period="week")
+    assert math.isclose(strength(hours, [done(START, 5.0)], d(7), "sun"), got, abs_tol=1e-12)
+
+
+def test_strength_weekly_count_keeps_fractional_frequency():
+    s = count_spec(5.0, "week")
+    m = 0.5 ** (math.sqrt(5 / 7) / 13)
+    got = strength(s, [done(START, 5.0)], d(7), "sun")
+    assert math.isclose(got, 1 - m**7, abs_tol=1e-12)
+    assert got < 1 - M13**7  # أبطأ من اليومية
+
+
+def test_strength_weekly_boolean_frequency_is_target_over_window():
+    s = spec(kind="boolean", target_per_period=3.0, period="week")
+    values = {d(0): 1.0, d(1): 1.0, d(2): 1.0}
+    logs = [done(day) for day in values]
+    got = strength(s, logs, d(7), "sun")
+    assert math.isclose(
+        got, _rolling_expected(3.0, 7, values, d(7), frequency=3 / 7), abs_tol=1e-12
+    )
+
+
+def test_strength_frequency_is_capped_at_one_when_target_exceeds_window():
+    s = count_spec(60.0, "month")  # 60 / 30 = 2 → f = 1
+    got = strength(s, [done(START, 60.0)], d(30), "sun")
+    assert math.isclose(got, 1 - M13**30, abs_tol=1e-12)
+    duration = spec(kind="duration", unit="min", target_per_period=600.0, period="month")
+    got = strength(duration, [done(START, 600.0)], d(30), "sun")
+    assert math.isclose(got, 1 - M13**30, abs_tol=1e-12)
+
+
+# ---------------------------------------------------------------- تفاصيل ثانوية
+
+
+def test_progress_numbers_are_always_floats():
+    for s in (spec(), count_spec(3.0, "day"), count_spec(3.0, "week"), count_spec(3.0, "month")):
+        p = period_progress(s, [], START, "sun")
+        for value in (p.done, p.target, p.completion, p.expected, p.need_per_day):
+            assert isinstance(value, float)
+    integer_target = HabitSpec(
+        "count", "session", 3, "day", "every_day", None, None, None, START, None
+    )
+    p = period_progress(integer_target, [done(START, 1)], START, "sun")
+    assert all(isinstance(v, float) for v in (p.done, p.target, p.completion, p.need_per_day))
+
+
+def test_same_day_float_sum_is_independent_of_input_order():
+    s = spec(kind="duration", unit="hour", target_per_period=1.0)
+    values = [0.1, 0.2, 0.3]  # 0.1+0.2+0.3 ≠ 0.3+0.2+0.1 بالترتيب العشوائي
+    results = set()
+    for order in itertools.permutations(values):
+        p = period_progress(s, [done(START, v) for v in order], START, "sun")
+        results.add(p.done)
+    assert len(results) == 1
+
+
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"kind": "text"},
+        {"period": "year"},
+        {"schedule_kind": "monthly"},
+        {"period": "week", "schedule_kind": "weekdays", "weekday_mask": 5},
+        {"period": "month", "schedule_kind": "every_n_days", "every_n": 2, "anchor_day": START},
+    ],
+)
+def test_habit_spec_rejects_unknown_enums_and_non_daily_schedules_for_week_month(kw):
+    with pytest.raises(ValueError):
+        spec(**kw)
+
+
+@pytest.mark.parametrize("bad", ["tue", "", "SUN"])
+def test_unknown_week_start_is_rejected_everywhere(bad):
+    s = spec(end_day=d(30))
+    with pytest.raises(ValueError):
+        period_bounds(START, "week", bad)
+    with pytest.raises(ValueError):
+        period_bounds(START, "day", bad)
+    with pytest.raises(ValueError):
+        period_bounds(START, "month", bad)
+    with pytest.raises(ValueError):
+        period_progress(s, [], START, bad)
+    with pytest.raises(ValueError):
+        strength(s, [], START, bad)
+    with pytest.raises(ValueError):
+        streak(s, [], START, bad)
+    with pytest.raises(ValueError):
+        streak(s, [], d(-5), bad)  # حتى قبل البداية
+    with pytest.raises(ValueError):
+        adherence(s, [], START, bad)
+    with pytest.raises(ValueError):
+        challenge_progress(s, [], START, bad)
+    with pytest.raises(ValueError):
+        challenge_progress(spec(), [], START, bad)  # حتى بلا نهاية
+    with pytest.raises(ValueError):
+        goal_prefill(10, 0, START, d(5), "day", bad)
+
+
+@pytest.mark.parametrize("n", [0, -1, -30])
+def test_end_day_requires_at_least_one_day(n):
+    with pytest.raises(ValueError):
+        end_day(START, n)
+
+
+def test_goal_prefill_epsilon_applies_to_the_quotient():
+    today, deadline = START, d(6)  # سبعة أيام
+    assert goal_prefill(56, 0, today, deadline, "day", "sun") == 8
+    # 56.000000004 / 7 = 8.00000000057 ثم ceil(x − 1e-9) يعطي 8
+    assert goal_prefill(56.000000004, 0, today, deadline, "day", "sun") == 8
+    assert goal_prefill(56.0000000035, 0, today, deadline, "day", "sun") == 8  # 8.0000000005
+    # وفوق الهامش يُقرَّب لأعلى: 56.00000002 / 7 = 8.0000000029
+    assert goal_prefill(56.00000002, 0, today, deadline, "day", "sun") == 9

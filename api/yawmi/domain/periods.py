@@ -24,7 +24,12 @@ _ONE_DAY = timedelta(days=1)
 
 
 def end_day(start: date, duration_days: int) -> date:
-    """آخر يوم في تحدٍّ مدته `duration_days` يوماً: `start + duration_days − 1`، والبداية يوم أول."""
+    """آخر يوم في تحدٍّ مدته `duration_days` يوماً: `start + duration_days − 1`، والبداية يوم أول.
+
+    المدة يوم واحد على الأقل، وإلا `ValueError`.
+    """
+    if duration_days < 1:
+        raise ValueError("مدة التحدي يوم واحد على الأقل")
     return start + timedelta(days=duration_days - 1)
 
 
@@ -41,13 +46,22 @@ def weekday_bit(day: date) -> int:
     return (day.weekday() + 1) % 7
 
 
+def check_week_start(week_start: str) -> None:
+    """يرفع `ValueError` إن لم يكن `week_start` أحد `sat` و`sun` و`mon`."""
+    if week_start not in _WEEK_START_WEEKDAY:
+        raise ValueError(f"بداية أسبوع غير معروفة: {week_start!r}")
+
+
 def period_bounds(day: date, period: Period, week_start: WeekStart) -> tuple[date, date]:
     """بداية الفترة التي تحوي `day` ونهايتها، شاملتين.
 
     - `day`: اليوم نفسه.
     - `week`: تبدأ في أحدث يوم يطابق `week_start` (`sat` أو `sun` أو `mon`) وتمتد سبعة أيام.
     - `month`: من أول الشهر الميلادي إلى آخره، وفبراير الكبيسة 29 يوماً.
+
+    `week_start` يُفحص دائماً: قيمة غير معروفة ترفع `ValueError` ولو كانت الفترة يوماً أو شهراً.
     """
+    check_week_start(week_start)
     if period == "day":
         return day, day
     if period == "week":
