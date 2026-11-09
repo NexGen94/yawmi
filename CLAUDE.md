@@ -6,6 +6,7 @@
 متابعة يومية للأهداف والعادات، بالعربية وRTL: `api/` خدمة FastAPI، و`web/` تطبيق PWA، و`YawmiKit/` حزمة Swift، و`openapi/` المواصفة المثبّتة، و`contracts/domain-vectors/v1/` المتجهات المشتركة، و`deploy/` ملفات النشر. بايثون هو التنفيذ المرجعي لقواعد النطاق، وعلى TypeScript وSwift اجتياز ملفات المتجهات نفسها.
 
 ## المرجع
+مستودع الخطة: `C:\Users\Lenovo\OneDrive - INSIGHTO\سطح المكتب\مشروع الخطة و الرويئة` (محلي بلا remote)؛ D-0NN تعني قرارات `docs/agent/DECISIONS.md` هناك.
 مسارات نسبية إلى مستودع الخطة، ولا يُنسخ محتواها هنا:
 - المواصفة: `docs/superpowers/specs/2026-11-09-yawmi-ios-architecture.md`
 - البرومبت: `docs/superpowers/specs/2026-11-09-yawmi-app-brief.md`
@@ -29,7 +30,9 @@
 - **الواجهة البرمجية:** كل المسارات تحت `/v1`.
 - **الذكاء الاصطناعي:** Anthropic افتراضياً: `claude-haiku-5-5` يومياً و`claude-sonnet-5-5` أسبوعياً. المخرجات مقيّدة بمخطط، وسطران كحد أقصى، وأي `source_id` خارج الحمولة يُرفض.
 - **الويب:** ≤ 80 KB gzip للتحميل الأول، وخصائص CSS المنطقية فقط.
-- **Swift:** لا استيراد Apple في `Domain` و`SyncClient`.
+- **Swift:** لا استيراد Apple في `Domain` و`SyncClient` (Foundation فقط).
+- **المتجهات:** في `contracts/domain-vectors/v1/`: المعرّف لا يتغيّر بعد التزامه؛ أي تغيير في `expect` يرفع `rulesVersion`؛ مقارنة تامة للأعداد الصحيحة والنصوص و`|Δ| ≤ 1e-9` للكسور ما لم يحدد `tol`.
+- **الخادم وn8n وNotion:** لا عملية عليها من هذا المستودع دون موافقة عبدالله الصريحة في المحادثة لكل عملية؛ القائمة الكاملة للقيود في قسم «القيود العامة» من الخطة.
 
 ## سير العمل في Git/GitHub (D-061)
 - فرع لكل مهمة باسم `task/NN-slug`.
@@ -44,4 +47,5 @@
 ```bash
 cd api && uv run pytest -q
 cd api && uv run ruff check .
+cd api && uv run ruff format --check .
 ```
