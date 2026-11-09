@@ -1,0 +1,120 @@
+"""Wire models for `/v1/events`: the event envelope, the batch, and the pull page."""
+
+import json
+from datetime import datetime
+from typing import Annotated, Any
+from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
+
+from yawmi.domain.days import DEFAULT_TZ, is_valid_tz
+from yawmi.events.project import (
+    EARLIEST,
+    LATEST,
+    EventType,
+    Instant,
+    ProjectionError,
+    project_event,
+)
+
+MAX_BATCH = 500
+MAX_PAYLOAD_BYTES = 16 * 1024
+
+_BAD_TEXT = "نص الحمولة غير صالح"
+
+
+def _check_storable(payload: dict[str, Any]) -> None:
+    """Refuse what Postgres cannot store: NUL characters and lone surrogates; and size.
+
+    Both would otherwise surface as a driver error (a 500) at insert time. The walk is iterative
+    so a deeply nested payload cannot exhaust the interpreter stack.
+    """
+    stack: list[object] = [payload]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            for key, value in item.items():
+                stack.append(key)
+                stack.append(value)
+        elif isinstance(item, list):
+            stack.extend(item)
+        elif isinstance(item, str):
+            try:
+                item.encode("utf-8")
+            except UnicodeEncodeError:
+                raise PydanticCustomError("payload_text_invalid", _BAD_TEXT) from None
+            if "\x00" in item:
+                raise PydanticCustomError("payload_text_invalid", _BAD_TEXT)
+    if len(json.dumps(payload, ensure_ascii=False).encode("utf-8")) > MAX_PAYLOAD_BYTES:
+        raise PydanticCustomError("payload_too_large", "حمولة الحدث أكبر من الحد المسموح")
+
+
+def clamp_instant(value: datetime) -> datetime:
+    """`value` limited to 2000..2099, the range every stored instant lies in."""
+    return min(max(value, EARLIEST), LATEST)
+
+
+class EventIn(BaseModel):
+    """One event as a client queues it.
+
+    `device_id` is never read from the body (the token's `sub` is used) and unknown fields are
+    ignored.
+    """
+
+    id: UUID  # UUIDv7 minted by the client: the idempotency key
+    type: EventType
+    payload: dict[str, Any]
+    occurred_at: Instant  # timezone-aware ISO-8601 text
+    tz: str = DEFAULT_TZ  # IANA zone naming the local day of the event
+
+    @field_validator("tz")
+    @classmethod
+    def _known_zone(cls, tz: str) -> str:
+        if not is_valid_tz(tz):
+            raise PydanticCustomError("unknown_tz", "المنطقة الزمنية غير معروفة")
+        return tz
+
+    @field_validator("payload")
+    @classmethod
+    def _storable(cls, payload: dict[str, Any]) -> dict[str, Any]:
+        _check_storable(payload)
+        return payload
+
+    @model_validator(mode="after")
+    def _projectable(self) -> "EventIn":
+        """Reject at the door what could not be projected; `source` does not change validity."""
+        try:
+            project_event(self, "web")
+        except ProjectionError as exc:
+            raise PydanticCustomError(exc.code, exc.message) from None
+        return self
+
+
+class EventBatch(BaseModel):
+    """`POST /v1/events` body: at most 500 events (more is a 422, like any other bad body)."""
+
+    events: Annotated[list[EventIn], Field(max_length=MAX_BATCH)]
+
+
+class BatchResult(BaseModel):
+    accepted: int  # new events stored
+    duplicates: int  # events whose id was already stored: nothing changed for them
+
+
+class StoredEvent(BaseModel):
+    """An event as stored, with the server-side `received_at` that `GET /v1/events` pages by."""
+
+    id: UUID
+    device_id: UUID | None
+    type: str
+    payload: dict[str, Any]
+    occurred_at: datetime
+    tz: str
+    received_at: datetime
+
+
+class PullResult(BaseModel):
+    events: list[StoredEvent]
+    # the last event's `received_at`, or the `since` that was asked for when there is nothing new
+    next_since: datetime | None

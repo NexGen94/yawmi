@@ -667,12 +667,16 @@ async def test_revoke_unknown_device_is_404_and_repeat_is_idempotent(
 def test_module_level_app_exists_and_import_needs_no_environment() -> None:
     assert module_app.title == "yawmi-api"
     assert module_app.state.use_db is True
-    assert set(module_app.openapi()["paths"]) == {
+    paths = set(module_app.openapi()["paths"])
+    # route modules are discovered automatically, so other modules add paths of their own:
+    # these four must exist, and every path (whoever defines it) lives under /v1
+    assert {
         "/v1/health/live",
         "/v1/devices/pair",
         "/v1/auth/refresh",
         "/v1/devices/{device_id}/revoke",
-    }
+    } <= paths
+    assert all(path.startswith("/v1/") for path in paths)
 
 
 async def test_lifespan_leaves_the_database_alone_with_an_injected_store(
