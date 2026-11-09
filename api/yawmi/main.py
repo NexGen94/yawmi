@@ -18,7 +18,7 @@ from yawmi import __version__
 from yawmi.auth.deps import DeviceStore
 from yawmi.auth.pg_store import AsyncpgDeviceStore
 from yawmi.db.pool import create_pool, set_pool
-from yawmi.routes.devices import router as devices_router
+from yawmi.routes import include_all
 from yawmi.settings import Settings
 from yawmi.settings import settings as load_settings
 
@@ -122,7 +122,7 @@ def create_app(*, settings: Settings | None = None, devices: DeviceStore | None 
     app.state.use_db = devices is None
     app.add_middleware(RequestIdMiddleware)
     app.add_exception_handler(RequestValidationError, _validation_error)  # type: ignore[arg-type]
-    app.include_router(devices_router)
+    include_all(app)
 
     @app.get("/v1/health/live", tags=["health"], summary="فحص الحياة (بلا مصادقة)")
     async def health_live() -> Live:
