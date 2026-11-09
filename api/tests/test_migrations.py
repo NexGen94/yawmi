@@ -5,11 +5,15 @@ Two groups:
 * Plain tests (no database): the migration runner's file handling and static
   guards on the SQL files themselves. These run everywhere.
 * Database tests: need a real Postgres with a ``raqib`` database and a user allowed
-  to create schemas and roles (superuser in CI). They are skipped unless
-  ``TEST_DATABASE_URL`` is set; the real run happens in GitHub Actions
-  (``.github/workflows/api-tests.yml``).
+  to create schemas and roles (superuser in CI). Locally they are skipped unless
+  ``TEST_DATABASE_URL`` is set. When ``CI`` is set they never skip: a missing
+  ``TEST_DATABASE_URL`` fails them, so CI cannot go green without a database. The real run
+  happens in GitHub Actions (``.github/workflows/api-tests.yml``).
 """
 
+import base64
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -25,10 +29,19 @@ import asyncpg
 import pytest
 from asyncpg import exceptions as pgerr
 
-from yawmi.db.migrate import MIGRATIONS_DIR, MigrationError, migrate, strip_transaction
+from yawmi.db.migrate import (
+    MIGRATIONS_DIR,
+    MigrationError,
+    clean_params,
+    migrate,
+    strip_transaction,
+)
 
 DSN = os.environ.get("TEST_DATABASE_URL")
-needs_db = pytest.mark.skipif(not DSN, reason="TEST_DATABASE_URL is not set (CI-only tests)")
+IN_CI = bool(os.environ.get("CI"))
+needs_db = pytest.mark.skipif(
+    not DSN and not IN_CI, reason="TEST_DATABASE_URL is not set (database tests run in CI)"
+)
 
 STUB_SQL = Path(__file__).parent / "fixtures" / "raqib_stub.sql"
 EXPECTED_FILES = ["0001_yawmi_schema.sql", "0002_yawmi_role.sql"]
@@ -48,15 +61,10 @@ YAWMI_TABLES = [
     "sync_cursor",
 ]
 DELETABLE = {"pairing_codes", "push_subscriptions"}
-RAQIB_READABLE = [
-    "notion_milestones",
-    "notion_cards",
-    "goals",
-    "cycles",
-    "kpis",
-    "kpi_readings",
-    "v_journal_daily",
-]
+# Read in full (table-level SELECT).
+RAQIB_WHOLE = ["notion_milestones", "goals", "cycles", "kpis", "v_journal_daily"]
+# Read column by column: every column except the one named here (personal free text).
+RAQIB_HIDDEN_COLUMN = {"notion_cards": "props", "kpi_readings": "note"}
 NOW = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
 
 
@@ -115,6 +123,78 @@ async def test_migrate_rejects_duplicate_numbers(tmp_path: Path):
         await migrate("postgresql://nobody@localhost:1/none", migrations_dir=tmp_path)
 
 
+async def test_migrate_rejects_a_missing_directory(tmp_path: Path):
+    with pytest.raises(MigrationError, match="not found"):
+        await migrate("postgresql://nobody@localhost:1/none", migrations_dir=tmp_path / "nope")
+
+
+async def test_migrate_rejects_an_empty_directory(tmp_path: Path):
+    with pytest.raises(MigrationError, match="no migration files"):
+        await migrate("postgresql://nobody@localhost:1/none", migrations_dir=tmp_path)
+
+
+def test_clean_params_strips_trailing_whitespace_only():
+    cleaned = clean_params({"yawmi_api_pw": "  ab c\r\n", "other": "x \t\n"})
+    assert cleaned == {"yawmi_api_pw": "  ab c", "other": "x"}
+
+
+def test_clean_params_rejects_bad_names_and_non_strings():
+    with pytest.raises(MigrationError):
+        clean_params({"Bad-Name": "x"})
+    with pytest.raises(MigrationError):
+        clean_params({"ok": 1})  # type: ignore[dict-item]
+
+
+def test_ci_provides_a_database_url():
+    if IN_CI:
+        assert DSN, "CI is set but TEST_DATABASE_URL is not: the database tests cannot run"
+
+
+def _scram_secret(password: str, salt_b64: str, iterations: int) -> tuple[bytes, bytes, bytes]:
+    """(client_key, stored_key, server_key) of a SCRAM-SHA-256 secret (RFC 5802)."""
+    salted = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), base64.b64decode(salt_b64), iterations
+    )
+    client_key = hmac.new(salted, b"Client Key", hashlib.sha256).digest()
+    server_key = hmac.new(salted, b"Server Key", hashlib.sha256).digest()
+    return client_key, hashlib.sha256(client_key).digest(), server_key
+
+
+def scram_matches(verifier: str, password: str) -> bool:
+    """True if a Postgres ``rolpassword`` verifier was built from ``password``."""
+    _, header, keys = verifier.split("$", 2)
+    iterations, salt = header.split(":")
+    _, stored_key, _ = _scram_secret(password, salt, int(iterations))
+    return base64.b64encode(stored_key).decode() == keys.split(":")[0]
+
+
+def test_scram_helper_reproduces_the_rfc_7677_example():
+    # RFC 7677 section 3: user/"pencil", salt W22ZaJ0SNY7soEsUEjb6gQ==, 4096 iterations.
+    salt = "W22ZaJ0SNY7soEsUEjb6gQ=="
+    auth_message = ",".join(
+        [
+            "n=user,r=rOprNGfwEbeRWgbNEkqO",
+            "r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,s=" + salt + ",i=4096",
+            "c=biws,r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0",
+        ]
+    )
+    client_key, stored_key, server_key = _scram_secret("pencil", salt, 4096)
+    signature = hmac.new(stored_key, auth_message.encode(), hashlib.sha256).digest()
+    proof = bytes(a ^ b for a, b in zip(client_key, signature, strict=True))
+    assert base64.b64encode(proof).decode() == "dHzbZapWIk4jUhN+Ute9ytag9zjfMHgsqmmiz7AndVQ="
+    server_signature = hmac.new(server_key, auth_message.encode(), hashlib.sha256).digest()
+    assert (
+        base64.b64encode(server_signature).decode()
+        == "6rriTRBi23WpRR/wtup+mMhUZUn/dB5nLTJRsjl95G4="
+    )
+    verifier = (
+        f"SCRAM-SHA-256$4096:{salt}${base64.b64encode(stored_key).decode()}"
+        f":{base64.b64encode(server_key).decode()}"
+    )
+    assert scram_matches(verifier, "pencil")
+    assert not scram_matches(verifier, "pencil\n")
+
+
 def test_migration_files_are_the_expected_pair_in_order():
     assert sorted(p.name for p in MIGRATIONS_DIR.glob("*.sql")) == EXPECTED_FILES
 
@@ -142,6 +222,9 @@ def test_role_migration_documents_the_password_mechanism():
     header = (MIGRATIONS_DIR / "0002_yawmi_role.sql").read_text(encoding="utf-8").split("BEGIN;")[0]
     assert "/run/yawmi/yawmi_api_pw" in header
     assert "yawmi_migrate.yawmi_api_pw" in header
+    # A psql loader must record the files it applies, or a later runner would re-apply them.
+    assert "INSERT INTO yawmi.schema_migrations" in header
+    assert "ON CONFLICT DO NOTHING" in header
 
 
 # ---------------------------------------------------------------------------
@@ -159,7 +242,8 @@ async def _reset(conn: asyncpg.Connection) -> None:
 @pytest.fixture
 async def conn() -> AsyncIterator[asyncpg.Connection]:
     """Admin connection to a database with the raqib stub applied and yawmi wiped."""
-    assert DSN
+    if not DSN:
+        pytest.fail("CI is set but TEST_DATABASE_URL is not: cannot run the database tests")
     c = await asyncpg.connect(DSN)
     try:
         await c.execute(STUB_SQL.read_text(encoding="utf-8"))
@@ -226,6 +310,26 @@ async def test_migrate_twice_applies_then_does_nothing(conn: asyncpg.Connection,
     rows = await conn.fetch("SELECT filename, applied_at FROM yawmi.schema_migrations")
     assert sorted(r["filename"] for r in rows) == EXPECTED_FILES
     assert all(r["applied_at"] is not None for r in rows)
+
+
+@needs_db
+async def test_files_apply_as_plain_sql_without_the_runner(conn: asyncpg.Connection):
+    # What a psql loader does: execute each file as it is (its own BEGIN/COMMIT), then
+    # record it. 0001 creates yawmi.schema_migrations itself, so 0002's REVOKE can resolve.
+    assert DSN
+    for name in EXPECTED_FILES:
+        await conn.execute((MIGRATIONS_DIR / name).read_text(encoding="utf-8"))
+        await conn.execute(
+            "INSERT INTO yawmi.schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING",
+            name,
+        )
+    recorded = await conn.fetch("SELECT filename FROM yawmi.schema_migrations ORDER BY filename")
+    assert [r["filename"] for r in recorded] == EXPECTED_FILES
+    assert await conn.fetchval("SELECT rolcanlogin FROM pg_roles WHERE rolname = 'yawmi_api'")
+    assert not await _has(conn, "yawmi.schema_migrations", "SELECT")
+    assert await _has(conn, "yawmi.habits", "SELECT")
+    # The Python runner then treats both as applied (and its bootstrap is a no-op).
+    assert await migrate(DSN) == []
 
 
 @needs_db
@@ -505,6 +609,18 @@ async def test_habit_log_is_unique_per_habit_day_source_and_latest_write_wins(
 
 
 @needs_db
+async def test_habit_log_requires_a_habit(migrated: asyncpg.Connection):
+    with pytest.raises(pgerr.NotNullViolationError):
+        await migrated.execute(
+            "INSERT INTO yawmi.habit_logs (id, habit_code, day, status, source, logged_at) "
+            "VALUES ($1, NULL, $2, 'done', 'web', $3)",
+            uuid.uuid4(),
+            date(2026, 11, 9),
+            NOW,
+        )
+
+
+@needs_db
 async def test_habit_log_links_to_event_and_habit(migrated: asyncpg.Connection):
     await insert_habit(migrated)
     event_id = await insert_event(migrated)
@@ -537,7 +653,7 @@ async def test_daily_metrics_score_ranges(migrated: asyncpg.Connection):
     )
     row = await migrated.fetchrow("SELECT data_quality, computed_at FROM yawmi.daily_metrics")
     assert row is not None
-    assert json.loads(row["data_quality"]) == {}
+    assert row["data_quality"] == "missing"
     assert row["computed_at"] is not None
     out_of_range: list[tuple[str, int | Decimal]] = [
         ("recovery_score", 101),
@@ -552,6 +668,18 @@ async def test_daily_metrics_score_ranges(migrated: asyncpg.Connection):
                 day + timedelta(days=1),
                 bad,
             )
+
+
+@needs_db
+async def test_daily_metrics_data_quality_is_a_label(migrated: asyncpg.Connection):
+    insert = "INSERT INTO yawmi.daily_metrics (day, data_quality) VALUES ($1, $2)"
+    for offset, label in enumerate(("missing", "low", "ok")):
+        await migrated.execute(insert, date(2026, 11, 1) + timedelta(days=offset), label)
+    for bad in ("great", "OK", "", "{}"):
+        with pytest.raises(pgerr.CheckViolationError):
+            await migrated.execute(insert, date(2026, 11, 20), bad)
+    with pytest.raises(pgerr.NotNullViolationError):
+        await migrated.execute(insert, date(2026, 11, 21), None)
 
 
 @needs_db
@@ -656,14 +784,48 @@ async def test_role_cannot_touch_the_migration_ledger(migrated: asyncpg.Connecti
 
 
 @needs_db
-@pytest.mark.parametrize("relation", RAQIB_READABLE)
-async def test_role_reads_but_never_writes_the_raqib_mirror(
+@pytest.mark.parametrize("relation", RAQIB_WHOLE)
+async def test_role_reads_these_raqib_relations_in_full(
     migrated: asyncpg.Connection, relation: str
 ):
+    assert await _has(migrated, f"raqib.{relation}", "SELECT"), relation
+
+
+@needs_db
+@pytest.mark.parametrize(("relation", "hidden"), list(RAQIB_HIDDEN_COLUMN.items()))
+async def test_role_reads_every_column_except_the_hidden_one(
+    migrated: asyncpg.Connection, relation: str, hidden: str
+):
     rel = f"raqib.{relation}"
-    assert await _has(migrated, rel, "SELECT"), rel
+    columns = [
+        r["column_name"]
+        for r in await migrated.fetch(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = 'raqib' AND table_name = $1",
+            relation,
+        )
+    ]
+    assert hidden in columns
+    assert len(columns) > 1
+    assert not await _has(migrated, rel, "SELECT"), f"{rel}: table-level SELECT must be absent"
+    for column in columns:
+        readable = await migrated.fetchval(
+            f"SELECT has_column_privilege('yawmi_api', '{rel}', '{column}', 'SELECT')"
+        )
+        assert readable is (column != hidden), f"{rel}.{column}"
+
+
+@needs_db
+@pytest.mark.parametrize("relation", [*RAQIB_WHOLE, *RAQIB_HIDDEN_COLUMN])
+async def test_role_never_writes_the_raqib_mirror(migrated: asyncpg.Connection, relation: str):
+    rel = f"raqib.{relation}"
     for privilege in ("INSERT", "UPDATE", "DELETE", "TRUNCATE"):
         assert not await _has(migrated, rel, privilege), f"{rel} {privilege}"
+    for privilege in ("INSERT", "UPDATE"):
+        any_column = await migrated.fetchval(
+            f"SELECT has_any_column_privilege('yawmi_api', '{rel}', '{privilege}')"
+        )
+        assert not any_column, f"{rel} column {privilege}"
 
 
 @needs_db
@@ -696,6 +858,16 @@ async def test_role_behaviour_under_set_role(migrated: asyncpg.Connection):
         await migrated.execute("DELETE FROM yawmi.pairing_codes WHERE code = 'c1'")
         await migrated.execute("UPDATE yawmi.habits SET active = false WHERE code = 'h1'")
         assert await migrated.fetchval("SELECT count(*) FROM raqib.kpis") == 0
+        assert await migrated.fetchval("SELECT count(page_id) FROM raqib.notion_cards") == 0
+        assert await migrated.fetchval("SELECT count(value) FROM raqib.kpi_readings") == 0
+        for hidden_read in (
+            "SELECT props FROM raqib.notion_cards",
+            "SELECT * FROM raqib.notion_cards",
+            "SELECT note FROM raqib.kpi_readings",
+            "SELECT * FROM raqib.kpi_readings",
+        ):
+            with pytest.raises(pgerr.InsufficientPrivilegeError):
+                await migrated.execute(hidden_read)
         with pytest.raises(pgerr.InsufficientPrivilegeError):
             await migrated.execute("DELETE FROM yawmi.habits WHERE code = 'h1'")
         with pytest.raises(pgerr.InsufficientPrivilegeError):
@@ -723,6 +895,19 @@ async def test_password_is_set_from_the_supplied_parameter(
     assert stored is not None
     assert stored.startswith("SCRAM-SHA-256$")
     assert api_pw not in stored
+    assert scram_matches(stored, api_pw)
+    assert not scram_matches(stored, api_pw + "x")
+
+
+@needs_db
+async def test_trailing_newline_in_the_password_value_is_stripped(
+    conn: asyncpg.Connection, api_pw: str
+):
+    assert DSN
+    await migrate(DSN, {"yawmi_api_pw": api_pw + "\n"})  # as read_text() of a secret file
+    stored = await conn.fetchval("SELECT rolpassword FROM pg_authid WHERE rolname = 'yawmi_api'")
+    assert scram_matches(stored, api_pw)
+    assert not scram_matches(stored, api_pw + "\n")
 
 
 @needs_db

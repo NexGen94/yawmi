@@ -9,10 +9,21 @@
 --     that adds a table must grant to yawmi_api itself.
 -- The runner wraps this file in one transaction and records it in
 -- yawmi.schema_migrations; BEGIN/COMMIT below also let it run standalone under psql.
+-- This file also creates yawmi.schema_migrations (IF NOT EXISTS, same DDL as the runner's
+-- bootstrap), so 0002 can reference it even when the runner is not used. A psql loader must
+-- then record each file it applies:
+--   INSERT INTO yawmi.schema_migrations (filename) VALUES ('0001_yawmi_schema.sql')
+--   ON CONFLICT DO NOTHING;
 
 BEGIN;
 
 CREATE SCHEMA IF NOT EXISTS yawmi;
+
+-- Migration ledger. Identical to the runner's bootstrap so either path may create it first.
+CREATE TABLE IF NOT EXISTS yawmi.schema_migrations (
+  filename text PRIMARY KEY,
+  applied_at timestamptz NOT NULL DEFAULT now()
+);
 
 -- ---------------------------------------------------------------------------
 -- Devices and pairing
@@ -111,7 +122,7 @@ CREATE INDEX habit_reminders_habit_code_idx ON yawmi.habit_reminders (habit_code
 
 CREATE TABLE yawmi.habit_logs (
   id uuid PRIMARY KEY,
-  habit_code text REFERENCES yawmi.habits,
+  habit_code text NOT NULL REFERENCES yawmi.habits,
   day date NOT NULL,
   value numeric,
   status text CHECK (status IN ('done', 'skip', 'vacation', 'missed')),
@@ -178,7 +189,7 @@ CREATE TABLE yawmi.daily_metrics (
   strain_score numeric(4, 1) CHECK (strain_score BETWEEN 0 AND 21),
   sleep_score smallint CHECK (sleep_score BETWEEN 0 AND 100),
   stress_score smallint CHECK (stress_score BETWEEN 0 AND 100),
-  data_quality jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(data_quality) = 'object'),
+  data_quality text NOT NULL DEFAULT 'missing' CHECK (data_quality IN ('missing', 'low', 'ok')),
   computed_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -187,7 +198,7 @@ COMMENT ON COLUMN yawmi.daily_metrics.hrv_ms IS
 COMMENT ON COLUMN yawmi.daily_metrics.strain_score IS
 'Saturating exertion curve 0..21; the other three scores are 0..100.';
 COMMENT ON COLUMN yawmi.daily_metrics.data_quality IS
-'Per-metric quality flags, e.g. {"hrv": "provisional"}; never used to invent zeros.';
+'Overall label for the day: missing (no watch data), low, or ok; never used to invent zeros.';
 
 -- ---------------------------------------------------------------------------
 -- Focus and breathing sessions (projected from focus_ended / breath_ended events)

@@ -12,7 +12,9 @@ Conventions
   the duration of its transaction as the settings ``yawmi_migrate.<name>`` (set with
   ``set_config``, bound as parameters, never spliced into the SQL text), and a file reads
   them with ``current_setting('yawmi_migrate.<name>', true)``. Only ``0002`` uses this,
-  for the ``yawmi_api`` role password.
+  for the ``yawmi_api`` role password. Trailing whitespace (a newline from a secret file)
+  is stripped from every value, like psql's backtick; values must not end in whitespace.
+* The runner refuses a missing or empty migrations directory instead of silently doing nothing.
 * A concurrent runner waits on an advisory lock instead of racing.
 """
 
@@ -71,6 +73,8 @@ def strip_transaction(name: str, sql: str) -> str:
 
 
 def _discover(directory: Path) -> list[Path]:
+    if not directory.is_dir():
+        raise MigrationError(f"migrations directory not found: {directory}")
     seen: dict[str, str] = {}
     files: list[Path] = []
     for path in sorted(directory.glob("*.sql")):
@@ -82,15 +86,25 @@ def _discover(directory: Path) -> list[Path]:
             raise MigrationError(f"{path.name}: number {number} already used by {seen[number]}")
         seen[number] = path.name
         files.append(path)
+    if not files:
+        raise MigrationError(f"no migration files (*.sql) in {directory}")
     return files
 
 
-def _check_params(params: dict[str, str]) -> None:
+def clean_params(params: dict[str, str]) -> dict[str, str]:
+    """Validate parameter names and strip trailing whitespace from the values.
+
+    Reading a secret file with ``read_text()`` keeps its final newline; psql's backtick
+    drops it; the Python path does the same so the stored password never ends in a newline.
+    """
+    cleaned: dict[str, str] = {}
     for name, value in params.items():
         if not _PARAM_NAME.match(name):
             raise MigrationError(f"bad parameter name {name!r}: use lowercase letters, digits, _")
         if not isinstance(value, str):
             raise MigrationError(f"parameter {name!r} must be a string")
+        cleaned[name] = value.rstrip()
+    return cleaned
 
 
 async def migrate(
@@ -103,9 +117,10 @@ async def migrate(
 
     ``params`` are exposed to each migration as ``yawmi_migrate.<name>`` settings for the
     duration of its transaction (see the module docstring); they are never written to SQL.
+    Raises ``MigrationError`` for a bad parameter, a bad file name, or a missing/empty
+    migrations directory, before connecting.
     """
-    params = params or {}
-    _check_params(params)
+    params = clean_params(params or {})
     files = _discover(migrations_dir or MIGRATIONS_DIR)
 
     applied: list[str] = []
