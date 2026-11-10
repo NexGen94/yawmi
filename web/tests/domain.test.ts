@@ -145,6 +145,7 @@ describe('habit specs the reference refuses', () => {
     ['weekdays mask 0', { scheduleKind: 'weekdays', weekdayMask: 0 }],
     ['weekdays mask 128', { scheduleKind: 'weekdays', weekdayMask: 128 }],
     ['every n days with n = 0', { scheduleKind: 'every_n_days', everyN: 0, anchorDay: '2026-11-09' }],
+    ['every n days with n = 1 (the server and the database take n >= 2)', { scheduleKind: 'every_n_days', everyN: 1, anchorDay: '2026-11-09' }],
     ['every n days without an anchor', { scheduleKind: 'every_n_days', everyN: 2, anchorDay: null }],
     ['end before start', { endDay: '2026-11-08' }],
     ['bad start day', { startDay: '2026-02-30' }],

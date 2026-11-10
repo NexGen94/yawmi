@@ -1,5 +1,6 @@
 // Pure habit-form model: conversion to and from the API shapes, validation that mirrors
-// the server HabitIn rules (task 10), and the system-habit field locks (spec 2.6).
+// the server HabitIn rules (task 10, and the limits in openapi/openapi.json), and the system-habit
+// field locks (spec 2.6). Field names are the server's (`title_ar`, `ac_ref`, ...).
 // Dates are ISO strings handled with UTC arithmetic only; no device timezone is involved.
 
 import { toOrdinal } from '../domain/days';
@@ -24,9 +25,11 @@ export const maxReminders = 3;
 export type DurationChoice = (typeof durationChips)[number] | 'custom' | null;
 
 export interface HabitForm {
-  title: string;
+  title_ar: string;
   goal_ref: string | null;
   outcome: string | null;
+  /** The acceptance criterion the habit serves, carried over from a draft or a stored habit. */
+  ac_ref: string | null;
   kind: HabitKind;
   unit: HabitUnit;
   period: HabitPeriod;
@@ -47,6 +50,11 @@ export interface HabitForm {
 export type FormErrors = Partial<Record<keyof HabitForm, string>>;
 
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+// Server limits (HabitIn in openapi/openapi.json).
+const MAX_TITLE = 200;
+const MAX_TARGET = 100_000;
+const MIN_EVERY_N = 2;
+const MAX_EVERY_N = 365;
 
 /** The day ordinal of an ISO day (see `domain/days`), or null when it is not a calendar day. */
 function parseDay(day: string): number | null {
@@ -86,9 +94,10 @@ function effectiveEnd(f: HabitForm): string | null {
 
 export function emptyForm(today: string): HabitForm {
   return {
-    title: '',
+    title_ar: '',
     goal_ref: null,
     outcome: null,
+    ac_ref: null,
     kind: 'boolean',
     unit: '',
     period: 'day',
@@ -108,10 +117,13 @@ export function emptyForm(today: string): HabitForm {
 }
 
 export function fromHabit(h: HabitOut): HabitForm {
+  // The schema never sends a null unit or anchor; the `??` only shields the editor from a row that
+  // predates those defaults.
   return {
-    title: h.title,
+    title_ar: h.title_ar,
     goal_ref: h.goal_ref,
     outcome: h.outcome,
+    ac_ref: h.ac_ref,
     kind: h.kind,
     unit: h.unit ?? '',
     period: h.period,
@@ -130,36 +142,39 @@ export function fromHabit(h: HabitOut): HabitForm {
   };
 }
 
-/** A goal-to-habit suggestion opens the editor as a new, unsaved user habit. */
-export function fromDraft(d: HabitDraft, today: string = d.start_day ?? ''): HabitForm {
-  const base = emptyForm(today);
-  const start = d.start_day ?? today;
-  const end = d.end_day ?? null;
+/**
+ * A goal-to-habit suggestion opens the editor as a new, unsaved user habit. The server fills every
+ * field of a draft, its start day included (today in Riyadh unless the goal says otherwise).
+ */
+export function fromDraft(d: HabitDraft): HabitForm {
   return {
-    ...base,
-    title: d.title,
-    goal_ref: d.goal_ref ?? null,
-    outcome: d.outcome ?? null,
+    ...emptyForm(d.start_day),
+    title_ar: d.title_ar,
+    goal_ref: d.goal_ref,
+    outcome: d.outcome,
+    ac_ref: d.ac_ref,
     kind: d.kind,
-    unit: d.kind === 'boolean' ? '' : (d.unit ?? ''),
+    unit: d.kind === 'boolean' ? '' : d.unit,
     period: d.period,
     target_per_period: d.target_per_period,
-    schedule_kind: d.schedule_kind ?? 'every_day',
-    weekday_mask: d.weekday_mask ?? null,
-    every_n: d.every_n ?? null,
-    anchor_day: d.anchor_day ?? null,
-    start_day: start,
-    end_day: end,
-    anchor: d.anchor ?? 'free',
-    reminders: (d.reminders ?? []).map((r) => ({ ...r })),
-    duration: chipFor(start, end),
+    schedule_kind: d.schedule_kind,
+    weekday_mask: d.weekday_mask,
+    every_n: d.every_n,
+    anchor_day: d.anchor_day,
+    start_day: d.start_day,
+    end_day: d.end_day,
+    anchor: d.anchor,
+    reminders: d.reminders.map((r) => ({ ...r })),
+    duration: chipFor(d.start_day, d.end_day),
   };
 }
 
 export function validate(f: HabitForm): FormErrors {
   const errors: FormErrors = {};
 
-  if (f.title.trim() === '') errors.title = 'العنوان مطلوب.';
+  if (f.title_ar.trim() === '') errors.title_ar = 'العنوان مطلوب.';
+  // The server counts characters (code points), as the spread does; `length` would count UTF-16 units.
+  else if ([...f.title_ar.trim()].length > MAX_TITLE) errors.title_ar = `العنوان لا يتجاوز ${MAX_TITLE} حرف.`;
 
   if (f.kind === 'boolean' && f.unit !== '') {
     errors.unit = 'العادة بنعم أو لا بلا وحدة.';
@@ -171,6 +186,8 @@ export function validate(f: HabitForm): FormErrors {
 
   if (!Number.isFinite(f.target_per_period) || f.target_per_period <= 0) {
     errors.target_per_period = 'الهدف في الفترة عدد موجب.';
+  } else if (f.target_per_period > MAX_TARGET) {
+    errors.target_per_period = `الهدف في الفترة لا يتجاوز ${MAX_TARGET}.`;
   } else if (f.kind === 'boolean') {
     const max = periodDays(f.period);
     if (!Number.isInteger(f.target_per_period)) {
@@ -190,8 +207,8 @@ export function validate(f: HabitForm): FormErrors {
       errors.weekday_mask = 'الأيام المحددة تحتاج يوماً واحداً على الأقل.';
     }
   } else if (f.schedule_kind === 'every_n_days') {
-    if (f.every_n === null || !Number.isInteger(f.every_n) || f.every_n < 2) {
-      errors.every_n = 'التكرار «كل N أيام» يحتاج N من 2 فأكثر.';
+    if (f.every_n === null || !Number.isInteger(f.every_n) || f.every_n < MIN_EVERY_N || f.every_n > MAX_EVERY_N) {
+      errors.every_n = `التكرار «كل N أيام» يحتاج N من ${MIN_EVERY_N} إلى ${MAX_EVERY_N}.`;
     }
     if (f.anchor_day === null || parseDay(f.anchor_day) === null) {
       errors.anchor_day = 'التكرار «كل N أيام» يحتاج يوم مرساة.';
@@ -228,9 +245,10 @@ export function toHabitIn(f: HabitForm): HabitIn {
   const daily = f.period === 'day';
   const kind = daily ? f.schedule_kind : 'every_day';
   return {
-    title: f.title.trim(),
+    title_ar: f.title_ar.trim(),
     goal_ref: f.goal_ref,
     outcome: f.outcome,
+    ac_ref: f.ac_ref,
     kind: f.kind,
     unit: f.kind === 'boolean' ? '' : f.unit,
     period: f.period,

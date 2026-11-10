@@ -71,7 +71,7 @@ const SCHEDULE_KINDS: ReadonlySet<string> = new Set(['every_day', 'weekdays', 'e
 /**
  * Throws `RangeError` for a spec the reference `HabitSpec` would refuse to construct: unknown
  * enums, a weekly or monthly habit not scheduled every day, a target not above zero, a missing or
- * out-of-range weekday mask, `everyN < 1` or no anchor, an end before the start, or a bad day.
+ * out-of-range weekday mask, `everyN < 2` or no anchor, an end before the start, or a bad day.
  */
 export function checkHabitSpec(spec: HabitSpec): void {
   if (!KINDS.has(spec.kind)) throw new RangeError(`unknown habit kind: ${JSON.stringify(spec.kind)}`);
@@ -93,9 +93,9 @@ export function checkHabitSpec(spec: HabitSpec): void {
   }
   if (
     spec.scheduleKind === 'every_n_days' &&
-    (spec.everyN === null || !Number.isInteger(spec.everyN) || spec.everyN < 1 || spec.anchorDay === null)
+    (spec.everyN === null || !Number.isInteger(spec.everyN) || spec.everyN < 2 || spec.anchorDay === null)
   ) {
-    throw new RangeError('an every-n-days schedule needs an integer n >= 1 and an anchor day');
+    throw new RangeError('an every-n-days schedule needs an integer n >= 2 and an anchor day');
   }
   const start = toOrdinal(spec.startDay);
   if (spec.anchorDay !== null) toOrdinal(spec.anchorDay);
