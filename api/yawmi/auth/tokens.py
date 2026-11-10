@@ -60,8 +60,13 @@ def verify_access(token: str, secret: str) -> AccessClaims:
 
 
 def hash_refresh(raw: str) -> str:
-    """SHA-256 hex digest of a raw refresh token: the only form that is ever stored."""
-    return hashlib.sha256(raw.encode()).hexdigest()
+    """SHA-256 hex digest of a raw refresh token: the only form that is ever stored.
+
+    `surrogatepass` keeps this total: a client-sent lone surrogate (a JSON escape such as
+    U+D800) hashes to a value no real token has, so the caller answers 401 instead of failing
+    with `UnicodeEncodeError`. Real tokens are ASCII, so for them the result is unchanged.
+    """
+    return hashlib.sha256(raw.encode("utf-8", "surrogatepass")).hexdigest()
 
 
 def new_refresh() -> tuple[str, str]:

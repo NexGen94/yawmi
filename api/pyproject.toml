@@ -16,6 +16,7 @@ dependencies = [
     "httpx",
     "pywebpush",
     "cryptography",
+    "tzdata>=2026.6",
 ]
 
 [project.scripts]
