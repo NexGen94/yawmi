@@ -187,3 +187,64 @@ describe('conversions', () => {
     expect(toHabitIn(f)).toMatchObject({ start_day: '2026-11-09', end_day: '2026-12-08' });
   });
 });
+
+describe('fix round 1', () => {
+  it('caps a monthly boolean target at 28 regardless of the start day', () => {
+    for (const start_day of [null, '2026-12-01', '2027-02-01']) {
+      expect(validate(form({ period: 'month', start_day, target_per_period: 28 })).target_per_period).toBeUndefined();
+      expect(validate(form({ period: 'month', start_day, target_per_period: 29 })).target_per_period).toBeTruthy();
+    }
+  });
+
+  it('requires an integer boolean target but accepts fractional count and duration targets', () => {
+    expect(validate(form({ period: 'week', target_per_period: 1.5 })).target_per_period).toBeTruthy();
+    expect(validate(form({ kind: 'duration', unit: 'hour', period: 'day', target_per_period: 1.5 })).target_per_period).toBeUndefined();
+    expect(validate(form({ kind: 'count', unit: 'session', period: 'day', target_per_period: 2.5 })).target_per_period).toBeUndefined();
+    for (const t of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(validate(form({ kind: 'count', unit: 'session', target_per_period: t })).target_per_period, String(t)).toBeTruthy();
+    }
+  });
+
+  it('normalizes null unit and anchor from a seeded system habit', () => {
+    const seeded = { ...systemHabit, unit: null, anchor: null } as unknown as HabitOut;
+    const f = fromHabit(seeded);
+    expect(f.unit).toBe('');
+    expect(f.anchor).toBe('free');
+    expect(validate(f)).toEqual({});
+  });
+
+  it('throws on a chip length below 1', () => {
+    expect(() => endDay('2026-11-09', 0)).toThrow(RangeError);
+    expect(() => endDay('2026-11-09', -3)).toThrow(RangeError);
+  });
+
+  it('reports a chip without a start day as a start_day error', () => {
+    expect(validate(form({ start_day: null, duration: 30 })).start_day).toBeTruthy();
+    expect(validate(form({ start_day: null, duration: null })).start_day).toBeUndefined();
+  });
+
+  it('keeps every validation message Arabic and free of imperatives', () => {
+    const r = { time: '07:00', days_mask: 127 };
+    const bad: HabitForm[] = [
+      form({ title: '', kind: 'duration', unit: '', period: 'day', target_per_period: 0 }),
+      form({ kind: 'boolean', unit: 'min', period: 'day', target_per_period: 2 }),
+      form({ kind: 'count', unit: 'min', target_per_period: Number.NaN }),
+      form({ period: 'month', target_per_period: 40, schedule_kind: 'weekdays' }),
+      form({ schedule_kind: 'weekdays', weekday_mask: 0 }),
+      form({ schedule_kind: 'every_n_days', every_n: 1, anchor_day: null }),
+      form({ start_day: 'x', duration: 'custom', end_day: null }),
+      form({ start_day: null, duration: 7 }),
+      form({ duration: 'custom', end_day: '2026-01-01' }),
+      form({ duration: 'custom', end_day: 'bad' }),
+      form({ reminders: [r, r, r, r] }),
+      form({ reminders: [{ time: '99:99', days_mask: 0 }] }),
+    ];
+    const messages = bad.flatMap((f) => Object.values(validate(f)));
+    expect(messages.length).toBeGreaterThan(12);
+    for (const m of messages) {
+      expect(m).toMatch(/[؀-ۿ]/);
+      expect(m).not.toMatch(/(^|\s)(أدخل|اختر|اكتب|حدد|أضف|اضبط|ضع|استخدم)(\s|$)/);
+      expect(m).not.toMatch(/(you|your)/i);
+    }
+  });
+});

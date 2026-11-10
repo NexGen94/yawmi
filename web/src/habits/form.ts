@@ -62,23 +62,17 @@ const formatDay = (t: number): string => new Date(t).toISOString().slice(0, 10);
 
 /** `end = start + N - 1` (the first and last day both count). */
 export function endDay(start: string, days: number): string {
+  if (!Number.isInteger(days) || days < 1) throw new RangeError(`invalid duration: ${days}`);
   const t = parseDay(start);
   if (t === null) throw new RangeError(`invalid ISO day: ${start}`);
   return formatDay(t + (days - 1) * DAY_MS);
 }
 
-function daysInMonthOf(day: string | null): number {
-  const t = day === null ? null : parseDay(day);
-  if (t === null) return 28;
-  const d = new Date(t);
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
-}
-
-/** The most days a boolean habit can ask for inside one period. */
-function periodDays(period: HabitPeriod, start: string | null): number {
+/** The most days a boolean habit can ask for inside one period (month: 28, always reachable). */
+function periodDays(period: HabitPeriod): number {
   if (period === 'day') return 1;
   if (period === 'week') return 7;
-  return daysInMonthOf(start);
+  return 28;
 }
 
 function chipFor(start: string | null, end: string | null): DurationChoice {
@@ -127,7 +121,7 @@ export function fromHabit(h: HabitOut): HabitForm {
     goal_ref: h.goal_ref,
     outcome: h.outcome,
     kind: h.kind,
-    unit: h.unit,
+    unit: h.unit ?? '',
     period: h.period,
     target_per_period: h.target_per_period,
     schedule_kind: h.schedule_kind,
@@ -136,7 +130,7 @@ export function fromHabit(h: HabitOut): HabitForm {
     anchor_day: h.anchor_day,
     start_day: h.start_day,
     end_day: h.end_day,
-    anchor: h.anchor,
+    anchor: h.anchor ?? 'free',
     reminders: h.reminders.map((r) => ({ ...r })),
     duration: chipFor(h.start_day, h.end_day),
     system: h.system,
@@ -183,11 +177,13 @@ export function validate(f: HabitForm): FormErrors {
     errors.unit = 'عادة المدة تحتاج وحدة: دقيقة أو ساعة.';
   }
 
-  if (!Number.isInteger(f.target_per_period) || f.target_per_period < 1) {
-    errors.target_per_period = 'الهدف في الفترة عدد صحيح موجب.';
+  if (!Number.isFinite(f.target_per_period) || f.target_per_period <= 0) {
+    errors.target_per_period = 'الهدف في الفترة عدد موجب.';
   } else if (f.kind === 'boolean') {
-    const max = periodDays(f.period, f.start_day);
-    if (f.target_per_period > max) {
+    const max = periodDays(f.period);
+    if (!Number.isInteger(f.target_per_period)) {
+      errors.target_per_period = 'هدف عادة نعم أو لا عدد صحيح.';
+    } else if (f.target_per_period > max) {
       errors.target_per_period =
         f.period === 'day'
           ? 'العادة اليومية بنعم أو لا هدفها 1.'
@@ -211,6 +207,9 @@ export function validate(f: HabitForm): FormErrors {
   }
 
   if (f.start_day !== null && parseDay(f.start_day) === null) errors.start_day = 'تاريخ البداية غير صالح.';
+  else if (f.start_day === null && typeof f.duration === 'number') {
+    errors.start_day = 'المدة المحددة تحتاج تاريخ بداية.';
+  }
   const end = effectiveEnd(f);
   if (f.duration === 'custom' && end !== null && parseDay(end) === null) {
     errors.end_day = 'تاريخ النهاية غير صالح.';

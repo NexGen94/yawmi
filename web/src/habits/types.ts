@@ -6,7 +6,7 @@ export type HabitUnit = '' | 'session' | 'min' | 'hour';
 export type HabitPeriod = 'day' | 'week' | 'month';
 export type ScheduleKind = 'every_day' | 'weekdays' | 'every_n_days';
 export type HabitAnchor = 'after_wake' | 'before_sleep' | 'free';
-export type HabitCreator = 'user' | 'seed' | 'goal';
+export type HabitCreator = 'user' | 'seed';
 
 export interface ReminderIn {
   /** Local time of day, `HH:mm`. */
