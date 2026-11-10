@@ -13,6 +13,7 @@ import json
 import math
 import re
 import shutil
+from datetime import date
 from pathlib import Path
 
 import gen_domain_vectors as gen
@@ -207,6 +208,80 @@ def test_mandatory_cases_are_present():
         0.9592,
         0.9918,
     }
+
+
+# ---------------------------------------------------------------- خط الأساس (D-065)
+
+# الكتل الأربع بعدد الأيام قبل اليوم المقيَّم: [day−28..day−22] ... [day−7..day−1]
+_BASELINE_BLOCKS = ((22, 28), (15, 21), (8, 14), (1, 7))
+
+
+def _offsets(inp: dict) -> list[int]:
+    """كم يوماً تسبق كلُّ ليلة اليومَ المقيَّم (0 = اليوم نفسه)."""
+    day = date.fromisoformat(inp["day"])
+    return [(day - date.fromisoformat(night["day"])).days for night in inp["nights"]]
+
+
+def _expected_quality(offsets: list[int]) -> str | None:
+    """قاعدة D-065 مكتوبة هنا مستقلة عن `scores.py`: نافذة 1..28، و7 للحد الأدنى، و4 في كل كتلة."""
+    inside = [k for k in offsets if 1 <= k <= 28]
+    if len(inside) < 7:
+        return None
+    full = all(sum(lo <= k <= hi for k in inside) >= 4 for lo, hi in _BASELINE_BLOCKS)
+    return "full" if full else "provisional"
+
+
+def _baseline_cases() -> list[tuple[str, dict, dict | None]]:
+    return [(c["id"], c["input"], c["expect"]["value"]) for c in _read("baseline")["cases"]]
+
+
+def test_baseline_inputs_are_dated_nights_without_duplicates():
+    for case_id, inp, _ in _baseline_cases():
+        assert inp.keys() == {"nights", "day", "log"}, case_id
+        assert all(night.keys() == {"day", "value"} for night in inp["nights"]), case_id
+        days = [night["day"] for night in inp["nights"]]
+        assert len(days) == len(set(days)), case_id
+
+
+def test_baseline_expectations_follow_the_calendar_window_rule():
+    """`quality` و`n` في كل حالة يطابقان القاعدة محسوبةً هنا من التواريخ وحدها."""
+    seen = set()
+    for case_id, inp, value in _baseline_cases():
+        offsets = _offsets(inp)
+        quality = _expected_quality(offsets)
+        seen.add(quality)
+        if quality is None:
+            assert value is None, case_id
+        else:
+            assert value is not None, case_id
+            assert value["quality"] == quality, case_id
+            assert value["n"] == sum(1 <= k <= 28 for k in offsets), case_id
+    assert seen == {None, "provisional", "full"}
+
+
+def test_baseline_cases_cover_the_rule_edges():
+    cases = [(frozenset(_offsets(inp)), inp, value) for _, inp, value in _baseline_cases()]
+    by_offsets = {offsets: value for offsets, _, value in cases}
+
+    def quality(offsets) -> str | None:
+        value = by_offsets.get(frozenset(offsets), {"quality": "no such case"})
+        return None if value is None else value["quality"]
+
+    assert any(len(o) == 6 and v is None for o, _, v in cases)  # 6 ليالٍ: null
+    assert quality(range(1, 8)) == "provisional"  # 7 ليالٍ
+    assert quality(range(1, 25)) == "provisional"  # 24 متتالية
+    assert quality(range(1, 26)) == "full"  # 25 متتالية
+    full_16 = [o for o, _, v in cases if len(o) == 16 and v is not None and v["quality"] == "full"]
+    assert full_16
+    for a, b in ((22, 21), (15, 14), (8, 7)):  # ليلة تعبر حداً داخلياً بين كتلتين
+        assert any(
+            a in o and b not in o and quality((o - {a}) | {b}) == "provisional" for o in full_16
+        ), (a, b)
+    assert any(0 in o for o, _, _ in cases)  # ليلة في اليوم المقيَّم نفسه: تُهمل
+    assert any(29 in o for o, _, _ in cases)  # وليلة قبل النافذة بيوم: تُهمل
+    assert any({1, 28} <= o for o, _, _ in cases)  # وطرفا النافذة يُحسبان
+    assert any(inp["log"] for _, inp, _ in cases)
+    assert any(len(o) > 28 and v is not None and v["n"] == 28 for o, _, v in cases)  # n للنافذة
 
 
 # ---------------------------------------------------------------- حارس المولّد

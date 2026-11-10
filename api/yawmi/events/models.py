@@ -12,20 +12,23 @@ from yawmi.domain.days import DEFAULT_TZ, is_valid_tz
 from yawmi.events.project import (
     EARLIEST,
     LATEST,
+    BreathSession,
     EventType,
+    FocusSession,
     Instant,
     ProjectionError,
     project_event,
 )
+from yawmi.text import PAYLOAD_TEXT_INVALID, check_text
 
 MAX_BATCH = 500
 MAX_PAYLOAD_BYTES = 16 * 1024
 # an event may be dated at most this far ahead of the server clock (device clocks drift)
 MAX_FUTURE = timedelta(hours=24)
 
-_BAD_TEXT = "نص الحمولة غير صالح"
 _NOT_FINITE = "الحمولة تحوي رقماً غير منتهٍ"
 _FUTURE = "وقت الحدث يسبق الوقت الحالي بأكثر من 24 ساعة"
+_SESSION_FUTURE = "وقت الجلسة يسبق الوقت الحالي بأكثر من 24 ساعة"
 
 
 class PayloadNotJson(ValueError):
@@ -48,25 +51,9 @@ def dump_payload(payload: dict[str, Any]) -> str:
 def _check_storable(payload: dict[str, Any]) -> None:
     """Refuse what Postgres cannot store: NUL characters, lone surrogates, NaN/Infinity, size.
 
-    All of them would otherwise surface as a driver error (a 500) at insert time. The walk is
-    iterative so a deeply nested payload cannot exhaust the interpreter stack.
+    All of them would otherwise surface as a driver error (a 500) at insert time.
     """
-    stack: list[object] = [payload]
-    while stack:
-        item = stack.pop()
-        if isinstance(item, dict):
-            for key, value in item.items():
-                stack.append(key)
-                stack.append(value)
-        elif isinstance(item, list):
-            stack.extend(item)
-        elif isinstance(item, str):
-            try:
-                item.encode("utf-8")
-            except UnicodeEncodeError:
-                raise PydanticCustomError("payload_text_invalid", _BAD_TEXT) from None
-            if "\x00" in item:
-                raise PydanticCustomError("payload_text_invalid", _BAD_TEXT)
+    check_text(payload, "payload_text_invalid", PAYLOAD_TEXT_INVALID)
     try:
         text = dump_payload(payload)
     except PayloadNotJson:
@@ -126,9 +113,18 @@ class EventIn(BaseModel):
     def _projectable(self) -> "EventIn":
         """Reject at the door what could not be projected; `source` does not change validity."""
         try:
-            project_event(self, "web")
+            intent = project_event(self, "web")
         except ProjectionError as exc:
             raise PydanticCustomError(exc.code, exc.message) from None
+        if isinstance(intent, FocusSession | BreathSession):
+            # the same 24 h cap as `occurred_at`: a far-future session time would poison the
+            # day it is filed under and every ordering by time
+            # (a start derived from the end is reported as the end's fault)
+            limit = server_now() + MAX_FUTURE
+            if self.payload.get("started_at") is not None and intent.started_at > limit:
+                raise PydanticCustomError("started_at_in_future", _SESSION_FUTURE)
+            if intent.ended_at > limit:
+                raise PydanticCustomError("ended_at_in_future", _SESSION_FUTURE)
         return self
 
 

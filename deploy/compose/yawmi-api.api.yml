@@ -1,0 +1,117 @@
+# Yawmi API and web: Hostinger Docker Manager project "yawmi-api". Both images come from GHCR
+# (private), so the server must be logged in to ghcr.io once (deploy/RUNBOOK.md).
+#
+# Project environment, typed by Abdullah in the Docker Manager (never in this repository):
+#   YAWMI_API_HOST            public host of the API; its DNS record must point at the server
+#   YAWMI_DB_HOST             Postgres container name on the shared network
+#   N8N_NETWORK               the existing n8n network (the one Postgres is attached to)
+#   TRAEFIK_CERT_RESOLVER     TLS resolver name, as in the n8n project's Traefik labels
+#   TRAEFIK_ENTRYPOINT        optional, default websecure
+#   YAWMI_JWT_SECRET          secret, 32+ random characters
+#   YAWMI_ANTHROPIC_API_KEY   secret
+#   RAQIB_NETWORK, YAWMI_DB_NAME   optional, defaults raqib_internal and raqib
+# The database password is not a variable: the entrypoint reads it from the secrets volume.
+name: yawmi-api
+
+services:
+  yawmi-api:
+    image: ghcr.io/nexgen94/yawmi-api:0.1.0
+    container_name: yawmi-api
+    restart: unless-stopped
+    environment:
+      YAWMI_DB_HOST: ${YAWMI_DB_HOST:?YAWMI_DB_HOST is required}
+      YAWMI_DB_NAME: ${YAWMI_DB_NAME:-raqib}
+      YAWMI_JWT_SECRET: ${YAWMI_JWT_SECRET:?YAWMI_JWT_SECRET is required}
+      YAWMI_ANTHROPIC_API_KEY: ${YAWMI_ANTHROPIC_API_KEY:?YAWMI_ANTHROPIC_API_KEY is required}
+      YAWMI_LOG_BODIES: "false"
+      YAWMI_SEND_RAW_HEALTH: "false"
+    networks:
+      - n8n
+      - raqib
+    volumes:
+      - yawmi_secrets:/run/yawmi:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${N8N_NETWORK}"
+      - "traefik.http.services.yawmi-api.loadbalancer.server.port=8000"
+      # 60 requests a minute (burst 20) for everything under /v1.
+      - "traefik.http.middlewares.yawmi-rl.ratelimit.average=60"
+      - "traefik.http.middlewares.yawmi-rl.ratelimit.period=1m"
+      - "traefik.http.middlewares.yawmi-rl.ratelimit.burst=20"
+      - "traefik.http.routers.yawmi-api.rule=Host(`${YAWMI_API_HOST}`) && PathPrefix(`/v1`)"
+      - "traefik.http.routers.yawmi-api.priority=100"
+      - "traefik.http.routers.yawmi-api.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.yawmi-api.tls=true"
+      - "traefik.http.routers.yawmi-api.tls.certresolver=${TRAEFIK_CERT_RESOLVER}"
+      - "traefik.http.routers.yawmi-api.middlewares=yawmi-rl"
+      - "traefik.http.routers.yawmi-api.service=yawmi-api"
+      # Pairing is the only unauthenticated write: 10 a minute (burst 5), and it wins on priority.
+      - "traefik.http.middlewares.yawmi-rl-pair.ratelimit.average=10"
+      - "traefik.http.middlewares.yawmi-rl-pair.ratelimit.period=1m"
+      - "traefik.http.middlewares.yawmi-rl-pair.ratelimit.burst=5"
+      - "traefik.http.routers.yawmi-pair.rule=Host(`${YAWMI_API_HOST}`) && Path(`/v1/devices/pair`)"
+      - "traefik.http.routers.yawmi-pair.priority=200"
+      - "traefik.http.routers.yawmi-pair.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.yawmi-pair.tls=true"
+      - "traefik.http.routers.yawmi-pair.tls.certresolver=${TRAEFIK_CERT_RESOLVER}"
+      - "traefik.http.routers.yawmi-pair.middlewares=yawmi-rl-pair"
+      - "traefik.http.routers.yawmi-pair.service=yawmi-api"
+
+  # The PWA: everything on the API host that is not /v1 (priority 1; the API routers are 100/200).
+  yawmi-web:
+    image: ghcr.io/nexgen94/yawmi-web:0.1.0
+    container_name: yawmi-web
+    restart: unless-stopped
+    networks:
+      - n8n
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    cpus: 0.25
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${N8N_NETWORK}"
+      - "traefik.http.services.yawmi-web.loadbalancer.server.port=8080"
+      - "traefik.http.routers.yawmi-web.rule=Host(`${YAWMI_API_HOST}`)"
+      - "traefik.http.routers.yawmi-web.priority=1"
+      - "traefik.http.routers.yawmi-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.yawmi-web.tls=true"
+      - "traefik.http.routers.yawmi-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER}"
+      - "traefik.http.routers.yawmi-web.service=yawmi-web"
+
+volumes:
+  yawmi_secrets:
+    name: yawmi_secrets
+    external: true
+
+networks:
+  n8n:
+    name: ${N8N_NETWORK:?N8N_NETWORK is required}
+    external: true
+  raqib:
+    name: ${RAQIB_NETWORK:-raqib_internal}
+    external: true
