@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -37,6 +37,9 @@ from yawmi.events.store import (
     _INSERT_BREATH,
     _INSERT_FOCUS,
     _UPSERT_HABIT_LOG,
+    AsyncpgEventStore,
+    EventStore,
+    InvalidPayloads,
     breath_args,
     focus_args,
     habit_log_args,
@@ -83,11 +86,17 @@ class Backend(Protocol):
     async def focus_rows(self, ids: list[UUID]) -> list[dict[str, Any]]: ...
     async def breath_rows(self, ids: list[UUID]) -> list[dict[str, Any]]: ...
     async def seed_events(self, count: int, received_at: datetime) -> list[UUID]: ...
+    def make_store(self, clock: Callable[[], datetime] | None = None) -> EventStore: ...
 
 
 class MemoryBackend:
     def __init__(self) -> None:
         self.store: InMemoryEventStore | None = InMemoryEventStore()
+
+    def make_store(self, clock: Callable[[], datetime] | None = None) -> EventStore:
+        """A fresh store (optionally on a fixed clock); the inspectors then read this one."""
+        self.store = InMemoryEventStore() if clock is None else InMemoryEventStore(clock=clock)
+        return self.store
 
     async def new_device(self, kind: str) -> UUID:
         return uuid4()
@@ -145,6 +154,13 @@ class PostgresBackend:
         self.devices: list[UUID] = []
         self.habits: list[str] = []
         self.seeded: list[UUID] = []
+
+    def make_store(self, clock: Callable[[], datetime] | None = None) -> EventStore:
+        return (
+            AsyncpgEventStore(self.pool)
+            if clock is None
+            else AsyncpgEventStore(self.pool, clock=clock)
+        )
 
     async def new_device(self, kind: str) -> UUID:
         device_id = uuid4()
@@ -781,6 +797,49 @@ async def test_text_postgres_cannot_store_is_a_422_not_a_500(
     assert response.status_code == 422
     assert response.json()["errors"][0]["type"] == "payload_text_invalid"
     assert "x-request-id" in response.headers
+
+
+def raw_number_event(literal: str) -> tuple[str, str]:
+    """A body whose payload holds `literal` as a bare JSON number token; also the event id."""
+    one = {"id": str(uuid4()), "type": "mood_logged", "occurred_at": NOON, "payload": {"n": "@"}}
+    return json.dumps({"events": [one]}).replace('"@"', literal), one["id"]
+
+
+@pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity", "1e999", "-1e999"])
+async def test_numbers_json_cannot_represent_are_a_422_not_a_500(
+    client: httpx.AsyncClient, backend: Backend, iphone: Device, literal: str
+) -> None:
+    """Python parses these tokens; `jsonb` would reject them and the insert would be a 500."""
+    body, event_id = raw_number_event(literal)
+    response = await client.post(
+        "/v1/events", content=body, headers=iphone.headers | {"Content-Type": "application/json"}
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == INVALID
+    assert response.json()["errors"][0]["type"] == "payload_not_finite"
+    assert response.json()["errors"][0]["loc"][:3] == ["body", "events", 0]
+    assert "x-request-id" in response.headers
+    assert await backend.event_count([UUID(event_id)]) == 0
+
+
+async def test_the_store_refuses_a_non_finite_payload_even_if_validation_was_skipped(
+    backend: Backend,
+) -> None:
+    """Defence in depth: the store serialises with allow_nan=False and rejects, never a 500."""
+    store = backend.make_store()
+    good = EventIn(id=uuid4(), type="mood_logged", payload={"n": 1}, occurred_at=NOON)
+    bad = EventIn.model_construct(
+        id=uuid4(),
+        type="mood_logged",
+        payload={"n": float("nan")},
+        occurred_at=datetime(2026, 11, 10, 9, 0, tzinfo=UTC),
+        tz="Asia/Riyadh",
+    )
+    device_id = await backend.new_device("iphone")
+    with pytest.raises(InvalidPayloads) as exc:
+        await store.ingest(device_id, plan([good, bad], "iphone"))
+    assert exc.value.indexes == [1]
+    assert await backend.event_count([good.id, bad.id]) == 0  # nothing was stored
 
 
 async def test_arabic_text_survives_storage(client: httpx.AsyncClient, iphone: Device) -> None:

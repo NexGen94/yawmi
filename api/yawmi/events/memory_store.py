@@ -18,7 +18,7 @@ from yawmi.events.project import (
     Planned,
     habit_codes,
 )
-from yawmi.events.store import UnknownHabits, received_times
+from yawmi.events.store import UnknownHabits, dump_payloads, received_times
 
 
 def _utc_now() -> datetime:
@@ -36,6 +36,7 @@ class InMemoryEventStore:
         self._last_received: datetime | None = None
 
     async def ingest(self, device_id: UUID, planned: Sequence[Planned]) -> BatchResult:
+        dump_payloads(planned)  # same rule as the Postgres store: no NaN / infinity
         base = self.clock()
         if self._last_received is not None and base <= self._last_received:
             base = self._last_received + timedelta(microseconds=1)

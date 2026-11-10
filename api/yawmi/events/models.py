@@ -22,13 +22,31 @@ MAX_BATCH = 500
 MAX_PAYLOAD_BYTES = 16 * 1024
 
 _BAD_TEXT = "نص الحمولة غير صالح"
+_NOT_FINITE = "الحمولة تحوي رقماً غير منتهٍ"
+
+
+class PayloadNotJson(ValueError):
+    """The payload holds a number JSON cannot represent (NaN or an infinity)."""
+
+
+def dump_payload(payload: dict[str, Any]) -> str:
+    """The text stored in `jsonb`, refusing NaN and the infinities.
+
+    Python's JSON parser accepts the bare tokens `NaN`, `Infinity` and `-Infinity`, and reads
+    `1e999` as an infinity; `json.dumps` would write them back out as tokens that `jsonb`
+    rejects. Both validation and the store serialise through here, so neither can disagree.
+    """
+    try:
+        return json.dumps(payload, ensure_ascii=False, allow_nan=False)
+    except ValueError:
+        raise PayloadNotJson("payload holds NaN or an infinity") from None
 
 
 def _check_storable(payload: dict[str, Any]) -> None:
-    """Refuse what Postgres cannot store: NUL characters and lone surrogates; and size.
+    """Refuse what Postgres cannot store: NUL characters, lone surrogates, NaN/Infinity, size.
 
-    Both would otherwise surface as a driver error (a 500) at insert time. The walk is iterative
-    so a deeply nested payload cannot exhaust the interpreter stack.
+    All of them would otherwise surface as a driver error (a 500) at insert time. The walk is
+    iterative so a deeply nested payload cannot exhaust the interpreter stack.
     """
     stack: list[object] = [payload]
     while stack:
@@ -46,7 +64,11 @@ def _check_storable(payload: dict[str, Any]) -> None:
                 raise PydanticCustomError("payload_text_invalid", _BAD_TEXT) from None
             if "\x00" in item:
                 raise PydanticCustomError("payload_text_invalid", _BAD_TEXT)
-    if len(json.dumps(payload, ensure_ascii=False).encode("utf-8")) > MAX_PAYLOAD_BYTES:
+    try:
+        text = dump_payload(payload)
+    except PayloadNotJson:
+        raise PydanticCustomError("payload_not_finite", _NOT_FINITE) from None
+    if len(text.encode("utf-8")) > MAX_PAYLOAD_BYTES:
         raise PydanticCustomError("payload_too_large", "حمولة الحدث أكبر من الحد المسموح")
 
 

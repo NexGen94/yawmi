@@ -28,7 +28,7 @@ from yawmi.events.models import (
     clamp_instant,
 )
 from yawmi.events.project import plan
-from yawmi.events.store import AsyncpgEventStore, EventStore, UnknownHabits
+from yawmi.events.store import AsyncpgEventStore, EventStore, InvalidPayloads, UnknownHabits
 from yawmi.routes.devices import ErrorDetail
 
 router = APIRouter(prefix="/v1", tags=["events"])
@@ -70,6 +70,18 @@ async def post_events(
     planned = plan(body.events, claims.kind)
     try:
         return await store.ingest(claims.sub, planned)
+    except InvalidPayloads as exc:  # unreachable while EventIn validates; kept as a backstop
+        raise RequestValidationError(
+            [
+                {
+                    "type": "payload_not_finite",
+                    "loc": ("body", "events", index, "payload"),
+                    "msg": "payload is not JSON",
+                    "input": None,
+                }
+                for index in exc.indexes
+            ]
+        ) from None
     except UnknownHabits as exc:
         raise RequestValidationError(
             [

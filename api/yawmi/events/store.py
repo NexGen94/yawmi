@@ -24,7 +24,7 @@ from uuid import UUID
 
 import asyncpg
 
-from yawmi.events.models import BatchResult, StoredEvent
+from yawmi.events.models import BatchResult, PayloadNotJson, StoredEvent, dump_payload
 from yawmi.events.project import (
     BreathSession,
     FocusSession,
@@ -46,9 +46,31 @@ class UnknownHabits(Exception):
         self.indexes = indexes
 
 
+class InvalidPayloads(Exception):
+    """Some payloads cannot be stored as JSON (validation was bypassed); nothing was stored."""
+
+    def __init__(self, indexes: list[int]) -> None:
+        super().__init__(f"unstorable payload at event positions {indexes}")
+        self.indexes = indexes
+
+
+def dump_payloads(planned: Sequence[Planned]) -> list[str]:
+    """The `jsonb` text of every payload, or `InvalidPayloads` naming the ones that have none."""
+    texts: list[str] = []
+    bad: list[int] = []
+    for item in planned:
+        try:
+            texts.append(dump_payload(item.event.payload))
+        except PayloadNotJson:
+            bad.append(item.index)
+    if bad:
+        raise InvalidPayloads(bad)
+    return texts
+
+
 class EventStore(Protocol):
     async def ingest(self, device_id: UUID, planned: Sequence[Planned]) -> BatchResult:
-        """Store the batch atomically; raise `UnknownHabits` (storing nothing) on a bad habit."""
+        """Store the batch atomically; `UnknownHabits` / `InvalidPayloads` store nothing."""
         ...
 
     async def pull(self, since: datetime | None, limit: int) -> list[StoredEvent]:
@@ -186,6 +208,7 @@ class AsyncpgEventStore:
     async def ingest(self, device_id: UUID, planned: Sequence[Planned]) -> BatchResult:
         if not planned:
             return BatchResult(accepted=0, duplicates=0)
+        payloads = dump_payloads(planned)  # before any connection or lock is taken
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(_LOCK, *INGEST_LOCK_KEYS)
             # the clock is read only now, with the lock held (see the module docstring)
@@ -197,7 +220,7 @@ class AsyncpgEventStore:
                     [item.event.id for item in planned],
                     device_id,
                     [item.event.type for item in planned],
-                    [json.dumps(item.event.payload, ensure_ascii=False) for item in planned],
+                    payloads,
                     [item.event.occurred_at for item in planned],
                     [item.event.tz for item in planned],
                     received,

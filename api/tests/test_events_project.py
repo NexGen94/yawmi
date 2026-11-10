@@ -15,7 +15,7 @@ import pytest
 from pydantic import ValidationError
 
 from yawmi.domain.days import day_key
-from yawmi.events.models import MAX_BATCH, EventBatch, EventIn
+from yawmi.events.models import MAX_BATCH, EventBatch, EventIn, PayloadNotJson, dump_payload
 from yawmi.events.project import (
     EVENT_TYPES,
     MAX_BACKDATE_DAYS,
@@ -155,6 +155,40 @@ def test_text_postgres_cannot_store_is_rejected(payload: dict[str, Any]) -> None
     with pytest.raises(ValidationError) as exc:
         ev("mood_logged", payload)
     assert "payload_text_invalid" in error_types(exc)
+
+
+@pytest.mark.parametrize(
+    "number",
+    [float("nan"), float("inf"), float("-inf"), json.loads("1e999"), json.loads("-1e999")],
+    ids=["NaN", "Infinity", "-Infinity", "1e999", "-1e999"],
+)
+def test_numbers_json_cannot_represent_are_rejected(number: float) -> None:
+    """Python's parser accepts NaN, Infinity and 1e999; `jsonb` accepts none of them."""
+    for payload in (
+        {"n": number},
+        {"deep": [{"x": [1, number]}]},
+        {"nested": {"a": {"b": number}}},
+    ):
+        with pytest.raises(ValidationError) as exc:
+            ev("mood_logged", payload)
+        assert "payload_not_finite" in error_types(exc)
+
+
+def test_a_non_finite_number_in_a_typed_payload_is_rejected_as_well() -> None:
+    with pytest.raises(ValidationError) as exc:
+        ev("habit_logged", logged(value=float("nan")))
+    assert "payload_not_finite" in error_types(exc)
+
+
+def test_ordinary_numbers_are_still_accepted() -> None:
+    assert ev("mood_logged", {"a": 0, "b": -1.5, "c": 1e300, "d": [2**40]})
+
+
+def test_dump_payload_refuses_what_jsonb_cannot_store_and_keeps_arabic_readable() -> None:
+    assert dump_payload({"a": "عربي", "n": 1.5}) == '{"a": "عربي", "n": 1.5}'
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(PayloadNotJson):
+            dump_payload({"x": bad})
 
 
 def test_a_payload_over_the_size_cap_is_rejected() -> None:
