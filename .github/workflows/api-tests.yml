@@ -87,18 +87,25 @@ jobs:
       #    fails even if the PR deleted and regenerated the files. Plain additions pass, and the
       #    regenerated result must again equal the PR's committed files.
       # The SHA reaches the shell through env, never through ${{ }} inside run.
+      # uv flags: --no-sync runs in the environment the "Install dependencies" step created with
+      # `uv sync --locked` (that step is the one that fails on a uv.lock out of date with
+      # pyproject.toml), so nothing is resolved, installed or built here; --no-build states the
+      # same for build scripts; --locked is kept for the explicit intent but checks nothing
+      # further once --no-sync is given. A syncing `uv run --no-build` cannot work in this
+      # project: http-ece (via pywebpush) ships as an sdist only, and the api project itself is
+      # an editable hatchling build.
       - name: Domain vectors match the reference implementation
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          uv run --project api python -I api/tools/gen_domain_vectors.py --check
+          uv run --locked --no-sync --no-build --project api python -I api/tools/gen_domain_vectors.py --check
           test -z "$(git status --porcelain --untracked-files=all -- contracts/)"
           if [ -n "$BASE_SHA" ] && git ls-tree --name-only "$BASE_SHA" contracts/domain-vectors/v1/ 2>/dev/null | grep -q '\.json$'; then
             mkdir -p "$RUNNER_TEMP/base"
             git archive "$BASE_SHA" contracts/domain-vectors/v1 | tar -x -C "$RUNNER_TEMP/base"
             rm -f contracts/domain-vectors/v1/*.json
             cp "$RUNNER_TEMP/base"/contracts/domain-vectors/v1/*.json contracts/domain-vectors/v1/
-            uv run --project api python -I api/tools/gen_domain_vectors.py --init
+            uv run --locked --no-sync --no-build --project api python -I api/tools/gen_domain_vectors.py --init
             git diff --exit-code -- contracts/
           else
             echo "base has no committed vectors yet: nothing to guard against"

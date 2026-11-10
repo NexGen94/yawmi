@@ -104,26 +104,25 @@ def test_file_format(fn):
     assert doc.keys() == {"rulesVersion", "function", "cases"}
     assert doc["rulesVersion"] == RULES_VERSION
     assert doc["function"] == fn
-    assert isinstance(doc["cases"], list) and doc["cases"]
+    assert isinstance(doc["cases"], list)
+    assert doc["cases"]
+    required = {"id", "input", "expect", "source"}
     for case in doc["cases"]:
-        assert (
-            {"id", "input", "expect", "source"}
-            <= case.keys()
-            <= {
-                "id",
-                "input",
-                "expect",
-                "source",
-                "tol",
-            }
-        )
+        assert required <= case.keys()
+        assert case.keys() <= required | {"tol"}
         match = _ID.match(case["id"])
-        assert match is not None and match.group("fn") == fn, case["id"]
-        assert isinstance(case["input"], dict) and _is_primitive_json(case["input"])
-        assert set(case["expect"].keys()) == {"value"} and _is_primitive_json(case["expect"])
-        assert isinstance(case["source"], str) and case["source"]
+        assert match is not None, case["id"]
+        assert match.group("fn") == fn, case["id"]
+        assert isinstance(case["input"], dict)
+        assert _is_primitive_json(case["input"])
+        assert set(case["expect"].keys()) == {"value"}
+        assert _is_primitive_json(case["expect"])
+        assert isinstance(case["source"], str)
+        assert case["source"]
         if "tol" in case:
-            assert isinstance(case["tol"], float) and 0 < case["tol"] < 1
+            assert isinstance(case["tol"], float)
+            assert case["tol"] > 0
+            assert case["tol"] < 1
         for key in case["input"]:
             assert re.fullmatch(r"[a-z][a-z0-9_]*", key), key
 
