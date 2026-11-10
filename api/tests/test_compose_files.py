@@ -841,7 +841,7 @@ def _runbook_steps() -> dict[int, str]:
 
 def test_every_server_step_asks_for_separate_approval_and_has_a_rollback() -> None:
     steps = _runbook_steps()
-    assert sorted(steps) == list(range(11))
+    assert sorted(steps) == list(range(12))
     for number, body in steps.items():
         assert APPROVAL in body, number
         assert "التراجع" in body, number
