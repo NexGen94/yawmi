@@ -1,45 +1,28 @@
-// Hand-written stand-ins for the habit API types (spec 2.6). They will be replaced by the
-// generated OpenAPI types in task 16b; the field names follow the spec unified model.
+// The habit API types, taken from the generated schema (openapi/openapi.json via `npm run gen:api`).
+// The server is the authority on their shape: `title_ar`, `unit: ''` for "no unit", reminders as
+// `{time: 'HH:mm', days_mask}`, `ac_ref` next to `goal_ref`. Nothing here is written by hand
+// except the short names.
+//
+// Note on `HabitIn`: fields with a server default (`unit`, `anchor`, `schedule_kind`) come out as
+// required in the generated type; the editor always sends them, so that costs nothing.
 
-export type HabitKind = 'boolean' | 'count' | 'duration';
-export type HabitUnit = '' | 'session' | 'min' | 'hour';
-export type HabitPeriod = 'day' | 'week' | 'month';
-export type ScheduleKind = 'every_day' | 'weekdays' | 'every_n_days';
-export type HabitAnchor = 'after_wake' | 'before_sleep' | 'free';
-export type HabitCreator = 'user' | 'seed';
+import type { components } from '../api/schema';
 
-export interface ReminderIn {
-  /** Local time of day, `HH:mm`. */
-  time: string;
-  /** Bit mask of days (1..127). */
-  days_mask: number;
-}
+type Schemas = components['schemas'];
 
-export interface HabitIn {
-  title: string;
-  goal_ref: string | null;
-  outcome: string | null;
-  kind: HabitKind;
-  unit: HabitUnit;
-  period: HabitPeriod;
-  target_per_period: number;
-  schedule_kind: ScheduleKind;
-  weekday_mask: number | null;
-  every_n: number | null;
-  /** ISO dates (`YYYY-MM-DD`). */
-  anchor_day: string | null;
-  start_day: string | null;
-  end_day: string | null;
-  anchor: HabitAnchor;
-  reminders: ReminderIn[];
-}
+/** `POST /v1/habits` body. */
+export type HabitIn = Schemas['HabitIn'];
+/** A stored habit, as `GET /v1/habits` returns it (`start_day` always set). */
+export type HabitOut = Schemas['HabitOut'];
+/** Unsaved suggestion returned by `POST /v1/goals/{ref}/to-habit`: every field set, `goal_ref` a string. */
+export type HabitDraft = Schemas['HabitDraft'];
+/** `PATCH /v1/habits/{code}` body: only the fields sent change. */
+export type HabitPatch = Schemas['HabitPatch'];
+export type ReminderIn = Schemas['ReminderIO'];
 
-export interface HabitOut extends HabitIn {
-  code: string;
-  system: boolean;
-  created_by: HabitCreator;
-  active: boolean;
-}
-
-/** Unsaved suggestion returned by `POST /v1/goals/{ref}/to-habit`. */
-export type HabitDraft = Partial<HabitIn> & Pick<HabitIn, 'title' | 'kind' | 'period' | 'target_per_period'>;
+export type HabitKind = HabitOut['kind'];
+export type HabitUnit = HabitOut['unit'];
+export type HabitPeriod = HabitOut['period'];
+export type ScheduleKind = HabitOut['schedule_kind'];
+export type HabitAnchor = HabitOut['anchor'];
+export type HabitCreator = HabitOut['created_by'];

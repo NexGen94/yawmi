@@ -15,13 +15,14 @@ import type { HabitDraft, HabitOut } from '../src/habits/types';
 
 const TODAY = '2026-11-09';
 
-const form = (patch: Partial<HabitForm> = {}): HabitForm => ({ ...emptyForm(TODAY), title: 'قراءة', ...patch });
+const form = (patch: Partial<HabitForm> = {}): HabitForm => ({ ...emptyForm(TODAY), title_ar: 'قراءة', ...patch });
 
 const systemHabit: HabitOut = {
   code: 'meditation',
-  title: 'تأمّل 10 دقائق',
+  title_ar: 'تأمّل 10 دقائق',
   goal_ref: null,
   outcome: 'O2',
+  ac_ref: 'O2-AC1',
   kind: 'boolean',
   unit: '',
   period: 'week',
@@ -30,7 +31,7 @@ const systemHabit: HabitOut = {
   weekday_mask: null,
   every_n: null,
   anchor_day: null,
-  start_day: null,
+  start_day: '2026-10-31',
   end_day: null,
   anchor: 'after_wake',
   reminders: [{ time: '06:30', days_mask: 127 }],
@@ -76,7 +77,7 @@ describe('validate', () => {
   });
 
   it('requires a title', () => {
-    expect(validate(form({ title: '  ' })).title).toBeTruthy();
+    expect(validate(form({ title_ar: '  ' })).title_ar).toBeTruthy();
   });
 
   it('restricts non-daily schedules to the daily period', () => {
@@ -92,7 +93,7 @@ describe('validate', () => {
   });
 
   it('uses Arabic messages without imperatives addressed to the user', () => {
-    const errors = validate(form({ title: '', kind: 'duration', unit: '', period: 'day', target_per_period: 0 }));
+    const errors = validate(form({ title_ar: '', kind: 'duration', unit: '', period: 'day', target_per_period: 0 }));
     expect(Object.keys(errors).length).toBeGreaterThan(0);
     for (const message of Object.values(errors)) {
       expect(message).toMatch(/[؀-ۿ]/);
@@ -142,17 +143,28 @@ describe('system habits', () => {
 describe('conversions', () => {
   it('keeps goal_ref, outcome and the suggested target from a draft', () => {
     const draft: HabitDraft = {
-      title: 'مراجعة المحطة',
+      title_ar: 'مراجعة المحطة',
       goal_ref: 'abc123',
       outcome: 'O3',
+      ac_ref: 'O3-AC2',
       kind: 'count',
       unit: 'session',
       period: 'week',
       target_per_period: 8,
+      schedule_kind: 'every_day',
+      weekday_mask: null,
+      every_n: null,
+      anchor_day: null,
+      anchor: 'free',
+      start_day: TODAY,
+      end_day: null,
+      reminders: [],
     };
-    expect(toHabitIn(fromDraft(draft, TODAY))).toMatchObject({
+    expect(toHabitIn(fromDraft(draft))).toMatchObject({
+      title_ar: 'مراجعة المحطة',
       goal_ref: 'abc123',
       outcome: 'O3',
+      ac_ref: 'O3-AC2',
       kind: 'count',
       unit: 'session',
       period: 'week',
@@ -205,12 +217,12 @@ describe('fix round 1', () => {
     }
   });
 
-  it('normalizes null unit and anchor from a seeded system habit', () => {
-    const seeded = { ...systemHabit, unit: null, anchor: null } as unknown as HabitOut;
-    const f = fromHabit(seeded);
-    expect(f.unit).toBe('');
-    expect(f.anchor).toBe('free');
-    expect(validate(f)).toEqual({});
+  it('takes unit and anchor as the server sends them (it never sends null: `to_api` fills them)', () => {
+    const f = fromHabit({ ...systemHabit, kind: 'count', unit: 'session', anchor: 'before_sleep' });
+    expect(f.unit).toBe('session');
+    expect(f.anchor).toBe('before_sleep');
+    expect(fromHabit(systemHabit).unit).toBe('');
+    expect(validate(fromHabit(systemHabit))).toEqual({});
   });
 
   it('throws on a chip length below 1', () => {
@@ -226,7 +238,7 @@ describe('fix round 1', () => {
   it('keeps every validation message Arabic and free of imperatives', () => {
     const r = { time: '07:00', days_mask: 127 };
     const bad: HabitForm[] = [
-      form({ title: '', kind: 'duration', unit: '', period: 'day', target_per_period: 0 }),
+      form({ title_ar: '', kind: 'duration', unit: '', period: 'day', target_per_period: 0 }),
       form({ kind: 'boolean', unit: 'min', period: 'day', target_per_period: 2 }),
       form({ kind: 'count', unit: 'min', target_per_period: Number.NaN }),
       form({ period: 'month', target_per_period: 40, schedule_kind: 'weekdays' }),
@@ -245,6 +257,83 @@ describe('fix round 1', () => {
       expect(m).toMatch(/[؀-ۿ]/);
       expect(m).not.toMatch(/(^|\s)(أدخل|اختر|اكتب|حدد|أضف|اضبط|ضع|استخدم)(\s|$)/);
       expect(m).not.toMatch(/(you|your)/i);
+    }
+  });
+});
+
+describe('server limits (HabitIn in openapi/openapi.json)', () => {
+  it('caps the title at 200 characters', () => {
+    expect(validate(form({ title_ar: 'ق'.repeat(200) })).title_ar).toBeUndefined();
+    expect(validate(form({ title_ar: 'ق'.repeat(201) })).title_ar).toBeTruthy();
+  });
+
+  it('takes every_n from 2 to 365', () => {
+    const every = (every_n: number) =>
+      validate(form({ schedule_kind: 'every_n_days', every_n, anchor_day: TODAY })).every_n;
+    expect(every(1)).toBeTruthy();
+    expect(every(2)).toBeUndefined();
+    expect(every(365)).toBeUndefined();
+    expect(every(366)).toBeTruthy();
+  });
+
+  it('caps the target per period at 100000', () => {
+    const target = (t: number) => validate(form({ kind: 'count', unit: 'session', target_per_period: t })).target_per_period;
+    expect(target(100_000)).toBeUndefined();
+    expect(target(100_001)).toBeTruthy();
+  });
+
+  it('sends ac_ref through unchanged, and null for a new habit', () => {
+    expect(toHabitIn(form()).ac_ref).toBeNull();
+    expect(toHabitIn(fromHabit({ ...systemHabit, system: false, created_by: 'user' })).ac_ref).toBe('O2-AC1');
+  });
+
+  it('opens a draft with its own start day', () => {
+    const draft: HabitDraft = {
+      ...systemHabit,
+      goal_ref: 'g-1',
+      start_day: '2026-12-01',
+      end_day: '2026-12-30',
+    };
+    const f = fromDraft(draft);
+    expect(f.start_day).toBe('2026-12-01');
+    expect(f.duration).toBe(30);
+    expect(f.system).toBe(false);
+    expect(f.created_by).toBe('user');
+  });
+});
+
+describe('server day range and end before today', () => {
+  it.each([
+    ['start_day', { start_day: '1999-12-31' }],
+    ['start_day', { start_day: '2100-01-01' }],
+    ['end_day', { duration: 'custom' as const, end_day: '2100-01-01' }],
+    ['anchor_day', { schedule_kind: 'every_n_days' as const, every_n: 2, anchor_day: '1999-12-31' }],
+  ])('refuses %s outside 2000-01-01..2099-12-31', (field, patch) => {
+    expect(validate(form(patch))[field as keyof HabitForm]).toBeTruthy();
+  });
+
+  it('accepts the first and last days of the range', () => {
+    expect(validate(form({ start_day: '2000-01-01', duration: 'custom', end_day: '2099-12-31' }))).toEqual({});
+    expect(
+      validate(form({ schedule_kind: 'every_n_days', every_n: 2, anchor_day: '2099-12-31' })).anchor_day,
+    ).toBeUndefined();
+  });
+
+  it('refuses a custom end before today when the start is left to the server (it becomes today)', () => {
+    const f = form({ start_day: null, duration: 'custom', end_day: '2026-11-08' });
+    expect(validate(f, TODAY).end_day).toBeTruthy();
+    expect(validate({ ...f, end_day: TODAY }, TODAY).end_day).toBeUndefined();
+  });
+
+  it('keeps the new messages Arabic and free of imperatives', () => {
+    const messages = [
+      ...Object.values(validate(form({ start_day: '1999-12-31' }))),
+      ...Object.values(validate(form({ start_day: null, duration: 'custom', end_day: '2026-11-08' }), TODAY)),
+    ];
+    expect(messages).toHaveLength(2);
+    for (const m of messages) {
+      expect(m).toMatch(/[؀-ۿ]/);
+      expect(m).not.toMatch(/(^|\s)(أدخل|اختر|اكتب|حدد|أضف|اضبط|ضع|استخدم)(\s|$)/);
     }
   });
 });

@@ -2,13 +2,14 @@
 // reference implementation; these are the same shapes with camelCase field names, and the shared
 // vectors in `contracts/domain-vectors/v1/` prove both agree.
 //
-// `HabitSpec` is deliberately not `HabitIn` from `../habits/types`: that one is the API/form
-// payload (snake_case, a title, reminders, a nullable `start_day` the server fills in), while this
-// is the rule input, where `startDay` is always known. The enum types are shared.
+// `HabitSpec` is deliberately not `HabitIn`/`HabitOut` from `../habits/types` (the generated API
+// shapes: snake_case, a title, reminders, a `start_day` the server may fill in), but the rule
+// input, where `startDay` is always known. `habitSpecOf` in `../habits/spec` converts one into the
+// other. The enum types are the generated ones.
 
-import type { HabitKind, HabitPeriod, ScheduleKind } from '../habits/types';
+import type { HabitKind, HabitPeriod, HabitUnit, ScheduleKind } from '../habits/types';
 
-export type { HabitKind, ScheduleKind };
+export type { HabitKind, HabitUnit, ScheduleKind };
 export type Period = HabitPeriod;
 
 /** The rules version these modules implement; must equal `rulesVersion` in the vector files. */
@@ -23,8 +24,11 @@ export type LogStatus = 'done' | 'skip' | 'vacation' | 'missed';
 
 export interface HabitSpec {
   kind: HabitKind;
-  /** Display unit only; the rules never read it. */
-  unit: string | null;
+  /**
+   * Display unit only; the rules never read it. The API spells "no unit" `''`; `null` is kept
+   * because the Python reference (`str | None`) and the shared vectors use it.
+   */
+  unit: HabitUnit | null;
   /** In the habit's unit, greater than zero. */
   targetPerPeriod: number;
   period: Period;
@@ -32,7 +36,7 @@ export interface HabitSpec {
   scheduleKind: ScheduleKind;
   /** Bit 0 = Sunday ... bit 6 = Saturday; required (1..127) for `weekdays`. */
   weekdayMask: number | null;
-  /** Required (>= 1) for `every_n_days`, with `anchorDay`. */
+  /** Required (>= 2, like the server and the database) for `every_n_days`, with `anchorDay`. */
   everyN: number | null;
   anchorDay: Day | null;
   startDay: Day;

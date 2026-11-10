@@ -4,11 +4,26 @@
 // IndexedDB. The long-lived refresh token is an HttpOnly cookie (`yawmi_rt`, Path=/v1/auth) that
 // script cannot read; the browser attaches it to POST /v1/auth/refresh. The server rotates it on
 // every refresh (a replayed token is refused), so two refreshes must never run at once with the
-// same cookie. That is why a single in-flight refresh is shared by every request that sees a 401.
+// same cookie. That is why a single in-flight refresh is shared by every request that sees a 401,
+// and why the refresh also holds a Web Lock: other tabs share the cookie jar (each keeps its own
+// in-memory token), so a refresh in one tab waits until another tab's rotation has landed.
+
+import { LockTimeout, withLock } from '../lib/locks';
+import { isAbortOrTimeout } from '../lib/timeout';
+import type { components } from './schema';
 
 const REFRESH_URL = '/v1/auth/refresh';
 const PAIR_URL = '/v1/devices/pair';
 const PAIR_FAILED = 'تعذّر الإقران';
+/** Cross-tab lock name for the cookie rotation. */
+const REFRESH_LOCK = 'yawmi-auth-refresh';
+
+/**
+ * Bounds on the refresh, in milliseconds. The request is bounded because it runs under the
+ * cross-tab lock; the wait is longer than one request, so a tab only gives up on a holder that is
+ * stuck (suspended or frozen), not on one that is merely slow. Mutable for tests only.
+ */
+export const refreshTimeouts = { requestMs: 15_000, lockWaitMs: 20_000 };
 
 let accessToken: string | null = null;
 let refreshing: Promise<void> | null = null;
@@ -31,8 +46,10 @@ export class Unauthorized extends Error {
 
 /**
  * The refresh could not be completed for a reason that says nothing about the session: a 5xx or
- * 429 from the server or its proxy, or a reply that is not a token. The token is kept and the
- * caller may simply try again later. (A network failure is not wrapped: it stays a `TypeError`.)
+ * 429 from the server or its proxy, a reply that is not a token, no answer within
+ * `refreshTimeouts.requestMs`, or another tab holding the refresh longer than
+ * `refreshTimeouts.lockWaitMs`. The token is kept and the caller may simply try again later.
+ * (A network failure is not wrapped: it stays a `TypeError`.)
  */
 export class RefreshError extends Error {
   /** The HTTP status, or `undefined` for a malformed 200. */
@@ -68,12 +85,19 @@ async function readAccessToken(res: Response): Promise<string | null> {
 async function requestRefresh(): Promise<void> {
   // A network failure (TypeError) is deliberately not turned into Unauthorized: being offline
   // says nothing about whether the session is still valid. The same goes for a 5xx or 429.
-  const res = await fetch(REFRESH_URL, {
-    method: 'POST',
-    credentials: 'include',
-    headers: jsonHeaders(),
-    body: '{}',
-  });
+  let res: Response;
+  try {
+    res = await fetch(REFRESH_URL, {
+      method: 'POST',
+      credentials: 'include',
+      headers: jsonHeaders(),
+      body: '{}',
+      signal: AbortSignal.timeout(refreshTimeouts.requestMs),
+    });
+  } catch (error) {
+    if (isAbortOrTimeout(error)) throw new RefreshError('refresh: no answer in time');
+    throw error;
+  }
   // Only a refusal by the server means the cookie is dead (invalid, rotated away, or the device
   // was revoked); then drop the token and let the app show the pairing screen.
   if (res.status === 401 || res.status === 403) {
@@ -87,9 +111,14 @@ async function requestRefresh(): Promise<void> {
 }
 
 function refresh(): Promise<void> {
-  refreshing ??= requestRefresh().finally(() => {
-    refreshing = null;
-  });
+  refreshing ??= withLock(REFRESH_LOCK, requestRefresh, { waitMs: refreshTimeouts.lockWaitMs })
+    .catch((error: unknown) => {
+      if (error instanceof LockTimeout) throw new RefreshError('refresh: another tab is still refreshing');
+      throw error;
+    })
+    .finally(() => {
+      refreshing = null;
+    });
   return refreshing;
 }
 
@@ -138,6 +167,9 @@ function pairErrorMessage(body: unknown): string {
   return typeof detail === 'string' && detail !== '' ? detail : PAIR_FAILED;
 }
 
+/** How this device is listed among the paired devices: a device name, addressed to no one. */
+const DEVICE_NAME = 'Safari iPhone';
+
 /** Exchange a one-time pairing code for a session on this device (cookie plus in-memory token). */
 export async function pair(code: string): Promise<void> {
   let res: Response;
@@ -146,7 +178,7 @@ export async function pair(code: string): Promise<void> {
       method: 'POST',
       credentials: 'include',
       headers: jsonHeaders(),
-      body: JSON.stringify({ code, name: 'Safari iPhone', kind: 'web' }),
+      body: JSON.stringify({ code, name: DEVICE_NAME, kind: 'web' } satisfies components['schemas']['PairRequest']),
     });
   } catch (cause) {
     throw new PairError(PAIR_FAILED, { cause });
