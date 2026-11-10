@@ -152,11 +152,17 @@ def _assert_closed(schema: dict[str, Any]) -> None:
 
 
 def test_insight_response_has_no_ref_and_requires_every_property(exporter: ModuleType) -> None:
-    """The provider-facing schema is checked now; the spec's copy once task 9b exposes it."""
+    """The provider-facing schema, and the spec's copy that `/v1/day/close` and `/v1/ask` return."""
     _assert_closed(insight_json_schema())
-    components = exporter.build_spec().get("components", {}).get("schemas", {})
-    if "InsightResponse" in components:  # TODO(9b): becomes unconditional with /v1/day/close
-        _assert_closed(components["InsightResponse"])
+    schemas = exporter.build_spec()["components"]["schemas"]
+    response = schemas["InsightResponse"]
+    assert set(response["required"]) == set(response["properties"])
+    for prop in response["properties"].values():
+        for ref in _refs(prop):  # the only reference allowed is to Priority, itself closed
+            assert ref == "#/components/schemas/Priority"
+    priority = schemas["Priority"]
+    assert set(priority["required"]) == set(priority["properties"])
+    assert _refs(priority) == []
 
 
 def _enum(schema: dict[str, Any]) -> list[str]:

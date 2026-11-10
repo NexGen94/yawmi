@@ -35,15 +35,14 @@ REQUIRED_PATHS: tuple[str, ...] = (
     "/v1/health/daily",
     "/v1/today",
     "/v1/overview",
+    "/v1/day/close",
+    "/v1/ask",
+    "/v1/reviews",
 )
 
 # Not built yet. The task that adds a route moves its path to REQUIRED_PATHS and regenerates
 # openapi.json in its own pull request (the --check test fails otherwise).
 PENDING_PATHS: tuple[str, ...] = (
-    # task 9b (insights)
-    "/v1/day/close",
-    "/v1/ask",
-    "/v1/reviews",
     # task 10b (habits and goals)
     "/v1/habits",
     "/v1/habits/{code}",
