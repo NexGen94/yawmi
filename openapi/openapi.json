@@ -610,10 +610,20 @@
             "type": "boolean"
           },
           "kind": {
+            "enum": [
+              "boolean",
+              "count",
+              "duration"
+            ],
             "title": "Kind",
             "type": "string"
           },
           "period": {
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ],
             "title": "Period",
             "type": "string"
           },
@@ -628,6 +638,11 @@
           "unit": {
             "anyOf": [
               {
+                "enum": [
+                  "session",
+                  "min",
+                  "hour"
+                ],
                 "type": "string"
               },
               {

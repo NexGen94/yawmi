@@ -10,11 +10,12 @@ Extension points (task 10b adds habit progress; keep these additive):
 import re
 from collections.abc import Iterable, Sequence
 from datetime import date, timedelta
+from typing import Literal, cast
 
 from pydantic import BaseModel, Field
 
-from yawmi.domain.habits import HabitSpec
-from yawmi.domain.periods import is_scheduled
+from yawmi.domain.habits import HabitKind, HabitSpec
+from yawmi.domain.periods import Period, is_scheduled
 from yawmi.domain.scores import DataQuality
 from yawmi.today.reader import (
     CardRow,
@@ -27,6 +28,7 @@ from yawmi.today.reader import (
 )
 
 TREND_DAYS = 7
+HabitUnit = Literal["session", "min", "hour"]  # the CHECK on yawmi.habits.unit
 _OUTCOME_CODE = re.compile(r"O([1-9]|1[0-2])")
 
 
@@ -36,10 +38,10 @@ _OUTCOME_CODE = re.compile(r"O([1-9]|1[0-2])")
 class HabitDue(BaseModel):
     code: str
     title_ar: str
-    kind: str
-    unit: str | None
+    kind: HabitKind
+    unit: HabitUnit | None
     target_per_period: float
-    period: str
+    period: Period
     done_today: bool = Field(description="سُجّل لها إنجاز (`done`) اليوم من أي مصدر")
 
 
@@ -101,10 +103,10 @@ def build_habits_due(
         HabitDue(
             code=row.code,
             title_ar=row.title_ar,
-            kind=row.kind,
-            unit=row.unit,
+            kind=cast(HabitKind, row.kind),
+            unit=cast(HabitUnit | None, row.unit),
             target_per_period=float(row.target_per_period),
-            period=row.period,
+            period=cast(Period, row.period),
             done_today=row.code in done,
         )
         for row in sorted(habits, key=lambda h: h.code)
@@ -121,7 +123,7 @@ def build_health(day: date, metrics: Iterable[MetricsRow]) -> TodayHealth:
     first, _ = trend_window(day)
     today = by_day.get(day)
     return TodayHealth(
-        data_quality=today.data_quality if today else "missing",  # type: ignore[arg-type]
+        data_quality=today.data_quality if today else "missing",
         recovery_score=today.recovery_score if today else None,
         strain_score=(
             float(today.strain_score) if today and today.strain_score is not None else None

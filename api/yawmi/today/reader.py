@@ -18,6 +18,8 @@ from typing import Protocol
 
 import asyncpg
 
+from yawmi.domain.scores import DataQuality
+
 
 @dataclass(frozen=True)
 class HabitRow:
@@ -49,7 +51,7 @@ class MetricsRow:
     recovery_score: int | None
     strain_score: Decimal | None
     sleep_minutes: int | None
-    data_quality: str
+    data_quality: DataQuality
 
 
 @dataclass(frozen=True)

@@ -5,13 +5,16 @@ in-memory reader (always) and against Postgres (when `TEST_DATABASE_URL` is set;
 fail rather than skip without it), with identical assertions. Postgres rows are written as the
 admin role; the column grants themselves are covered by `test_migrations.py`, and the SQL here
 is checked statically never to name `props` or `note`.
+
+`TEST_DATABASE_URL` must point at a throwaway database, never the real `raqib`: these tests
+write and delete rows in `raqib.goals`, `raqib.cycles`, the Notion mirror and `yawmi.*`.
 """
 
 import json
 import os
 import re
 from collections.abc import AsyncIterator
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
@@ -357,11 +360,15 @@ class PostgresBackend:
         like = PREFIX + "%"
         await self.pool.execute("DELETE FROM yawmi.habit_logs WHERE habit_code LIKE $1", like)
         await self.pool.execute("DELETE FROM yawmi.habits WHERE code LIKE $1", like)
-        await self.pool.execute("DELETE FROM yawmi.daily_metrics WHERE day = ANY($1)", self.days)
+        # the fixed keys the tests use, so a run aborted before its cleanup cannot block the next
+        days = [*self.days, *(DAY - timedelta(days=i) for i in range(7))]
+        await self.pool.execute("DELETE FROM yawmi.daily_metrics WHERE day = ANY($1)", days)
         await self.pool.execute("DELETE FROM raqib.notion_milestones WHERE page_id LIKE $1", like)
         await self.pool.execute("DELETE FROM raqib.notion_cards WHERE page_id LIKE $1", like)
-        await self.pool.execute("DELETE FROM raqib.cycles WHERE cycle_no = ANY($1)", self.cycles)
-        await self.pool.execute("DELETE FROM raqib.goals WHERE code = ANY($1)", self.goals)
+        cycles = [*self.cycles, CYCLE1.cycle_no, CYCLE2.cycle_no]
+        goals = [*self.goals, "O1", "O2", "O3", "weight"]
+        await self.pool.execute("DELETE FROM raqib.cycles WHERE cycle_no = ANY($1)", cycles)
+        await self.pool.execute("DELETE FROM raqib.goals WHERE code = ANY($1)", goals)
 
 
 IN_CI = bool(os.environ.get("CI"))
@@ -483,6 +490,21 @@ async def test_today_brings_habits_health_and_plan_together(
         64,
     ]
     assert body["plan"] == {"cycle": 1, "day_in_cycle": 11, "focus_outcomes": ["O3"]}
+
+
+@pytest.mark.parametrize(
+    ("now", "day"),
+    [("2026-11-09T20:59:59+00:00", "2026-11-09"), ("2026-11-09T21:00:00+00:00", "2026-11-10")],
+    ids=["23:59:59-riyadh", "00:00-riyadh"],
+)
+async def test_today_is_the_riyadh_day(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch, now: str, day: str
+) -> None:
+    at = datetime.fromisoformat(now)
+    monkeypatch.setattr("yawmi.events.models.server_now", lambda: at)
+    response = await client.get("/v1/today", headers=auth())
+    assert response.json()["day"] == day
+    assert response.json()["health"]["recovery_7d"][-1]["day"] == day
 
 
 @pytest.mark.parametrize("path", ["/v1/today", "/v1/overview"])
