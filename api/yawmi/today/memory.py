@@ -44,6 +44,16 @@ class InMemoryTodayReader:
     async def habit_logs(self, first: date, last: date) -> list[LogRow]:
         return [log for log in self.logs if first <= log.day <= last]
 
+    async def linked_habits(self) -> list[HabitRow]:
+        return sorted(
+            (h for h in self.habits if h.code not in self.inactive and h.goal_ref is not None),
+            key=lambda h: h.code,
+        )
+
+    async def habit_logs_of(self, codes: list[str], first: date, last: date) -> list[LogRow]:
+        wanted = set(codes)
+        return [log for log in self.logs if log.habit_code in wanted and first <= log.day <= last]
+
     async def daily_metrics(self, first: date, last: date) -> list[MetricsRow]:
         return sorted((m for m in self.metrics if first <= m.day <= last), key=lambda m: m.day)
 

@@ -35,6 +35,7 @@ class HabitRow:
     anchor_day: date | None
     start_day: date
     end_day: date | None
+    goal_ref: str | None = None
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,14 @@ class TodayReader(Protocol):
         """Habit logs of every source with `day` in `[first, last]`."""
         ...
 
+    async def linked_habits(self) -> list[HabitRow]:
+        """Active habits that serve a goal (`goal_ref` set), whatever their window, by code."""
+        ...
+
+    async def habit_logs_of(self, codes: list[str], first: date, last: date) -> list[LogRow]:
+        """Logs of the habits `codes` only, of every source, with `day` in `[first, last]`."""
+        ...
+
     async def daily_metrics(self, first: date, last: date) -> list[MetricsRow]:
         """Stored health days in `[first, last]`, oldest first."""
         ...
@@ -112,9 +121,17 @@ class TodayReader(Protocol):
 
 ACTIVE_HABITS = """
 SELECT code, title_ar, kind, unit, target_per_period, period, schedule_kind,
-       weekday_mask, every_n, anchor_day, start_day, end_day
+       weekday_mask, every_n, anchor_day, start_day, end_day, goal_ref
 FROM yawmi.habits
 WHERE active AND start_day <= $1 AND (end_day IS NULL OR end_day >= $1)
+ORDER BY code
+"""
+
+LINKED_HABITS = """
+SELECT code, title_ar, kind, unit, target_per_period, period, schedule_kind,
+       weekday_mask, every_n, anchor_day, start_day, end_day, goal_ref
+FROM yawmi.habits
+WHERE active AND goal_ref IS NOT NULL
 ORDER BY code
 """
 
@@ -122,6 +139,12 @@ HABIT_LOGS = """
 SELECT habit_code, day, value, status
 FROM yawmi.habit_logs
 WHERE day BETWEEN $1 AND $2
+"""
+
+HABIT_LOGS_OF = """
+SELECT habit_code, day, value, status
+FROM yawmi.habit_logs
+WHERE habit_code = ANY($1) AND day BETWEEN $2 AND $3
 """
 
 DAILY_METRICS = """
@@ -153,7 +176,17 @@ SELECT page_id, title, status, outcome_codes
 FROM raqib.notion_cards
 """
 
-ALL_SQL = (ACTIVE_HABITS, HABIT_LOGS, DAILY_METRICS, CYCLES, MILESTONES, GOALS, CARDS)
+ALL_SQL = (
+    ACTIVE_HABITS,
+    LINKED_HABITS,
+    HABIT_LOGS,
+    HABIT_LOGS_OF,
+    DAILY_METRICS,
+    CYCLES,
+    MILESTONES,
+    GOALS,
+    CARDS,
+)
 
 
 def _codes(raw: object) -> tuple[str, ...]:
@@ -173,6 +206,13 @@ class AsyncpgTodayReader:
 
     async def habit_logs(self, first: date, last: date) -> list[LogRow]:
         return [LogRow(**dict(r)) for r in await self._pool.fetch(HABIT_LOGS, first, last)]
+
+    async def linked_habits(self) -> list[HabitRow]:
+        return [HabitRow(**dict(r)) for r in await self._pool.fetch(LINKED_HABITS)]
+
+    async def habit_logs_of(self, codes: list[str], first: date, last: date) -> list[LogRow]:
+        rows = await self._pool.fetch(HABIT_LOGS_OF, codes, first, last)
+        return [LogRow(**dict(r)) for r in rows]
 
     async def daily_metrics(self, first: date, last: date) -> list[MetricsRow]:
         return [MetricsRow(**dict(r)) for r in await self._pool.fetch(DAILY_METRICS, first, last)]

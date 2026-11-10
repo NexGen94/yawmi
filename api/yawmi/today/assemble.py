@@ -2,21 +2,26 @@
 
 No I/O and no clock: the route reads rows through a `TodayReader` and hands them here.
 
-Extension points (task 10b adds habit progress; keep these additive):
-* `HabitDue` gains `period_progress`; `build_habits_due` receives the logs it needs.
-* `CardOut.habits` is filled with `[{code, title_ar, adherence}]` (empty until then).
+Habit indicators (task 10b) come from the pure rules of `yawmi.domain.habits`:
+* `HabitDue.period_progress`: how far the current period has come (`build_habits_due` receives
+  the logs of `logs_window`: from the start of the current month or week to the day).
+* `CardOut.habits`: the active habits whose `goal_ref` is the card, each with its adherence, and
+  `CardOut.habits_adherence_avg`, the mean of the adherences that are not null.
 """
 
 import re
+from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from datetime import date, timedelta
-from typing import Literal, cast
+from typing import cast
 
 from pydantic import BaseModel, Field
 
-from yawmi.domain.habits import HabitKind, HabitSpec
-from yawmi.domain.periods import Period, is_scheduled
+from yawmi.domain.habits import HabitKind, HabitLog, HabitSpec, adherence, period_progress
+from yawmi.domain.periods import Period, WeekStart, is_scheduled, period_bounds
 from yawmi.domain.scores import DataQuality
+from yawmi.habits.models import HabitUnit, domain_logs
+from yawmi.habits.progress import PeriodProgressOut
 from yawmi.today.reader import (
     CardRow,
     CycleRow,
@@ -28,7 +33,6 @@ from yawmi.today.reader import (
 )
 
 TREND_DAYS = 7
-HabitUnit = Literal["session", "min", "hour"]  # the CHECK on yawmi.habits.unit
 _OUTCOME_CODE = re.compile(r"O([1-9]|1[0-2])")
 
 
@@ -39,10 +43,13 @@ class HabitDue(BaseModel):
     code: str
     title_ar: str
     kind: HabitKind
-    unit: HabitUnit | None
+    unit: HabitUnit = Field(description="`''` للعادة بلا وحدة، كما في `/v1/habits`")
     target_per_period: float
     period: Period
     done_today: bool = Field(description="سُجّل لها إنجاز (`done`) اليوم من أي مصدر")
+    period_progress: PeriodProgressOut = Field(
+        description="تقدّم الفترة الحالية (يوم أو أسبوع أو شهر)"
+    )
 
 
 class TrendPoint(BaseModel):
@@ -89,29 +96,66 @@ def habit_spec(row: HabitRow) -> HabitSpec:
     )
 
 
+def logs_window(day: date, week_start: WeekStart) -> tuple[date, date]:
+    """The days whose logs `build_habits_due` needs: from the start of the current month or
+    week, whichever is earlier, to `day`."""
+    week_first, _ = period_bounds(day, "week", week_start)
+    return min(week_first, day.replace(day=1)), day
+
+
+def _logs_by_habit(logs: Iterable[LogRow]) -> dict[str, list[HabitLog]]:
+    rows: dict[str, list[LogRow]] = defaultdict(list)
+    for log in logs:
+        rows[log.habit_code].append(log)
+    return {code: domain_logs(group) for code, group in rows.items()}
+
+
+def _period_progress(
+    spec: HabitSpec, logs: list[HabitLog], day: date, week_start: WeekStart
+) -> PeriodProgressOut:
+    p = period_progress(spec, logs, day, week_start)
+    return PeriodProgressOut(
+        done=p.done,
+        target=p.target,
+        completion=p.completion,
+        reached=p.reached,
+        expected=p.expected,
+        on_track=p.on_track,
+        need_per_day=p.need_per_day,
+    )
+
+
 def build_habits_due(
-    day: date, habits: Iterable[HabitRow], logs: Iterable[LogRow]
+    day: date, habits: Iterable[HabitRow], logs: Iterable[LogRow], week_start: WeekStart
 ) -> list[HabitDue]:
     """Habits scheduled on `day`, in code order.
 
     A weekly or monthly habit is scheduled every day of its window (its target is spread over
     the period), so it is listed every day. `done_today` is true when any source logged `done`
-    for it on `day`; how far the period has come is `period_progress` (task 10b).
+    for it on `day`; `period_progress` is the domain's progress of the period holding `day`
+    (it needs the logs of `logs_window`).
     """
+    logs = list(logs)
     done = {log.habit_code for log in logs if log.day == day and log.status == "done"}
-    return [
-        HabitDue(
-            code=row.code,
-            title_ar=row.title_ar,
-            kind=cast(HabitKind, row.kind),
-            unit=cast(HabitUnit | None, row.unit),
-            target_per_period=float(row.target_per_period),
-            period=cast(Period, row.period),
-            done_today=row.code in done,
+    by_habit = _logs_by_habit(logs)
+    due: list[HabitDue] = []
+    for row in sorted(habits, key=lambda h: h.code):
+        spec = habit_spec(row)
+        if not is_scheduled(day, spec):
+            continue
+        due.append(
+            HabitDue(
+                code=row.code,
+                title_ar=row.title_ar,
+                kind=cast(HabitKind, row.kind),
+                unit=cast(HabitUnit, row.unit or ""),
+                target_per_period=float(row.target_per_period),
+                period=cast(Period, row.period),
+                done_today=row.code in done,
+                period_progress=_period_progress(spec, by_habit.get(row.code, []), day, week_start),
+            )
         )
-        for row in sorted(habits, key=lambda h: h.code)
-        if is_scheduled(day, habit_spec(row))
-    ]
+    return due
 
 
 def trend_window(day: date) -> tuple[date, date]:
@@ -205,7 +249,12 @@ class CardOut(BaseModel):
     title: str
     status: str | None
     outcome_codes: list[str]
-    habits: list[CardHabit] = Field(description="العادات المرتبطة بالبطاقة (تملؤها المهمة 10)")
+    habits: list[CardHabit] = Field(
+        description="العادات النشطة التي `goal_ref` فيها هذه البطاقة، بالرمز، مع التزام كل منها"
+    )
+    habits_adherence_avg: float | None = Field(
+        description="متوسط الالتزام غير الفارغ لعادات البطاقة، أو null إن لم يوجد"
+    )
 
 
 class OverviewOut(BaseModel):
@@ -256,14 +305,42 @@ def build_outcomes(
     return outcomes
 
 
-def build_cards(cards: Iterable[CardRow]) -> list[CardOut]:
-    return [
-        CardOut(
-            page_id=c.page_id,
-            title=c.title,
-            status=c.status,
-            outcome_codes=list(c.outcome_codes),
-            habits=[],
+def build_cards(
+    cards: Iterable[CardRow],
+    habits: Iterable[HabitRow],
+    logs: Iterable[LogRow],
+    today: date,
+    week_start: WeekStart,
+) -> list[CardOut]:
+    """Cards with the habits linked to them (`goal_ref` = the card's page id) and adherence.
+
+    `habits` are the linked habits to consider (the route passes the active ones) and `logs`
+    their logs up to `today`. The average leaves out habits without a finished period yet.
+    """
+    by_habit = _logs_by_habit(logs)
+    linked: dict[str, list[CardHabit]] = defaultdict(list)
+    for row in sorted(habits, key=lambda h: h.code):
+        if row.goal_ref is None:
+            continue
+        linked[row.goal_ref].append(
+            CardHabit(
+                code=row.code,
+                title_ar=row.title_ar,
+                adherence=adherence(habit_spec(row), by_habit.get(row.code, []), today, week_start),
+            )
         )
-        for c in sorted(cards, key=lambda c: (c.title, c.page_id))
-    ]
+    out: list[CardOut] = []
+    for c in sorted(cards, key=lambda c: (c.title, c.page_id)):
+        mine = linked.get(c.page_id, [])
+        values = [h.adherence for h in mine if h.adherence is not None]
+        out.append(
+            CardOut(
+                page_id=c.page_id,
+                title=c.title,
+                status=c.status,
+                outcome_codes=list(c.outcome_codes),
+                habits=mine,
+                habits_adherence_avg=sum(values) / len(values) if values else None,
+            )
+        )
+    return out
