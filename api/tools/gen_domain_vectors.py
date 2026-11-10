@@ -1,19 +1,26 @@
 """مولّد متجهات النطاق المشتركة `contracts/domain-vectors/v1/*.json`.
 
-    uv run python -I tools/gen_domain_vectors.py            # من api/: يكتب الملفات
+    uv run python -I tools/gen_domain_vectors.py            # من api/: يكتب الملفات المختلفة
     uv run python -I tools/gen_domain_vectors.py --check    # لا يكتب؛ يفشل عند أي فرق
+    uv run python -I tools/gen_domain_vectors.py --init     # يسمح بإنشاء ملف ملتزَم مفقود
 
 المدخلات من `vector_cases.py`، و`expect` يُحسب من التنفيذ المرجعي (`yawmi.domain.days` و
 `periods` و`habits` و`scores`) وحده؛ لا قيمة تُكتب يدوياً. الملفات بمفاتيح مرتبة ومسافتين
-وUTF-8 وLF وسطر أخير فارغ.
+وUTF-8 وLF وسطر أخير فارغ. مجلد الإخراج ثابت من موقع هذا الملف ولا يُمرَّر من سطر الأوامر؛
+الاختبارات تمرّره إلى `generate()` و`main()` برمجياً.
 
-الحارس (يعمل في الوضعين): عند وجود ملف ملتزَم يفشل المولّد إن:
+الحارس (يعمل في الوضعين، ويفحص الملفات الأربعة عشر كلها قبل أن يكتب أيّها): يفشل إن:
+- غاب ملف ملتزَم (خط الأساس) ولم يُطلب `--init`؛
 - حُذف معرّف ملتزَم من `vector_cases.py`؛
 - تغيّر `input` لمعرّف ملتزَم؛
 - تغيّر `expect` (أو `tol`) لمعرّف ملتزَم و`RULES_VERSION` لم يُرفع فوق ما في الملف؛
 - خالف ناتجٌ قيمةً مثبّتة (`pin`) من المواصفة.
 
-يعمل تحت `-I` (مجلد السكربت ليس في `sys.path`) فيُضاف صراحة لاستيراد `vector_cases`.
+الكتابة ذرّية: ملف مؤقت بجوار الهدف ثم استبدال، فلا يبقى ملف مكتوب جزئياً.
+
+`sys.path.insert` أدناه لازم: السكربت يُشغَّل بـ`-I` (مجلد السكربت لا يُضاف إلى `sys.path`)
+و`tools/` ليس حزمة مثبّتة، فبدونه لا يُستورد `vector_cases`. المسار مشتق من `__file__` لا من
+أي مدخل خارجي.
 """
 
 from __future__ import annotations
@@ -166,36 +173,46 @@ def apply(function: str, inp: dict[str, Any]) -> Any:
     return _encode(result)
 
 
-# ---------------------------------------------------------------- البناء والكتابة
+# ---------------------------------------------------------------- قاعدة المقارنة
 
 
-def _close(actual: Any, expect: Any, tol: float) -> bool:
+def close(actual: Any, expect: Any, tol: float) -> bool:
+    """قاعدة المقارنة في الاتفاق: تطابق تام للصحيحة والنصوص والمنطقية وnull، و`|Δ| ≤ tol` للكسور.
+
+    الصحيح لا يقبل كسراً ولا منطقياً، والكسر يقبل صحيحاً ضمن الهامش ولا يقبل منطقياً. الكائنات
+    بالمفاتيح نفسها وكل حقل بقاعدته، والمصفوفات بالطول نفسه عنصراً عنصراً.
+    """
     if isinstance(expect, bool) or expect is None or isinstance(expect, str):
         return type(actual) is type(expect) and actual == expect
+    if isinstance(actual, bool):
+        return False
     if isinstance(expect, int):
-        return isinstance(actual, int) and not isinstance(actual, bool) and actual == expect
+        return isinstance(actual, int) and actual == expect
     if isinstance(expect, float):
         return isinstance(actual, (int, float)) and abs(actual - expect) <= tol
     if isinstance(expect, dict):
         return (
             isinstance(actual, dict)
             and actual.keys() == expect.keys()
-            and all(_close(actual[k], expect[k], tol) for k in expect)
+            and all(close(actual[k], expect[k], tol) for k in expect)
         )
     if isinstance(expect, list):
         return (
             isinstance(actual, list)
             and len(actual) == len(expect)
-            and all(_close(a, e, tol) for a, e in zip(actual, expect, strict=True))
+            and all(close(a, e, tol) for a, e in zip(actual, expect, strict=True))
         )
     return False
+
+
+# ---------------------------------------------------------------- البناء
 
 
 def _case_doc(function: str, case: Case) -> dict[str, Any]:
     value = apply(function, case.input)
     if case.pin is not None:
         pinned, tol = case.pin
-        if not _close(value, pinned, tol):
+        if not close(value, pinned, tol):
             raise VectorError(
                 f"{case.id}: الناتج {value!r} يخالف القيمة المثبّتة {pinned!r} (±{tol})"
             )
@@ -227,6 +244,9 @@ def _canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, allow_nan=False)
 
 
+# ---------------------------------------------------------------- الحارس
+
+
 def _guard(function: str, old: dict[str, Any], new: dict[str, Any]) -> None:
     """يرفع `VectorError` إن خالف الملف الجديد قاعدة الثبات تجاه الملف الملتزَم."""
     old_version = old.get("rulesVersion", 0)
@@ -254,39 +274,60 @@ def _guard(function: str, old: dict[str, Any], new: dict[str, Any]) -> None:
             )
 
 
-def generate(out_dir: Path = DEFAULT_OUT, check: bool = False) -> list[str]:
-    """يبني الملفات الأربعة عشر ويكتب المختلف منها (أو يبلّغ عنه في `check`). يعيد أسماء المختلفة."""
-    changed: list[str] = []
+def _plan(out_dir: Path, init: bool) -> list[tuple[Path, bytes]]:
+    """يبني الملفات الأربعة عشر ويحرسها كلها، ويعيد ما يختلف عن الملتزَم `(المسار, النص)`."""
+    pending: list[tuple[Path, bytes]] = []
     for function in FUNCTIONS:
         path = out_dir / f"{function}.json"
         new_doc = json.loads(render(build(function)))  # مرور بـJSON لتوحيد الأعداد
+        text = render(new_doc).encode("utf-8")
         if path.exists():
-            old_doc = json.loads(path.read_text(encoding="utf-8"))
-            _guard(function, old_doc, new_doc)
-        text = render(new_doc)
-        if path.exists() and path.read_bytes() == text.encode("utf-8"):
-            continue
-        changed.append(path.name)
-        if not check:
-            out_dir.mkdir(parents=True, exist_ok=True)
-            with path.open("w", encoding="utf-8", newline="\n") as fh:
-                fh.write(text)
-    return changed
+            _guard(function, json.loads(path.read_text(encoding="utf-8")), new_doc)
+            if path.read_bytes() == text:
+                continue
+        elif not init:
+            raise VectorError(f"{path.name}: لا ملف ملتزَم في {out_dir} (استعمل --init لإنشائه)")
+        pending.append((path, text))
+    return pending
 
 
-def main(argv: list[str] | None = None) -> int:
+def _write_atomic(path: Path, data: bytes) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        tmp.write_bytes(data)
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def generate(out_dir: Path = DEFAULT_OUT, check: bool = False, init: bool = False) -> list[str]:
+    """يحرس الملفات الأربعة عشر ثم يكتب المختلف منها (أو يبلّغ عنه في `check`). يعيد أسماءها.
+
+    `init` يسمح بإنشاء ملف ملتزَم مفقود (المجلد أول مرة، أو ملف دالة جديدة)؛ بدونه الملف المفقود
+    خط أساس محذوف فيفشل. الحارس يكتمل على كل الملفات قبل أول كتابة، والكتابة ذرّية.
+    """
+    pending = _plan(out_dir, init)
+    if not check and pending:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for path, text in pending:
+            _write_atomic(path, text)
+    return [path.name for path, _ in pending]
+
+
+def main(argv: list[str] | None = None, out_dir: Path = DEFAULT_OUT) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--check", action="store_true", help="لا يكتب؛ يفشل إن اختلف أي ملف")
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="مجلد الإخراج")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true", help="لا يكتب؛ يفشل إن اختلف أي ملف")
+    mode.add_argument("--init", action="store_true", help="يسمح بإنشاء ملف ملتزَم مفقود")
     args = parser.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(
             encoding="utf-8", errors="replace"
         )  # الرسائل عربية ولو كانت الطرفية cp1252
     try:
-        changed = generate(args.out, check=args.check)
+        changed = generate(out_dir, check=args.check, init=args.init)
     except VectorError as exc:
         print(f"خرق: {exc}")
         return 1
@@ -303,7 +344,7 @@ def main(argv: list[str] | None = None) -> int:
         print("كُتبت: " + ", ".join(changed))
     else:
         print("لا تغيير")
-    print(f"{len(FUNCTIONS)} ملفاً و{total} حالة (rulesVersion {RULES_VERSION}) في {args.out}")
+    print(f"{len(FUNCTIONS)} ملفاً و{total} حالة (rulesVersion {RULES_VERSION}) في {out_dir}")
     return 0
 
 
@@ -317,6 +358,7 @@ __all__ = [
     "VectorError",
     "apply",
     "build",
+    "close",
     "generate",
     "main",
     "render",

@@ -47,7 +47,10 @@
 
 - `id`: `<fn>-NNN` فريد في كل الملفات.
 - `input`: بدائيات JSON وحدها بمفاتيح `snake_case`: تواريخ `YYYY-MM-DD`، ولحظات ISO 8601 بـ`Z`
-  (وحالة واحدة بإزاحة صريحة `+03:00` في `day_key`)، وأعداد، ونصوص تعداد، ومصفوفات وكائنات منها.
+  (وفي `day_key` حالة واحدة بأجزاء الثانية `20:59:59.999Z` هي `day_key-006`، وحالة واحدة بإزاحة
+  صريحة `+03:00` هي `day_key-013`)، وأعداد، ونصوص تعداد، ومصفوفات وكائنات منها. محلل اللحظات في
+  كل عميل يجب أن يقبل الصيغ الثلاث؛ في Swift يحتاج `ISO8601DateFormatter` إلى
+  `.withFractionalSeconds` لقبول `day_key-006`.
   - `habit`: حقول `HabitSpec` العشرة دائماً (ولو `null`): `kind`، `unit`، `target_per_period`،
     `period`، `schedule_kind`، `weekday_mask` (بتّ 0 = الأحد ... 6 = السبت)، `every_n`،
     `anchor_day`، `start_day`، `end_day`.
@@ -65,13 +68,19 @@
 - الكسور: `|actual − expect| ≤ tol`، و`tol = 1e-9` إن لم يُحدَّد.
 - الكائنات: المفاتيح نفسها، وكل حقل بالقاعدة التي تناسبه. العدد المكتوب `3.0` كسر و`3` صحيح؛
   حقول `PeriodProgress` كلها كسور إلا `reached` و`on_track`، وحقول `ChallengeProgress` صحيحة إلا
-  `completion`.
+  `completion`، وفي `Baseline` الحقل `n` صحيح و`mean` و`sd` كسور و`quality` نص. نواتج `streak`
+  و`goal_prefill` و`recovery` صحيحة، و`strength` و`adherence` و`trimp` و`strain` كسور.
 
 ## قاعدة الثبات
 
 - المعرّف لا يتغيّر ولا يُحذف بعد التزامه، ومدخلاته لا تتغيّر. الحالة الجديدة تأخذ رقماً جديداً.
 - أي تغيير في `expect` (أو `tol`) لمعرّف ملتزَم يرفع `RULES_VERSION` في `api/tools/vector_cases.py`،
   وإلا رفض المولّد الكتابة بعبارة «تغيّر expect دون رفع rulesVersion».
+- الملف الملتزَم هو خط الأساس للحارس، فحذفه ثم التوليد لا يعيد ضبطه بصمت: ملف مفقود يُفشل
+  المولّد في الوضعين إلا بـ`--init` (لإنشاء المجلد أول مرة أو ملف دالة جديدة). وفي CI يُطبَّق
+  الحارس على ملفات الفرع الأساس أيضاً لا على ملفات الفرع نفسه فقط.
+- الحارس يفحص الملفات الأربعة عشر كلها قبل أن يكتب أيّها، والكتابة ذرّية (ملف مؤقت ثم استبدال)،
+  فلا يترك فشلٌ متأخر ملفاً مكتوباً جزئياً.
 - القيم المعلنة في المواصفة (Loop 0.7980 @30 و0.9592 @60 و0.9918 @90، والتعافي 50 و69 و84،
   وTRIMP 8.357 ...) مثبّتة كـ`pin` في `vector_cases.py`؛ المولّد والاختبار يفشلان إن خالفها الناتج.
 
@@ -81,11 +90,15 @@
 cd api
 uv run python -I tools/gen_domain_vectors.py            # يكتب الملفات المختلفة فقط
 uv run python -I tools/gen_domain_vectors.py --check    # لا يكتب؛ يفشل عند أي فرق
+uv run python -I tools/gen_domain_vectors.py --init     # يسمح بإنشاء ملف ملتزَم مفقود (أول مرة فقط)
 uv run pytest -q tests/test_domain_vectors.py           # الصيغة، والمطابقة مع المرجع، وحارس المولّد
 ```
 
-CI (`api-tests.yml`) يعيد التوليد ويفشل إن ظهر أي فرق في `contracts/`. الملفات بمفاتيح مرتبة
-ومسافتين وUTF-8 وLF وسطر أخير فارغ، فأي تعديل يدوي يظهر فرقاً.
+مجلد الإخراج ثابت من موقع السكربت (`contracts/domain-vectors/v1` في جذر المستودع) ولا يُمرَّر
+من سطر الأوامر. CI (`api-tests.yml`) يشغّل `--check` على ملفات الفرع، ثم يستخرج ملفات الفرع
+الأساس بـ`git archive` ويشغّل الحارس عليها، فلا يمرّ حذف ملف وإعادة توليده بـ`expect` جديد دون
+رفع `rulesVersion`. الملفات بمفاتيح مرتبة ومسافتين وUTF-8 وLF وسطر أخير فارغ، فأي تعديل يدوي
+يظهر فرقاً.
 
 ## كيف يقرأها TypeScript وSwift
 
@@ -97,7 +110,9 @@ CI (`api-tests.yml`) يعيد التوليد ويفشل إن ظهر أي فرق 
 - **Swift Testing** (`YawmiKit/Tests/.../VectorTests.swift`): `VectorLoader.load("<fn>")` يحدد
   الجذر من `#filePath` صعوداً ثم `contracts/domain-vectors/v1/<fn>.json`، ويعيد
   `[VectorCase { id, input: JSONValue, expect: JSONValue, tol: Double? }]`؛ ثم
-  `@Test(arguments: VectorLoader.load("<fn>"))` لكل ملف من الأربعة عشر، وفك `input` إلى
+  `@Test(arguments: VectorLoader.load("<fn>"))` لكل ملف من الأربعة عشر، ومحلل لحظات يقبل `Z`
+  وأجزاء الثانية والإزاحة الصريحة (`ISO8601DateFormatter` مع `.withFractionalSeconds` لحالة
+  `day_key-006`، أو محلل يدوي على `Foundation` وحده)، وفك `input` إلى
   `HabitSpec`/`HabitLog`/`DayKey` من `Foundation` وحده.
 
 ## ما لا تغطيه المتجهات
