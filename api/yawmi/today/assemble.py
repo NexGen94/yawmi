@@ -13,14 +13,14 @@ import re
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from datetime import date, timedelta
-from typing import Literal, cast
+from typing import cast
 
 from pydantic import BaseModel, Field
 
 from yawmi.domain.habits import HabitKind, HabitLog, HabitSpec, adherence, period_progress
 from yawmi.domain.periods import Period, WeekStart, is_scheduled, period_bounds
 from yawmi.domain.scores import DataQuality
-from yawmi.habits.models import domain_logs
+from yawmi.habits.models import HabitUnit, domain_logs
 from yawmi.habits.progress import PeriodProgressOut
 from yawmi.today.reader import (
     CardRow,
@@ -33,7 +33,6 @@ from yawmi.today.reader import (
 )
 
 TREND_DAYS = 7
-HabitUnit = Literal["session", "min", "hour"]  # the CHECK on yawmi.habits.unit
 _OUTCOME_CODE = re.compile(r"O([1-9]|1[0-2])")
 
 
@@ -44,7 +43,7 @@ class HabitDue(BaseModel):
     code: str
     title_ar: str
     kind: HabitKind
-    unit: HabitUnit | None
+    unit: HabitUnit = Field(description="`''` للعادة بلا وحدة، كما في `/v1/habits`")
     target_per_period: float
     period: Period
     done_today: bool = Field(description="سُجّل لها إنجاز (`done`) اليوم من أي مصدر")
@@ -127,7 +126,7 @@ def _period_progress(
 
 
 def build_habits_due(
-    day: date, habits: Iterable[HabitRow], logs: Iterable[LogRow], week_start: WeekStart = "sun"
+    day: date, habits: Iterable[HabitRow], logs: Iterable[LogRow], week_start: WeekStart
 ) -> list[HabitDue]:
     """Habits scheduled on `day`, in code order.
 
@@ -149,7 +148,7 @@ def build_habits_due(
                 code=row.code,
                 title_ar=row.title_ar,
                 kind=cast(HabitKind, row.kind),
-                unit=cast(HabitUnit | None, row.unit),
+                unit=cast(HabitUnit, row.unit or ""),
                 target_per_period=float(row.target_per_period),
                 period=cast(Period, row.period),
                 done_today=row.code in done,

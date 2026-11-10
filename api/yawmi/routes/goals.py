@@ -8,12 +8,19 @@ in `raqib.kpis` and a deadline (the milestone's `due_date`, else the outcome's `
 minus the newest reading on or before today, or 0) over the periods up to the deadline
 (`goal_prefill`). Otherwise it is a daily yes/no habit with target 1. Nothing is written: the
 Notion completion of the goal never changes because of a habit.
+
+An unknown `kpi_code` is a 422 on `["body", "kpi_code"]` (an unknown `ref` stays a 404). A
+draft is always one that `POST /v1/habits` accepts: a blank mirror title becomes «عادة جديدة»
+and a long one is cut to 200 characters, and a KPI target that is not a finite number, or a
+computed target above the limit (100 000), falls back to the daily yes/no draft.
 """
 
+import math
 from datetime import date
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field
 
 from yawmi.auth.deps import SettingsDep, require_kind
@@ -30,6 +37,10 @@ from yawmi.text import StorableText, is_storable
 USER_KINDS = ("iphone", "watch", "web")
 DEFAULT_KPI_PERIOD: Period = "week"
 NOT_FOUND_MESSAGE = "لا محطة ولا بطاقة بهذا المعرّف"
+KPI_UNKNOWN_MESSAGE = "لا مؤشر بهذا الرمز"
+DEFAULT_TITLE = "عادة جديدة"
+MAX_TITLE = 200
+MAX_TARGET = 100_000
 _OUTCOMES = {f"O{n}" for n in range(1, 13)}
 
 NOT_FOUND: dict[int | str, dict[str, Any]] = {
@@ -48,7 +59,7 @@ class ToHabitIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kpi_code: Annotated[StorableText, Field(min_length=1, max_length=64)] | None = Field(
-        default=None, description="رمز مؤشر في `raqib.kpis`"
+        default=None, description="رمز مؤشر من مؤشرات الخطة؛ رمز مجهول يُرفض (422)"
     )
     period: Period = Field(
         default=DEFAULT_KPI_PERIOD,
@@ -100,24 +111,31 @@ async def to_habit(
     if deadline is None and outcome is not None:
         deadline = await mirror.outcome_deadline(outcome)
 
+    goal_target = None
+    if request.kpi_code is not None:
+        kpi = await mirror.kpi(request.kpi_code)
+        if kpi is None:
+            raise RequestValidationError(
+                [{"loc": ("body", "kpi_code"), "type": "kpi_unknown", "msg": KPI_UNKNOWN_MESSAGE}]
+            )
+        goal_target = kpi.target
+
     today: date = day_key(event_models.server_now(), DEFAULT_TZ)
     kind, period, target = "boolean", "day", 1.0
-    goal_target = None if request.kpi_code is None else await mirror.kpi_target(request.kpi_code)
-    if goal_target is not None and deadline is not None:
+    goal = math.nan if goal_target is None else float(goal_target)  # Decimal NaN -> nan
+    if math.isfinite(goal) and deadline is not None:
         current = await mirror.latest_reading(request.kpi_code or "", today)
-        kind, period = "count", request.period
-        target = float(
-            goal_prefill(
-                float(goal_target),
-                0.0 if current is None else float(current),
-                today,
-                deadline,
-                request.period,
-                settings.week_start,
+        reading = 0.0 if current is None else float(current)
+        if not math.isfinite(reading):
+            reading = 0.0
+        if math.isfinite(goal - reading):
+            prefill = goal_prefill(
+                goal, reading, today, deadline, request.period, settings.week_start
             )
-        )
+            if prefill <= MAX_TARGET:
+                kind, period, target = "count", request.period, float(prefill)
     return HabitDraft(
-        title_ar=title,
+        title_ar=title.strip()[:MAX_TITLE].strip() or DEFAULT_TITLE,
         goal_ref=ref,
         outcome=outcome,
         ac_ref=None,

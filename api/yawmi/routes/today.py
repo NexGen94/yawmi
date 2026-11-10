@@ -86,7 +86,8 @@ async def get_overview(reader: TodayReaderDep, settings: SettingsDep) -> Overvie
     day = day_key(event_models.server_now(), DEFAULT_TZ)
     milestones = await reader.milestones()
     linked = await reader.linked_habits()
-    logs = await reader.habit_logs(min(h.start_day for h in linked), day) if linked else []
+    first = min((h.start_day for h in linked), default=day)
+    logs = await reader.habit_logs_of([h.code for h in linked], first, day) if linked else []
     return OverviewOut(
         outcomes=build_outcomes(await reader.goals(), milestones),
         cards=build_cards(await reader.cards(), linked, logs, day, settings.week_start),

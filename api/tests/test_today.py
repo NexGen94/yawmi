@@ -115,7 +115,7 @@ def test_habits_due_follow_the_schedule_and_the_window() -> None:
         habit("g-not-started", start_day=DAY + timedelta(days=1)),
         habit("h-ended", end_day=DAY - timedelta(days=1)),
     ]
-    due = build_habits_due(DAY, rows, [])
+    due = build_habits_due(DAY, rows, [], "sun")
     assert [h.code for h in due] == [
         PREFIX + c for c in ("a-daily", "b-tuesdays", "d-every3", "f-weekly")
     ]
@@ -136,7 +136,7 @@ def test_done_today_needs_a_done_log_on_the_day() -> None:
         log("c", day=DAY - timedelta(days=1)),
         log("d", status="done", value="2"),
     ]
-    assert {h.code: h.done_today for h in build_habits_due(DAY, rows, logs)} == {
+    assert {h.code: h.done_today for h in build_habits_due(DAY, rows, logs, "sun")} == {
         PREFIX + "a": True,
         PREFIX + "b": False,
         PREFIX + "c": False,
@@ -662,3 +662,51 @@ async def test_archived_habits_are_not_linked() -> None:
         inactive={PREFIX + "y"},
     )
     assert [h.code for h in await reader.linked_habits()] == [PREFIX + "x"]
+
+
+def test_no_unit_is_the_empty_string_as_in_the_habit_routes() -> None:
+    (due,) = build_habits_due(DAY, [habit("a")], [], "sun")
+    assert due.unit == ""
+
+
+async def test_overview_reads_only_the_logs_of_linked_habits() -> None:
+    card = PREFIX + "card"
+    reader = InMemoryTodayReader(
+        habits=[habit("a", goal_ref=card), habit("b", start_day=date(2000, 1, 1))],
+        logs=[log("a"), log("b", day=date(2000, 1, 1))],
+    )
+    linked = await reader.linked_habits()
+    logs = await reader.habit_logs_of([h.code for h in linked], date(2000, 1, 1), DAY)
+    assert [lg.habit_code for lg in logs] == [PREFIX + "a"]
+
+
+async def test_overview_answers_for_the_widest_linked_habits(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    card = PREFIX + "card"
+    widest = {"start_day": date(2000, 1, 1), "end_day": date(2099, 12, 31), "goal_ref": card}
+    await backend.add(
+        habit("daily", **widest),
+        habit(
+            "weekly",
+            kind="count",
+            unit="session",
+            target_per_period=Decimal(3),
+            period="week",
+            **widest,
+        ),
+        habit(
+            "monthly",
+            kind="duration",
+            unit="min",
+            target_per_period=Decimal(600),
+            period="month",
+            **widest,
+        ),
+        log("daily"),
+    )
+    await backend.add_card(CardRow(card, "بطاقة", None, ()), {})
+    response = await client.get("/v1/overview", headers=auth())
+    assert response.status_code == 200, response.text
+    today = await client.get("/v1/today", headers=auth())
+    assert today.status_code == 200, today.text

@@ -23,7 +23,6 @@ from yawmi.errors import FORBIDDEN, INVALID, UNAUTHORIZED, ErrorDetail
 from yawmi.events import models as event_models
 from yawmi.events.project import EARLIEST
 from yawmi.habits.models import (
-    NOT_NULL,
     HabitIn,
     HabitOut,
     HabitPatch,
@@ -44,7 +43,6 @@ CODE_ATTEMPTS = 5
 
 NOT_FOUND_MESSAGE = "العادة غير موجودة"
 SYSTEM_LOCKED_MESSAGE = "عادة نظامية: يُعدَّل المرسى والتذكيرات فقط"
-_NULL_NOT_ALLOWED = "الحقل لا يقبل قيمة فارغة"
 _DAY_AHEAD = "اليوم يلي اليوم الحالي بأكثر من يوم"
 _DAY_TOO_OLD = "اليوم خارج النطاق المعقول"
 
@@ -133,26 +131,26 @@ async def create_habit(body: HabitIn, store: HabitStoreDep) -> HabitOut:
     description=(
         "تعديل جزئي: تتغير الحقول المرسلة وحدها، و`null` يفرغ الحقل الذي يقبل الفراغ. "
         "`reminders` يستبدل التذكيرات كلها. الأرشفة `active = false`، ولا حذف. العادة النظامية "
-        "يُعدَّل فيها `anchor` و`reminders` فقط (409 لغيرهما إن اختلفت قيمته)."
+        "يُعدَّل فيها `anchor` و`reminders` فقط (409 لغيرهما إن اختلفت قيمته). التذكير الباقي "
+        "بوقته وقناعه يحتفظ بصفّه، والمحذوف يُعطَّل، والجديد يُضاف."
     ),
     responses={**NOT_FOUND, **CONFLICT, **INVALID},
 )
 async def patch_habit(code: Code, body: HabitPatch, store: HabitStoreDep) -> HabitOut:
-    nulls = [
-        {"loc": ("body", f), "type": "null_not_allowed", "msg": _NULL_NOT_ALLOWED}
-        for f in sorted(body.model_fields_set & NOT_NULL)
-        if getattr(body, f) is None
-    ]
-    if nulls:
-        raise RequestValidationError(nulls)
-    stored = await _load(store, code)
-    current = to_api(stored)
-    merged = normalize({**current, **body.model_dump(include=body.model_fields_set)})
-    if stored.system and locked_changes(current, merged):
-        raise HTTPException(status_code=409, detail=SYSTEM_LOCKED_MESSAGE)
-    _refuse_if_invalid(merged)
-    habit = from_api(merged)
-    await store.update(habit, replace_reminders="reminders" in body.model_fields_set)
+    sent = body.model_dump(include=body.model_fields_set)
+
+    def change(stored: StoredHabit) -> StoredHabit:
+        """Merge the patch into the locked habit; a 409 or 422 here aborts with nothing written."""
+        current = to_api(stored)
+        merged = normalize({**current, **sent})
+        if stored.system and locked_changes(current, merged):
+            raise HTTPException(status_code=409, detail=SYSTEM_LOCKED_MESSAGE)
+        _refuse_if_invalid(merged)
+        return from_api(merged)
+
+    habit = await store.modify(code, change) if is_storable(code) else None
+    if habit is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND_MESSAGE)
     return habit_out(habit)
 
 

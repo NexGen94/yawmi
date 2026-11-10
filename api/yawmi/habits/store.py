@@ -2,8 +2,16 @@
 
 `HabitStore` reads and writes `yawmi.habits` and `yawmi.habit_reminders`, and reads
 `yawmi.habit_logs`. Nothing is ever deleted (the role has no DELETE there): a habit is archived
-with `active = false`, and replacing a habit's reminders deactivates the old rows and inserts new
-ones.
+with `active = false`.
+
+Reminders keep their identity. A reminder is its `(at_time, weekday_mask)`: when an edit sends
+the reminders again, a reminder that is still there keeps its row (and its id, which the push
+service records in `reminder_sends` to never send twice), a removed one is deactivated, and only
+a new one gets a new row. So saving a habit with the same reminders touches no reminder row.
+
+An edit (`modify`) locks the habit row (`SELECT … FOR UPDATE`) for the whole read-merge-write,
+so two devices editing at once cannot restore each other's stale values. `system` and
+`created_by` are never rewritten by an edit.
 
 `MirrorReader` reads the Raqib mirror for `POST /v1/goals/{ref}/to-habit`. Every query names its
 columns: `yawmi_api` reads `raqib.notion_cards` and `raqib.kpi_readings` through column-level
@@ -14,18 +22,19 @@ Rows are stored as the table holds them (`unit` and `anchor` may be NULL); the A
 """
 
 import json
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, time
 from decimal import Decimal
 from typing import Protocol
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import asyncpg
 
 from yawmi.today.reader import LogRow
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class Reminder:
     at_time: time
     weekday_mask: int
@@ -33,7 +42,7 @@ class Reminder:
 
 @dataclass(frozen=True)
 class StoredHabit:
-    """A `yawmi.habits` row (column names) with its active reminders."""
+    """A `yawmi.habits` row (column names) with its active reminders, sorted."""
 
     code: str
     title_ar: str
@@ -57,6 +66,9 @@ class StoredHabit:
     reminders: tuple[Reminder, ...] = field(default=())
 
 
+Change = Callable[[StoredHabit], StoredHabit]
+
+
 class HabitStore(Protocol):
     async def list_habits(self) -> list[StoredHabit]:
         """Every habit, archived ones included, by code."""
@@ -68,13 +80,37 @@ class HabitStore(Protocol):
         """Insert the habit and its reminders; `False` (and nothing written) if the code exists."""
         ...
 
-    async def update(self, habit: StoredHabit, *, replace_reminders: bool) -> None:
-        """Overwrite the habit's columns; with `replace_reminders`, swap its active reminders."""
+    async def modify(self, code: str, change: Change) -> StoredHabit | None:
+        """Lock the habit, store `change(habit)`, and return it; `None` if there is no such habit.
+
+        An exception raised by `change` aborts the edit with nothing written. Columns other than
+        `code`, `system` and `created_by` are overwritten; reminders are reconciled by
+        `(at_time, weekday_mask)` (see the module docstring).
+        """
         ...
 
     async def logs(self, code: str, first: date, last: date) -> list[LogRow]:
         """The habit's logs, of every source, with `day` in `[first, last]`."""
         ...
+
+
+def reconcile(
+    current: Sequence[tuple[UUID, Reminder]], wanted: Iterable[Reminder]
+) -> tuple[list[UUID], list[Reminder]]:
+    """Which active reminder rows to deactivate and which reminders to insert.
+
+    A row whose reminder is still wanted is kept (the first one, if the same reminder has more
+    than one active row); every other row is deactivated; a wanted reminder with no row is new.
+    """
+    target = set(wanted)
+    kept: set[Reminder] = set()
+    deactivate: list[UUID] = []
+    for row_id, reminder in current:
+        if reminder in target and reminder not in kept:
+            kept.add(reminder)
+        else:
+            deactivate.append(row_id)
+    return deactivate, sorted(target - kept)
 
 
 @dataclass(frozen=True)
@@ -90,6 +126,11 @@ class CardRef:
     outcome_codes: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class KpiRef:
+    target: Decimal | None  # None: the KPI has no single target (a range, or nothing)
+
+
 class MirrorReader(Protocol):
     async def milestone(self, page_id: str) -> MilestoneRef | None: ...
 
@@ -99,8 +140,8 @@ class MirrorReader(Protocol):
         """`raqib.goals.target_date` of an outcome, or `None` if unknown."""
         ...
 
-    async def kpi_target(self, code: str) -> Decimal | None:
-        """`raqib.kpis.target`, or `None` if the KPI is unknown or has no single target."""
+    async def kpi(self, code: str) -> KpiRef | None:
+        """The KPI of `raqib.kpis`, or `None` if there is no KPI with that code."""
         ...
 
     async def latest_reading(self, code: str, today: date) -> Decimal | None:
@@ -129,29 +170,31 @@ HABIT_COLUMNS = (
     "created_by",
     "active",
 )
+# what an edit may write: never the code, nor who made the habit and whether it is a system one
+EDITED_COLUMNS = tuple(c for c in HABIT_COLUMNS if c not in ("code", "system", "created_by"))
 _SELECT = ", ".join(HABIT_COLUMNS)
 
 LIST_HABITS = f"SELECT {_SELECT} FROM yawmi.habits ORDER BY code"
 GET_HABIT = f"SELECT {_SELECT} FROM yawmi.habits WHERE code = $1"
+LOCK_HABIT = f"SELECT {_SELECT} FROM yawmi.habits WHERE code = $1 FOR UPDATE"
 INSERT_HABIT = (
     f"INSERT INTO yawmi.habits ({_SELECT}) VALUES "
     f"({', '.join(f'${i}' for i in range(1, len(HABIT_COLUMNS) + 1))}) "
     "ON CONFLICT (code) DO NOTHING RETURNING code"
 )
-_UPDATED = HABIT_COLUMNS[1:]
 UPDATE_HABIT = (
     "UPDATE yawmi.habits SET "
-    + ", ".join(f"{column} = ${i}" for i, column in enumerate(_UPDATED, start=2))
+    + ", ".join(f"{column} = ${i}" for i, column in enumerate(EDITED_COLUMNS, start=2))
     + ", updated_at = now() WHERE code = $1"
 )
 REMINDERS = """
-SELECT habit_code, at_time, weekday_mask
+SELECT id, habit_code, at_time, weekday_mask
 FROM yawmi.habit_reminders
 WHERE active AND habit_code = ANY($1)
-ORDER BY habit_code, at_time, weekday_mask
+ORDER BY habit_code, at_time, weekday_mask, id
 """
 DEACTIVATE_REMINDERS = """
-UPDATE yawmi.habit_reminders SET active = FALSE WHERE habit_code = $1 AND active
+UPDATE yawmi.habit_reminders SET active = FALSE WHERE id = ANY($1)
 """
 INSERT_REMINDER = """
 INSERT INTO yawmi.habit_reminders (id, habit_code, at_time, weekday_mask) VALUES ($1, $2, $3, $4)
@@ -168,7 +211,7 @@ SELECT title, outcome_code, due_date FROM raqib.notion_milestones WHERE page_id 
 # column-level grant: never `props`
 CARD = "SELECT title, outcome_codes FROM raqib.notion_cards WHERE page_id = $1"
 OUTCOME_DEADLINE = "SELECT target_date FROM raqib.goals WHERE code = $1"
-KPI_TARGET = "SELECT target FROM raqib.kpis WHERE code = $1"
+KPI = "SELECT target FROM raqib.kpis WHERE code = $1"
 # column-level grant: never `note`
 LATEST_READING = """
 SELECT value
@@ -181,6 +224,7 @@ LIMIT 1
 ALL_SQL = (
     LIST_HABITS,
     GET_HABIT,
+    LOCK_HABIT,
     INSERT_HABIT,
     UPDATE_HABIT,
     REMINDERS,
@@ -190,58 +234,71 @@ ALL_SQL = (
     MILESTONE,
     CARD,
     OUTCOME_DEADLINE,
-    KPI_TARGET,
+    KPI,
     LATEST_READING,
 )
 
 
-def _values(habit: StoredHabit) -> list[object]:
-    return [getattr(habit, column) for column in HABIT_COLUMNS]
+def _values(habit: StoredHabit, columns: Sequence[str]) -> list[object]:
+    return [getattr(habit, column) for column in columns]
+
+
+async def _reminder_rows(
+    conn: asyncpg.Pool | asyncpg.Connection, codes: list[str]
+) -> dict[str, list[tuple[UUID, Reminder]]]:
+    by_code: dict[str, list[tuple[UUID, Reminder]]] = {}
+    for r in await conn.fetch(REMINDERS, codes) if codes else []:
+        by_code.setdefault(r["habit_code"], []).append(
+            (r["id"], Reminder(r["at_time"], r["weekday_mask"]))
+        )
+    return by_code
+
+
+def _habit(row: asyncpg.Record, reminders: Iterable[tuple[UUID, Reminder]]) -> StoredHabit:
+    return StoredHabit(**dict(row), reminders=tuple(sorted({r for _, r in reminders})))
 
 
 class AsyncpgHabitStore:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
 
-    async def _with_reminders(self, rows: list[asyncpg.Record]) -> list[StoredHabit]:
-        codes = [r["code"] for r in rows]
-        by_code: dict[str, list[Reminder]] = {}
-        for r in await self._pool.fetch(REMINDERS, codes) if codes else []:
-            by_code.setdefault(r["habit_code"], []).append(
-                Reminder(r["at_time"], r["weekday_mask"])
-            )
-        return [StoredHabit(**dict(r), reminders=tuple(by_code.get(r["code"], ()))) for r in rows]
-
     async def list_habits(self) -> list[StoredHabit]:
-        return await self._with_reminders(await self._pool.fetch(LIST_HABITS))
+        rows = await self._pool.fetch(LIST_HABITS)
+        by_code = await _reminder_rows(self._pool, [r["code"] for r in rows])
+        return [_habit(r, by_code.get(r["code"], [])) for r in rows]
 
     async def get(self, code: str) -> StoredHabit | None:
         row = await self._pool.fetchrow(GET_HABIT, code)
-        return None if row is None else (await self._with_reminders([row]))[0]
+        if row is None:
+            return None
+        return _habit(row, (await _reminder_rows(self._pool, [code])).get(code, []))
 
     async def insert(self, habit: StoredHabit) -> bool:
         async with self._pool.acquire() as conn, conn.transaction():
-            if await conn.fetchval(INSERT_HABIT, *_values(habit)) is None:
+            if await conn.fetchval(INSERT_HABIT, *_values(habit, HABIT_COLUMNS)) is None:
                 return False
-            for reminder in habit.reminders:
+            for reminder in sorted(set(habit.reminders)):
                 await conn.execute(
                     INSERT_REMINDER, uuid4(), habit.code, reminder.at_time, reminder.weekday_mask
                 )
         return True
 
-    async def update(self, habit: StoredHabit, *, replace_reminders: bool) -> None:
+    async def modify(self, code: str, change: Change) -> StoredHabit | None:
         async with self._pool.acquire() as conn, conn.transaction():
-            await conn.execute(UPDATE_HABIT, *_values(habit))
-            if replace_reminders:
-                await conn.execute(DEACTIVATE_REMINDERS, habit.code)
-                for reminder in habit.reminders:
-                    await conn.execute(
-                        INSERT_REMINDER,
-                        uuid4(),
-                        habit.code,
-                        reminder.at_time,
-                        reminder.weekday_mask,
-                    )
+            row = await conn.fetchrow(LOCK_HABIT, code)
+            if row is None:
+                return None
+            current = (await _reminder_rows(conn, [code])).get(code, [])
+            habit = change(_habit(row, current))
+            await conn.execute(UPDATE_HABIT, code, *_values(habit, EDITED_COLUMNS))
+            deactivate, new = reconcile(current, habit.reminders)
+            if deactivate:
+                await conn.execute(DEACTIVATE_REMINDERS, deactivate)
+            for reminder in new:
+                await conn.execute(
+                    INSERT_REMINDER, uuid4(), code, reminder.at_time, reminder.weekday_mask
+                )
+        return await self.get(code)
 
     async def logs(self, code: str, first: date, last: date) -> list[LogRow]:
         return [LogRow(**dict(r)) for r in await self._pool.fetch(LOGS, code, first, last)]
@@ -270,8 +327,9 @@ class AsyncpgMirrorReader:
     async def outcome_deadline(self, code: str) -> date | None:
         return await self._pool.fetchval(OUTCOME_DEADLINE, code)
 
-    async def kpi_target(self, code: str) -> Decimal | None:
-        return await self._pool.fetchval(KPI_TARGET, code)
+    async def kpi(self, code: str) -> KpiRef | None:
+        row = await self._pool.fetchrow(KPI, code)
+        return None if row is None else KpiRef(row["target"])
 
     async def latest_reading(self, code: str, today: date) -> Decimal | None:
         return await self._pool.fetchval(LATEST_READING, code, today)

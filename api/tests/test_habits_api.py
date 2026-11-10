@@ -13,11 +13,11 @@ by `test_migrations.py`, and the SQL here is checked statically never to name `p
 import os
 import re
 from collections.abc import AsyncIterator
-from datetime import date
+from datetime import date, time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import asyncpg
 import httpx
@@ -82,6 +82,7 @@ class Backend(Protocol):
     async def add_kpi(
         self, code: str, target: str | None, readings: list[tuple[date, str]]
     ) -> None: ...
+    async def reminder_rows(self, code: str) -> list[tuple[UUID, time, int, bool]]: ...
 
 
 def system_habits() -> list[StoredHabit]:
@@ -141,6 +142,13 @@ class MemoryBackend:
     ) -> None:
         self.mirror.kpi_targets[code] = None if target is None else Decimal(target)
         self.mirror.readings[code] = [(d, Decimal(v)) for d, v in readings]
+
+    async def reminder_rows(self, code: str) -> list[tuple[UUID, time, int, bool]]:
+        return sorted(
+            (r.id, r.at_time, r.weekday_mask, r.active)
+            for r in self.store.reminder_rows
+            if r.habit_code == code
+        )
 
 
 class PostgresBackend:
@@ -210,6 +218,14 @@ class PostgresBackend:
                 Decimal(value),
             )
 
+    async def reminder_rows(self, code: str) -> list[tuple[UUID, time, int, bool]]:
+        rows = await self.pool.fetch(
+            "SELECT id, at_time, weekday_mask, active FROM yawmi.habit_reminders"
+            " WHERE habit_code = $1 ORDER BY id",
+            code,
+        )
+        return sorted((r["id"], r["at_time"], r["weekday_mask"], r["active"]) for r in rows)
+
     async def cleanup(self) -> None:
         user = "SELECT code FROM yawmi.habits WHERE title_ar LIKE $1"
         like = TITLE + "%"
@@ -219,7 +235,9 @@ class PostgresBackend:
             [h.code for h in system_habits()],
         )
         await self.pool.execute(
-            f"DELETE FROM yawmi.habit_reminders WHERE habit_code IN ({user})", like
+            f"DELETE FROM yawmi.habit_reminders WHERE habit_code IN ({user})"
+            " OR habit_code = 'english_minutes'",
+            like,
         )
         await self.pool.execute("DELETE FROM yawmi.habits WHERE title_ar LIKE $1", like)
         await self.pool.execute(
@@ -749,7 +767,7 @@ async def test_without_a_usable_kpi_the_draft_is_a_daily_yes_no_habit(
 ) -> None:
     await backend.add_card(CardRef("بطاقة اللغة", ("O7", "O2")), PAGE + "card")
     await backend.add_kpi(KPI, None, [(date(2026, 11, 1), "3")])
-    for payload in (None, {}, {"kpi_code": KPI}, {"kpi_code": "t10b-unknown"}, {"period": "week"}):
+    for payload in (None, {}, {"kpi_code": KPI}, {"period": "week"}):
         response = await client.post(f"/v1/goals/{PAGE}card/to-habit", json=payload, headers=auth())
         assert response.status_code == 200, (payload, response.text)
         draft = response.json()
@@ -791,3 +809,289 @@ async def test_unknown_goal_ref_is_404(client: httpx.AsyncClient) -> None:
         response = await client.post(f"/v1/goals/{ref}/to-habit", json={}, headers=auth())
         assert response.status_code == 404
         assert response.json() == {"detail": "لا محطة ولا بطاقة بهذا المعرّف"}
+
+
+# --- fix round 1 -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("clock", ["٠٧:٣٠", "0٧:30", "０7:30", "07:3٠", "۰۷:۳۰"])
+async def test_reminder_time_takes_ascii_digits_only(client: httpx.AsyncClient, clock: str) -> None:
+    payload = body(reminders=[{"time": clock, "days_mask": 127}])
+    response = await client.post("/v1/habits", json=payload, headers=auth())
+    assert response.status_code == 422, response.text
+    assert error_types(response) == [(["body", "reminders", 0, "time"], "string_pattern_mismatch")]
+    created = await create(client)
+    patched = await client.patch(
+        f"/v1/habits/{created['code']}",
+        json={"reminders": [{"time": clock, "days_mask": 1}]},
+        headers=auth(),
+    )
+    assert patched.status_code == 422, patched.text
+
+
+@pytest.mark.parametrize("field", ["start_day", "end_day", "anchor_day"])
+@pytest.mark.parametrize("day", ["1999-12-31", "2100-01-01", "0001-01-01", "9999-12-31"])
+async def test_stored_days_are_bounded(client: httpx.AsyncClient, field: str, day: str) -> None:
+    every = {"schedule_kind": "every_n_days", "every_n": 2, "anchor_day": "2026-11-01"}
+    payload = body(**{**every, field: day})
+    if field == "end_day":
+        payload["start_day"] = "2000-01-01"
+    response = await client.post("/v1/habits", json=payload, headers=auth())
+    assert response.status_code == 422, response.text
+    assert (["body", field], "day_out_of_range") in error_types(response)
+    created = await create(client, **every)
+    patched = await client.patch(f"/v1/habits/{created['code']}", json={field: day}, headers=auth())
+    assert patched.status_code == 422, patched.text
+    assert error_types(patched) == [(["body", field], "day_out_of_range")]
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {},
+        {"kind": "count", "period": "week", "target_per_period": 3},
+        {"kind": "duration", "unit": "min", "period": "month", "target_per_period": 600},
+    ],
+    ids=["daily", "weekly", "monthly"],
+)
+async def test_the_widest_habit_answers_its_progress(
+    client: httpx.AsyncClient, backend: Backend, override: dict[str, Any]
+) -> None:
+    created = await create(
+        client,
+        start_day="2000-01-01",
+        end_day="2099-12-31",
+        goal_ref=PAGE + "card",
+        **override,
+    )
+    await backend.add_log(created["code"], DAY, "done", "1")
+    response = await client.get(f"/v1/habits/{created['code']}/progress", headers=auth())
+    assert response.status_code == 200, response.text
+    assert response.json()["challenge"]["remaining_days"] == (date(2099, 12, 31) - DAY).days + 1
+    assert len(response.json()["last_8_periods"]) == 8
+
+
+async def test_identical_reminders_keep_their_rows(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    reminders = [{"time": "21:00", "days_mask": 127}, {"time": "06:00", "days_mask": 62}]
+    created = await create(client, reminders=reminders)
+    code = created["code"]
+    before = await backend.reminder_rows(code)
+    assert sorted((at, mask, active) for _, at, mask, active in before) == [
+        (time(6), 62, True),
+        (time(21), 127, True),
+    ]
+    same = await client.patch(
+        f"/v1/habits/{code}",
+        json={"reminders": list(reversed(reminders)), "title_ar": TITLE + "تعديل"},
+        headers=auth(),
+    )
+    assert same.status_code == 200, same.text
+    assert await backend.reminder_rows(code) == before
+
+    changed = await client.patch(
+        f"/v1/habits/{code}",
+        json={"reminders": [{"time": "06:00", "days_mask": 62}, {"time": "07:15", "days_mask": 1}]},
+        headers=auth(),
+    )
+    assert changed.json()["reminders"] == [
+        {"time": "06:00", "days_mask": 62},
+        {"time": "07:15", "days_mask": 1},
+    ]
+    after = {
+        (at, mask): (rid, active) for rid, at, mask, active in await backend.reminder_rows(code)
+    }
+    old = {(at, mask): rid for rid, at, mask, _ in before}
+    assert after[(time(6), 62)] == (old[(time(6), 62)], True)  # kept, same id
+    assert after[(time(21), 127)] == (old[(time(21), 127)], False)  # removed: deactivated
+    assert after[(time(7, 15), 1)][1] is True  # added
+    assert len(after) == 3
+
+
+async def test_reminders_are_sorted_and_deduplicated_everywhere(
+    client: httpx.AsyncClient,
+) -> None:
+    sent = [
+        {"time": "21:00", "days_mask": 127},
+        {"time": "06:00", "days_mask": 1},
+        {"time": "21:00", "days_mask": 127},
+    ]
+    expected = [{"time": "06:00", "days_mask": 1}, {"time": "21:00", "days_mask": 127}]
+    created = await create(client, reminders=sent)
+    assert created["reminders"] == expected
+    patched = await client.patch(
+        f"/v1/habits/{created['code']}", json={"reminders": sent}, headers=auth()
+    )
+    assert patched.json()["reminders"] == expected
+    listed = (await client.get("/v1/habits", headers=auth())).json()
+    assert [h["reminders"] for h in listed if h["code"] == created["code"]] == [expected]
+
+
+async def test_system_habit_reminders_can_be_edited(client: httpx.AsyncClient) -> None:
+    response = await client.patch(
+        "/v1/habits/english_minutes",
+        json={"reminders": [{"time": "20:30", "days_mask": 127}]},
+        headers=auth(),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["reminders"] == [{"time": "20:30", "days_mask": 127}]
+    listed = (await client.get("/v1/habits", headers=auth())).json()
+    english = next(h for h in listed if h["code"] == "english_minutes")
+    assert english["reminders"] == [{"time": "20:30", "days_mask": 127}]
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"target_per_period": 3, "reminders": [{"time": "05:00", "days_mask": 1}]},
+        {"end_day": "2026-01-01", "anchor": "after_wake"},
+        {"title_ar": None, "anchor": "after_wake"},
+    ],
+)
+async def test_a_refused_patch_changes_nothing(
+    client: httpx.AsyncClient, backend: Backend, patch: dict[str, Any]
+) -> None:
+    created = await create(client, reminders=[{"time": "06:00", "days_mask": 1}])
+    path = f"/v1/habits/{created['code']}"
+    rows = await backend.reminder_rows(created["code"])
+    assert (await client.patch(path, json=patch, headers=auth())).status_code == 422
+    listed = (await client.get("/v1/habits", headers=auth())).json()
+    assert [h for h in listed if h["code"] == created["code"]] == [created]
+    assert await backend.reminder_rows(created["code"]) == rows
+
+
+async def test_a_refused_system_patch_changes_nothing(client: httpx.AsyncClient) -> None:
+    before = next(
+        h
+        for h in (await client.get("/v1/habits", headers=auth())).json()
+        if h["code"] == "english_minutes"
+    )
+    response = await client.patch(
+        "/v1/habits/english_minutes",
+        json={"anchor": "after_wake", "target_per_period": 1},
+        headers=auth(),
+    )
+    assert response.status_code == 409
+    after = next(
+        h
+        for h in (await client.get("/v1/habits", headers=auth())).json()
+        if h["code"] == "english_minutes"
+    )
+    assert after == before
+
+
+@pytest.mark.parametrize("field", ["title_ar", "kind", "unit", "anchor", "start_day", "active"])
+def test_the_spec_does_not_offer_null_where_it_is_refused(field: str) -> None:
+    spec = create_app(devices=InMemoryDeviceStore()).openapi()
+    prop = spec["components"]["schemas"]["HabitPatch"]["properties"][field]
+    assert "anyOf" not in prop or all(p.get("type") != "null" for p in prop["anyOf"]), prop
+
+
+@pytest.mark.parametrize("ref", ["   ", "\t"])
+async def test_blank_references_are_refused(client: httpx.AsyncClient, ref: str) -> None:
+    for field in ("goal_ref", "ac_ref"):
+        response = await client.post("/v1/habits", json=body(**{field: ref}), headers=auth())
+        assert response.status_code == 422, (field, response.text)
+        assert error_types(response) == [(["body", field], "ref_blank")]
+
+
+async def test_progress_of_an_archived_habit_still_answers(client: httpx.AsyncClient) -> None:
+    created = await create(client, start_day="2026-11-08")
+    path = f"/v1/habits/{created['code']}"
+    await client.patch(path, json={"active": False}, headers=auth())
+    response = await client.get(f"{path}/progress", headers=auth())
+    assert response.status_code == 200
+    assert response.json()["adherence"] == 0.0
+
+
+async def test_progress_before_the_start_and_after_the_end(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    created = await create(client, start_day="2026-11-11", end_day="2026-11-11")
+    early = await client.get(
+        f"/v1/habits/{created['code']}/progress", params={"today": "2026-11-10"}, headers=auth()
+    )
+    assert early.status_code == 200
+    assert (early.json()["streak"], early.json()["adherence"], early.json()["last_8_periods"]) == (
+        0,
+        None,
+        [],
+    )
+    assert early.json()["challenge"]["remaining_days"] == 1
+
+    ended = await create(client, start_day="2026-11-01", end_day="2026-11-03")
+    for day in (date(2026, 11, 1), date(2026, 11, 2), date(2026, 11, 3)):
+        await backend.add_log(ended["code"], day, "done", None)
+    late = (await client.get(f"/v1/habits/{ended['code']}/progress", headers=auth())).json()
+    assert (late["streak"], late["adherence"], late["last_8_periods"]) == (3, 1.0, [1.0, 1.0, 1.0])
+    assert late["challenge"] == {"achieved": 3, "total": 3, "completion": 1.0, "remaining_days": 0}
+
+
+async def test_progress_follows_the_week_start_setting(backend: Backend) -> None:
+    application = create_app(
+        settings=Settings(
+            database_url="postgresql://yawmi_api@localhost:5432/raqib",
+            jwt_secret=SecretStr(SECRET),
+            week_start="mon",
+        ),
+        devices=InMemoryDeviceStore(),
+    )
+    backend.install(application)
+    transport = ASGITransport(app=application)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await create(
+            client, kind="count", period="week", target_per_period=4, start_day="2026-10-01"
+        )
+        # Sunday 2026-11-08 belongs to the week that starts on Monday 2026-11-02
+        await backend.add_log(created["code"], date(2026, 11, 8), "done", "3")
+        await backend.add_log(created["code"], date(2026, 11, 9), "done", "1")
+        out = (await client.get(f"/v1/habits/{created['code']}/progress", headers=auth())).json()
+    assert out["period_progress"]["done"] == 1.0  # Monday 2026-11-09 starts this week
+    assert out["last_8_periods"][-2:] == [0.75, 0.25]
+
+
+async def test_unknown_kpi_is_422(client: httpx.AsyncClient, backend: Backend) -> None:
+    await backend.add_card(CardRef("بطاقة", ("O7",)), PAGE + "card")
+    response = await client.post(
+        f"/v1/goals/{PAGE}card/to-habit", json={"kpi_code": "t10b-unknown"}, headers=auth()
+    )
+    assert response.status_code == 422, response.text
+    assert error_types(response) == [(["body", "kpi_code"], "kpi_unknown")]
+    missing = await client.post(
+        f"/v1/goals/{PAGE}nowhere/to-habit", json={"kpi_code": "t10b-unknown"}, headers=auth()
+    )
+    assert missing.status_code == 404
+
+
+@pytest.mark.parametrize("target", ["NaN", "1e9"])
+async def test_a_kpi_draft_the_server_would_refuse_falls_back_to_yes_no(
+    client: httpx.AsyncClient, backend: Backend, target: str
+) -> None:
+    await backend.add_milestone(MilestoneRef("محطة", "O9", date(2026, 12, 31)), PAGE + "m1")
+    await backend.add_kpi(KPI, target, [])
+    response = await client.post(
+        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": KPI, "period": "day"}, headers=auth()
+    )
+    assert response.status_code == 200, response.text
+    draft = response.json()
+    assert (draft["kind"], draft["period"], draft["target_per_period"]) == ("boolean", "day", 1.0)
+
+
+@pytest.mark.parametrize(("title", "expected"), [("   ", "عادة جديدة"), ("ع" * 250, "ع" * 200)])
+async def test_every_draft_can_be_posted_back(
+    client: httpx.AsyncClient, backend: Backend, title: str, expected: str
+) -> None:
+    await backend.add_milestone(MilestoneRef(title, "O9", date(2026, 12, 31)), PAGE + "m1")
+    await backend.add_kpi(KPI, "100", [])
+    draft = await client.post(
+        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": KPI}, headers=auth()
+    )
+    assert draft.status_code == 200, draft.text
+    assert draft.json()["title_ar"] == expected
+    saved = await client.post(
+        "/v1/habits",
+        json={**draft.json(), "title_ar": TITLE + draft.json()["title_ar"][:150]},
+        headers=auth(),
+    )
+    assert saved.status_code == 201, saved.text

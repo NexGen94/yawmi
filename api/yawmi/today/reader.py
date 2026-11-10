@@ -102,6 +102,10 @@ class TodayReader(Protocol):
         """Active habits that serve a goal (`goal_ref` set), whatever their window, by code."""
         ...
 
+    async def habit_logs_of(self, codes: list[str], first: date, last: date) -> list[LogRow]:
+        """Logs of the habits `codes` only, of every source, with `day` in `[first, last]`."""
+        ...
+
     async def daily_metrics(self, first: date, last: date) -> list[MetricsRow]:
         """Stored health days in `[first, last]`, oldest first."""
         ...
@@ -137,6 +141,12 @@ FROM yawmi.habit_logs
 WHERE day BETWEEN $1 AND $2
 """
 
+HABIT_LOGS_OF = """
+SELECT habit_code, day, value, status
+FROM yawmi.habit_logs
+WHERE habit_code = ANY($1) AND day BETWEEN $2 AND $3
+"""
+
 DAILY_METRICS = """
 SELECT day, recovery_score, strain_score, sleep_minutes, data_quality
 FROM yawmi.daily_metrics
@@ -170,6 +180,7 @@ ALL_SQL = (
     ACTIVE_HABITS,
     LINKED_HABITS,
     HABIT_LOGS,
+    HABIT_LOGS_OF,
     DAILY_METRICS,
     CYCLES,
     MILESTONES,
@@ -198,6 +209,10 @@ class AsyncpgTodayReader:
 
     async def linked_habits(self) -> list[HabitRow]:
         return [HabitRow(**dict(r)) for r in await self._pool.fetch(LINKED_HABITS)]
+
+    async def habit_logs_of(self, codes: list[str], first: date, last: date) -> list[LogRow]:
+        rows = await self._pool.fetch(HABIT_LOGS_OF, codes, first, last)
+        return [LogRow(**dict(r)) for r in rows]
 
     async def daily_metrics(self, first: date, last: date) -> list[MetricsRow]:
         return [MetricsRow(**dict(r)) for r in await self._pool.fetch(DAILY_METRICS, first, last)]

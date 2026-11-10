@@ -36,6 +36,9 @@ from yawmi.text import StorableText
 from yawmi.today.reader import LogRow
 
 MAX_REMINDERS = 3
+# the stored days (`start_day`, `end_day`, `anchor_day`): the range the service uses for instants
+FIRST_DAY = date(2000, 1, 1)
+LAST_DAY = date(2099, 12, 31)
 SYSTEM_EDITABLE = frozenset({"anchor", "reminders"})
 BOOLEAN_MAX_TARGET: dict[str, int] = {"day": 1, "week": 7, "month": 28}
 
@@ -44,6 +47,8 @@ Anchor = Literal["after_wake", "before_sleep", "free"]
 CreatedBy = Literal["seed", "user"]
 
 _TITLE_BLANK = "العنوان مطلوب"
+_REF_BLANK = "المعرّف لا يكون فراغاً"
+_DAY_OUT_OF_RANGE = "اليوم خارج النطاق المقبول (2000-01-01 إلى 2099-12-31)"
 
 
 def _title(text: str) -> str:
@@ -53,13 +58,27 @@ def _title(text: str) -> str:
     return text
 
 
+def _ref(text: str) -> str:
+    if not text.strip():
+        raise PydanticCustomError("ref_blank", _REF_BLANK)
+    return text
+
+
+def _day(value: date) -> date:
+    if not FIRST_DAY <= value <= LAST_DAY:
+        raise PydanticCustomError("day_out_of_range", _DAY_OUT_OF_RANGE)
+    return value
+
+
 Title = Annotated[StorableText, Field(max_length=200), AfterValidator(_title)]
-Ref = Annotated[StorableText, Field(min_length=1, max_length=128)]
+Ref = Annotated[StorableText, Field(min_length=1, max_length=128), AfterValidator(_ref)]
+Day = Annotated[date, AfterValidator(_day), Field(description="من 2000-01-01 إلى 2099-12-31")]
 OutcomeCode = Annotated[str, Field(pattern=r"^O([1-9]|1[0-2])$")]
 Target = Annotated[float, Field(gt=0, le=100_000)]
 DayMask = Annotated[StrictInt, Field(ge=1, le=127, description="بتّ 0 = الأحد … 6 = السبت")]
 EveryN = Annotated[StrictInt, Field(ge=2, le=365)]
-Clock = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$", description="HH:mm محلياً")]
+# ASCII digits only: `\d` would also match Arabic-Indic and full-width digits
+Clock = Annotated[str, Field(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$", description="HH:mm محلياً")]
 
 
 class ReminderIO(BaseModel):
@@ -95,52 +114,45 @@ class HabitIn(BaseModel):
     schedule_kind: ScheduleKind = "every_day"
     weekday_mask: DayMask | None = None
     every_n: EveryN | None = None
-    anchor_day: date | None = None
+    anchor_day: Day | None = None
     anchor: Anchor = "free"
-    start_day: date | None = Field(default=None, description="الافتراضي اليوم بتوقيت الرياض")
-    end_day: date | None = None
-    reminders: Reminders = Field(default_factory=list)
+    start_day: Day | None = Field(default=None, description="الافتراضي اليوم بتوقيت الرياض")
+    end_day: Day | None = None
+    reminders: Reminders = Field(
+        default_factory=list, description="تُرتَّب بالوقت ثم القناع، ويُحذف المكرر"
+    )
 
 
 class HabitPatch(BaseModel):
-    """A partial edit: only the fields sent change; `null` clears a nullable field."""
+    """A partial edit: only the fields sent change; `null` clears a nullable field.
+
+    The fields that cannot be empty are typed without `null` (so the spec does not offer it);
+    their `None` default only marks them as not sent, and `null` sent for them is a 422.
+    """
 
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
-    title_ar: Title | None = None
+    title_ar: Title = None  # type: ignore[assignment]
     goal_ref: Ref | None = None
     outcome: OutcomeCode | None = None
     ac_ref: Ref | None = None
-    kind: HabitKind | None = None
-    unit: HabitUnit | None = None
-    target_per_period: Target | None = None
-    period: Period | None = None
-    schedule_kind: ScheduleKind | None = None
+    kind: HabitKind = None  # type: ignore[assignment]
+    unit: HabitUnit = None  # type: ignore[assignment]
+    target_per_period: Target = None  # type: ignore[assignment]
+    period: Period = None  # type: ignore[assignment]
+    schedule_kind: ScheduleKind = None  # type: ignore[assignment]
     weekday_mask: DayMask | None = None
     every_n: EveryN | None = None
-    anchor_day: date | None = None
-    anchor: Anchor | None = None
-    start_day: date | None = None
-    end_day: date | None = None
-    reminders: Reminders | None = None
-    active: StrictBool | None = Field(default=None, description="false للأرشفة (لا حذف)")
-
-
-# fields of `HabitPatch` that must not be sent as null
-NOT_NULL = frozenset(
-    {
-        "title_ar",
-        "kind",
-        "unit",
-        "target_per_period",
-        "period",
-        "schedule_kind",
-        "anchor",
-        "start_day",
-        "reminders",
-        "active",
-    }
-)
+    anchor_day: Day | None = None
+    anchor: Anchor = None  # type: ignore[assignment]
+    start_day: Day = None  # type: ignore[assignment]
+    end_day: Day | None = None
+    reminders: Reminders = Field(  # type: ignore[assignment]
+        default=None, description="تستبدل المجموعة؛ ما بقي منها يحتفظ بصفّه"
+    )
+    active: StrictBool = Field(  # type: ignore[assignment]
+        default=None, description="false للأرشفة (لا حذف)"
+    )
 
 
 class HabitOut(BaseModel):
@@ -259,8 +271,14 @@ def from_api(values: dict[str, Any]) -> StoredHabit:
         system=values["system"],
         created_by=values["created_by"],
         active=values["active"],
+        # sorted and without duplicates: the same order in every answer, one push per reminder
         reminders=tuple(
-            Reminder(time.fromisoformat(r["time"]), r["days_mask"]) for r in values["reminders"]
+            sorted(
+                {
+                    Reminder(time.fromisoformat(r["time"]), r["days_mask"])
+                    for r in values["reminders"]
+                }
+            )
         ),
     )
 
