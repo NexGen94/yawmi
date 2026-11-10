@@ -52,6 +52,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+          # Full history: the vectors step reads the tree of the base commit (BASE_SHA). With the
+          # default depth-1 clone that commit is absent, and it cannot be fetched later because
+          # no credentials are persisted.
+          fetch-depth: 0
 
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
@@ -81,11 +85,17 @@ jobs:
 
       # The shared domain vectors are generated from the Python reference implementation.
       # 1. --check: the committed files equal what the generator produces (no writes).
-      # 2. Stability rule against the BASE branch, not only this checkout: the base's vector files
+      # 2. Stability rule against the BASE commit, not only this checkout: the base's vector files
       #    are extracted with git archive and swapped in, then the generator's guard runs against
       #    them. A dropped id, a changed input, or a changed expect without a rulesVersion bump
-      #    fails even if the PR deleted and regenerated the files. Plain additions pass, and the
-      #    regenerated result must again equal the PR's committed files.
+      #    fails even if the PR deleted and regenerated the files. Plain additions pass, the
+      #    regenerated result must again equal the PR's committed files, and no base file may be
+      #    left over (a function dropped together with its JSON file).
+      # The base comparison fails closed. It is skipped in exactly two cases: the event has no
+      # base commit (BASE_SHA empty or all zeros: a newly pushed branch), or the base commit
+      # resolves and holds no *.json under contracts/domain-vectors/v1/. A BASE_SHA that is not a
+      # commit id, or that is not present in this clone (shallow checkout, force-push), is an
+      # error, never a skip; hence fetch-depth: 0 on the checkout above.
       # The SHA reaches the shell through env, never through ${{ }} inside run.
       # uv flags: --no-sync runs in the environment the "Install dependencies" step created with
       # `uv sync --locked` (that step is the one that fails on a uv.lock out of date with
@@ -95,18 +105,41 @@ jobs:
       # project: http-ece (via pywebpush) ships as an sdist only, and the api project itself is
       # an editable hatchling build.
       - name: Domain vectors match the reference implementation
+        shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
+          set -euo pipefail
+          trap 'echo "::error::domain vector check failed at: $BASH_COMMAND"' ERR
           uv run --locked --no-sync --no-build --project api python -I api/tools/gen_domain_vectors.py --check
+          git status --porcelain --untracked-files=all -- contracts/
           test -z "$(git status --porcelain --untracked-files=all -- contracts/)"
-          if [ -n "$BASE_SHA" ] && git ls-tree --name-only "$BASE_SHA" contracts/domain-vectors/v1/ 2>/dev/null | grep -q '\.json$'; then
-            mkdir -p "$RUNNER_TEMP/base"
-            git archive "$BASE_SHA" contracts/domain-vectors/v1 | tar -x -C "$RUNNER_TEMP/base"
-            rm -f contracts/domain-vectors/v1/*.json
-            cp "$RUNNER_TEMP/base"/contracts/domain-vectors/v1/*.json contracts/domain-vectors/v1/
-            uv run --locked --no-sync --no-build --project api python -I api/tools/gen_domain_vectors.py --init
-            git diff --exit-code -- contracts/
-          else
-            echo "base has no committed vectors yet: nothing to guard against"
+
+          if [ -z "$BASE_SHA" ] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            echo "no base commit for this event (newly pushed branch): no base vectors to guard against"
+            exit 0
           fi
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]]; then
+            echo "::error::BASE_SHA is not a commit id; the base-branch vector guard cannot run"
+            exit 1
+          fi
+          if ! git cat-file -e "$BASE_SHA^{commit}"; then
+            echo "::error::base commit $BASE_SHA is not in this clone (shallow checkout or rewritten history); the base-branch vector guard cannot run"
+            exit 1
+          fi
+          base_files="$(git ls-tree --name-only "$BASE_SHA" contracts/domain-vectors/v1/)"
+          if ! grep -q '\.json$' <<<"$base_files"; then
+            echo "base commit $BASE_SHA holds no vector files yet: no base vectors to guard against"
+            exit 0
+          fi
+
+          echo "guarding the generated vectors against base commit $BASE_SHA"
+          mkdir -p "$RUNNER_TEMP/base"
+          git archive "$BASE_SHA" contracts/domain-vectors/v1 | tar -x -C "$RUNNER_TEMP/base"
+          rm -f contracts/domain-vectors/v1/*.json
+          cp "$RUNNER_TEMP/base"/contracts/domain-vectors/v1/*.json contracts/domain-vectors/v1/
+          uv run --locked --no-sync --no-build --project api python -I api/tools/gen_domain_vectors.py --init
+          git diff --exit-code -- contracts/
+          git status --porcelain --untracked-files=all -- contracts/
+          test -z "$(git status --porcelain --untracked-files=all -- contracts/)"
+          echo "base-branch vector guard passed"
