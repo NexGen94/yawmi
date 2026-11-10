@@ -45,28 +45,37 @@ def dump_payload(payload: dict[str, Any]) -> str:
         raise PayloadNotJson("payload holds NaN or an infinity") from None
 
 
-def _check_storable(payload: dict[str, Any]) -> None:
-    """Refuse what Postgres cannot store: NUL characters, lone surrogates, NaN/Infinity, size.
+def check_text(value: object, code: str = "payload_text_invalid") -> None:
+    """Refuse text Postgres or a UTF-8 encoder cannot take: NUL characters and lone surrogates.
 
-    All of them would otherwise surface as a driver error (a 500) at insert time. The walk is
-    iterative so a deeply nested payload cannot exhaust the interpreter stack.
+    Walks dicts (keys and values) and lists of any depth; shared with the AI routes, which pass
+    their own error `code`. The walk is iterative so a deeply nested value cannot exhaust the
+    interpreter stack.
     """
-    stack: list[object] = [payload]
+    stack: list[object] = [value]
     while stack:
         item = stack.pop()
         if isinstance(item, dict):
-            for key, value in item.items():
+            for key, inner in item.items():
                 stack.append(key)
-                stack.append(value)
+                stack.append(inner)
         elif isinstance(item, list):
             stack.extend(item)
         elif isinstance(item, str):
             try:
                 item.encode("utf-8")
             except UnicodeEncodeError:
-                raise PydanticCustomError("payload_text_invalid", _BAD_TEXT) from None
-            if "\x00" in item:
-                raise PydanticCustomError("payload_text_invalid", _BAD_TEXT)
+                raise PydanticCustomError(code, _BAD_TEXT) from None
+            if "\0" in item:
+                raise PydanticCustomError(code, _BAD_TEXT)
+
+
+def _check_storable(payload: dict[str, Any]) -> None:
+    """Refuse what Postgres cannot store: NUL characters, lone surrogates, NaN/Infinity, size.
+
+    All of them would otherwise surface as a driver error (a 500) at insert time.
+    """
+    check_text(payload)
     try:
         text = dump_payload(payload)
     except PayloadNotJson:
