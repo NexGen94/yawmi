@@ -1,4 +1,4 @@
-# Yawmi API: Hostinger Docker Manager project "yawmi-api". The image comes from GHCR
+# Yawmi API and web: Hostinger Docker Manager project "yawmi-api". Both images come from GHCR
 # (private), so the server must be logged in to ghcr.io once (deploy/RUNBOOK.md).
 #
 # Project environment, typed by Abdullah in the Docker Manager (never in this repository):
@@ -70,6 +70,38 @@ services:
       - "traefik.http.routers.yawmi-pair.tls.certresolver=${TRAEFIK_CERT_RESOLVER}"
       - "traefik.http.routers.yawmi-pair.middlewares=yawmi-rl-pair"
       - "traefik.http.routers.yawmi-pair.service=yawmi-api"
+
+  # The PWA: everything on the API host that is not /v1 (priority 1; the API routers are 100/200).
+  yawmi-web:
+    image: ghcr.io/nexgen94/yawmi-web:0.1.0
+    container_name: yawmi-web
+    restart: unless-stopped
+    networks:
+      - n8n
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    cpus: 0.25
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${N8N_NETWORK}"
+      - "traefik.http.services.yawmi-web.loadbalancer.server.port=8080"
+      - "traefik.http.routers.yawmi-web.rule=Host(`${YAWMI_API_HOST}`)"
+      - "traefik.http.routers.yawmi-web.priority=1"
+      - "traefik.http.routers.yawmi-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.yawmi-web.tls=true"
+      - "traefik.http.routers.yawmi-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER}"
+      - "traefik.http.routers.yawmi-web.service=yawmi-web"
 
 volumes:
   yawmi_secrets:

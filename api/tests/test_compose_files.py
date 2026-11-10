@@ -841,7 +841,7 @@ def _runbook_steps() -> dict[int, str]:
 
 def test_every_server_step_asks_for_separate_approval_and_has_a_rollback() -> None:
     steps = _runbook_steps()
-    assert sorted(steps) == list(range(11))
+    assert sorted(steps) == list(range(12))
     for number, body in steps.items():
         assert APPROVAL in body, number
         assert "التراجع" in body, number
@@ -928,3 +928,64 @@ def test_runbook_step_6_ends_with_docker_logout_after_the_pull() -> None:
     sub_steps = re.findall(r"^(\d)\. ", body, re.MULTILINE)
     last = body.split(f"\n{sub_steps[-1]}. ", 1)[1]
     assert last.startswith("**آخر خطوة فرعية") and "docker logout ghcr.io" in last
+
+
+def test_runbook_pulls_and_requires_the_web_image_before_the_project_is_created() -> None:
+    # The compose file holds both services, so a project created from it needs both private
+    # images already on the server (the login is closed again right after step 6).
+    steps = _runbook_steps()
+    assert "yawmi-web" in steps[6]
+    assert "yawmi-web" in steps[7]
+    row_7 = next(line for line in RUNBOOK.splitlines() if line.startswith("| 7 |"))
+    assert "yawmi-web" in row_7
+
+
+# --- the yawmi-web service and its image workflow ------------------------------------------------
+
+WEB_WORKFLOW_PATH = REPO / ".github" / "workflows" / "web-image.yml"
+
+
+def test_web_service_is_hardened_and_routed_after_the_api() -> None:
+    data = _yaml(API_COMPOSE)
+    service = data["services"]["yawmi-web"]
+    assert re.fullmatch(r"ghcr\.io/nexgen94/yawmi-web:\d+\.\d+\.\d+", service["image"])
+    assert service["read_only"] is True
+    assert service["tmpfs"] == ["/tmp"]
+    assert service["cap_drop"] == ["ALL"]
+    assert "no-new-privileges:true" in service["security_opt"]
+    for absent in ("volumes", "environment", "env_file", "ports", "privileged", "user"):
+        assert absent not in service, absent
+    assert service["networks"] == ["n8n"]
+    labels = _labels(service)
+    assert labels["traefik.http.routers.yawmi-web.priority"] == "1"
+    assert labels["traefik.http.services.yawmi-web.loadbalancer.server.port"] == "8080"
+    api = _labels(data["services"]["yawmi-api"])
+    assert int(api["traefik.http.routers.yawmi-api.priority"]) > 1
+
+
+def test_web_workflow_is_pinned_least_privilege_and_has_no_expressions_in_scripts() -> None:
+    text = WEB_WORKFLOW_PATH.read_text(encoding="utf-8")
+    uses = re.findall(r"uses:\s*(\S+)", text)
+    assert uses
+    for ref in uses:
+        assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}", ref), ref
+    data = _yaml(WEB_WORKFLOW_PATH)
+    assert data["permissions"] == {"contents": "read"}
+    assert data["jobs"]["image"]["permissions"] == {"contents": "read", "packages": "write"}
+    for step in data["jobs"]["image"]["steps"]:
+        assert "${{" not in step.get("run", ""), step.get("name")
+    assert ":latest" not in text
+
+
+def test_web_workflow_only_publishes_tags_that_are_on_main_and_checks_the_running_image() -> None:
+    text = WEB_WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert "fetch-depth: 0" in text
+    assert "merge-base --is-ancestor" in text and "origin/main" in text
+    assert "--cap-drop ALL" in text and "--security-opt no-new-privileges:true" in text
+    assert "State.Health.Status" in text and "healthy" in text
+    assert "--ignore-scripts" not in text  # the install flag belongs to the Dockerfile only
+    for needle in ("gzip", "nosniff", "no-referrer", "/sw.js", "immutable"):
+        assert needle in text, needle
+    docker = (REPO / "web" / "Dockerfile").read_text(encoding="utf-8")
+    assert "npm ci --ignore-scripts" in docker
+    assert "127.0.0.1:8080/healthz" in docker

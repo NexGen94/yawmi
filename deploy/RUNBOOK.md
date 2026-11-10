@@ -41,12 +41,13 @@
 | 2 | شرط مسبق: جدولا مرآة Notion (W9)، **قبل محمّل 2** | `raqib/server/W9-loader-1-tables.proposed.yml` | نعم |
 | 3 | إنشاء الـvolume `yawmi_secrets` (3أ) ثم محمّل 1: المخطط وسر كلمة المرور (3ب) | `yawmi-db-1-schema.yml` | نعم، لكلٍّ منهما |
 | 4 | محمّل 2: الدور والبذرة وفحص `yawmi_api`، **بعد الخطوتين 2 و3** | `yawmi-db-2-role.yml` | نعم |
-| 5 | وسم الإصدار وبناء الصورة ودفعها إلى GHCR | `.github/workflows/api-image.yml` | نعم (push) |
-| 6 | تسجيل GHCR من طرفية الخادم بـPAT قراءة فقط، وسحب الصورة | — | نعم |
-| 7 | مشروع `yawmi-api` | `yawmi-api.api.yml` | نعم |
+| 5 | وسم الإصدار وبناء الصورة ودفعها إلى GHCR (وصورة الويب 11أ تُبنى قبل الخطوة 7 أيضاً) | `.github/workflows/api-image.yml` | نعم (push) |
+| 6 | تسجيل GHCR من طرفية الخادم بـPAT قراءة فقط، وسحب الصورتين `yawmi-api` و`yawmi-web` (11ب) | — | نعم |
+| 7 | مشروع `yawmi-api` (بخدمتيه `yawmi-api` و`yawmi-web`، فالصورتان مسحوبتان قبله) | `yawmi-api.api.yml` | نعم |
 | 8 | فحص `/v1/health/live` | — | نعم (أوامر قراءة) |
 | 9 | كود إقران | — | نعم |
 | 10 | رمز خدمة (للمجدول ولإبطال الأجهزة) | — | نعم |
+| 11 | الويب: وسم `web-vX.Y.Z` وصورة `yawmi-web` وخدمتها في المشروع نفسه (11أ و11ب **قبل** الخطوة 7) | `web/Dockerfile`، `web-image.yml`، `yawmi-api.api.yml` | نعم، لكل عملية |
 
 ## الخطوة 0 · فحوص قراءة فقط وتجهيز المتغيرات
 
@@ -180,16 +181,20 @@ git push origin api-v0.1.0
    ```sh
    docker pull ghcr.io/nexgen94/yawmi-api:0.1.0
    docker image inspect ghcr.io/nexgen94/yawmi-api:0.1.0 --format '{{.Config.User}}'
+   docker pull ghcr.io/nexgen94/yawmi-web:0.1.0
+   docker image inspect ghcr.io/nexgen94/yawmi-web:0.1.0 --format '{{.Config.User}}'
    ```
+
+   الصورتان تُسحبان في نافذة الدخول والخروج نفسها، لأن ملف compose يحوي الخدمتين، والمشروع لا يقوم إن غابت إحداهما (الحزمتان خاصتان ولا دخول مخزَّناً بعد الخروج). وصورة الويب تُبنى أولاً بالخطوة 11أ.
 
 4. **آخر خطوة فرعية، تسجيل الخروج فور السحب:** `docker logout ghcr.io`. الرمز يبقى بعد `docker login` في `config.json` للمستخدم على الخادم إلى أن يُخرَج، وبعد السحب لا حاجة إليه. ثم يلغيه عبدالله من إعدادات GitHub إن لم يكن سيُعاد الاستعمال قريباً.
 
-- **المطبوع المتوقع:** `Login Succeeded` (مع تنبيه أن بيانات الدخول تُحفظ في `config.json` للمستخدم)، ثم `Status: Downloaded newer image for ghcr.io/nexgen94/yawmi-api:0.1.0`، ثم `10001:10001`، وأخيراً `Removing login credentials for ghcr.io`.
-- **التراجع:** إن تعذّر إكمال السحب فيُنفَّذ تسجيل الخروج مع ذلك (الخطوة 4 أعلاه) قبل أي شيء. وإلغاء الرمز من إعدادات GitHub، و`docker rmi ghcr.io/nexgen94/yawmi-api:0.1.0`.
+- **المطبوع المتوقع:** `Login Succeeded` (مع تنبيه أن بيانات الدخول تُحفظ في `config.json` للمستخدم)، ثم `Status: Downloaded newer image for ghcr.io/nexgen94/yawmi-api:0.1.0`، ثم `10001:10001`، وأخيراً `Removing login credentials for ghcr.io`. وللويب: `Status: Downloaded newer image for ghcr.io/nexgen94/yawmi-web:0.1.0` ثم `101`.
+- **التراجع:** إن تعذّر إكمال السحب فيُنفَّذ تسجيل الخروج مع ذلك (الخطوة 4 أعلاه) قبل أي شيء. وإلغاء الرمز من إعدادات GitHub، و`docker rmi ghcr.io/nexgen94/yawmi-api:0.1.0 ghcr.io/nexgen94/yawmi-web:0.1.0`.
 
 ## الخطوة 7 · مشروع `yawmi-api`
 
-**يحتاج موافقة عبدالله المستقلة.** إنشاء مشروع باسم `yawmi-api` في واجهة Hostinger من الملف `deploy/compose/yawmi-api.api.yml`، وكتابة المتغيرات من الجدول في § 0 (الأسرار منها بيد عبدالله وحده). ملف compose يرفض النشر إن غاب `YAWMI_DB_HOST` أو `N8N_NETWORK` أو `YAWMI_JWT_SECRET` أو `YAWMI_ANTHROPIC_API_KEY`.
+**يحتاج موافقة عبدالله المستقلة.** إنشاء مشروع باسم `yawmi-api` في واجهة Hostinger من الملف `deploy/compose/yawmi-api.api.yml`، وكتابة المتغيرات من الجدول في § 0 (الأسرار منها بيد عبدالله وحده). **شرط مسبق:** صورة `yawmi-web:0.1.0` مبنيّة (11أ) ومسحوبة (الخطوة 6 أو 11ب) قبل هذه الخطوة؛ فالملف يحوي خدمتي `yawmi-api` و`yawmi-web` معاً. ملف compose يرفض النشر إن غاب `YAWMI_DB_HOST` أو `N8N_NETWORK` أو `YAWMI_JWT_SECRET` أو `YAWMI_ANTHROPIC_API_KEY`.
 
 عند بدء الحاوية يقرأ المدخل `/usr/local/bin/yawmi-entrypoint` كلمة المرور من `/run/yawmi/yawmi_api_pw` ويرمّزها (percent-encoding) ويركّب `YAWMI_DATABASE_URL` في بيئة العملية فقط، ثم يشغّل `uvicorn`.
 
@@ -203,7 +208,7 @@ git push origin api-v0.1.0
 
   الأول: `yawmi-api Up … (healthy)` خلال دقيقة تقريباً. والثاني: لا ناتج (لا منفذ منشور). والثالث: أسطر بدء `uvicorn` (`Application startup complete`) بلا كلمة مرور ولا رابط اتصال.
 - **إن لم تصل الحاوية إلى `healthy`:** `docker logs yawmi-api`. `password file is missing or unreadable` ← الخطوة 3 أو حذف الـvolume. `password authentication failed` ← كلمة المرور في الملف لا تطابق الدور: يُعاد تشغيل محمّل 2 فيزامنها.
-- **التراجع:** إيقاف المشروع `yawmi-api` وحذفه من واجهة Hostinger (دون خيار حذف الـvolumes). لا أثر له على القاعدة ولا على n8n.
+- **التراجع:** إيقاف المشروع `yawmi-api` وحذفه من واجهة Hostinger (دون خيار حذف الـvolumes). لا أثر له على القاعدة ولا على n8n. **والتراجع إلى إصدار سابق للواجهة البرمجية وحدها** يحتاج صورة `yawmi-web` الموجودة في الملف حاضرة على الخادم أيضاً، وإلا فشل المشروع كله.
 
 ## الخطوة 8 · فحص الصحة
 
@@ -241,6 +246,39 @@ docker exec yawmi-api /usr/local/bin/yawmi-entrypoint yawmi-admin service-token 
 - **المطبوع المتوقع:** سطر واحد هو رمز الوصول (ثلاثة أجزاء تفصلها نقطتان)، وفي مخرج الأخطاء: «سُجّل جهاز الخدمة، والرمز صالح 8760 ساعة، ولا يُعرض مرة ثانية». التحقق من الشكل دون عرض الرمز: `… service-token … | awk -F. '{print NF}'` يطبع `3`. الصلاحية الافتراضية سنة، والحد الأقصى 43800 ساعة. ولا رمز تحديث له.
 - **يخزّنه عبدالله** في Credential داخل n8n بنفسه، ولا يُلصق في المحادثة.
 - **التراجع:** لا يوجد إبطال لرمز خدمة بعينه. الرمز عديم الحالة: يتحقق منه الخادم بالتوقيع والانتهاء وحدهما دون قراءة القاعدة، فحذف صف الجهاز أو استدعاء `POST /v1/devices/{id}/revoke` عليه لا يقطعه قبل انتهائه. **السبيل الوحيد لإبطاله هو تدوير `YAWMI_JWT_SECRET`** في واجهة Hostinger ثم إعادة نشر `yawmi-api`، وهذا يُسقط رموز كل الأجهزة والخدمات معاً فتُقرن الأجهزة من جديد ويُصدَر رمز خدمة جديد. لذلك: الصلاحية الافتراضية سنة بقرار مقبول، وتُقصَّر بـ`--ttl-hours` إن أريد تعرّض أقل، ولا يُترك رمز خدمة في مكان غير Credential داخل n8n.
+
+## الخطوة 11 · الويب (`yawmi-web`) على المضيف نفسه
+
+**كل عملية فرعية يحتاج موافقة عبدالله المستقلة. لم يُنفَّذ منها شيء. 11أ و11ب تسبقان الخطوة 7، لأن ملف المشروع يحوي خدمة `yawmi-web`.** تُخدَم الحزمة الأمامية من حاوية nginx غير مميّزة (منفذ 8080، مستخدم 101) على مضيف الواجهة نفسه: Traefik يوجّه `/v1` إلى `yawmi-api` (الأولوية 100، و200 للإقران) وكل ما عداه إلى `yawmi-web` (الأولوية 1). فلا CORS ولا مضيف ثانٍ ولا متغير جديد: الخدمة بلا volume ولا بيئة، وتستعمل `YAWMI_API_HOST` و`N8N_NETWORK` و`TRAEFIK_*` الموجودة.
+
+القواعد التي تفرضها `web/nginx.conf` (ويفحصها `web/tests/nginx.test.ts`):
+
+- `/sw.js` و`/index.html` و`/manifest.webmanifest` وكل ملف خارج `/assets/`: `Cache-Control: no-cache`، فيصل الإصدار الجديد عند أول فتح.
+- `/assets/` (ملفات ببصمة المحتوى): `public, max-age=31536000, immutable`، والملف الناقص يعيد 404 لا `index.html`.
+- `/v1` لا يُخدَم هنا أبداً: إن وصل طلب إليه فالرد 404 (خطأ توجيه ظاهر، لا قشرة التطبيق).
+- **HSTS** (`Strict-Transport-Security`) لا تُرسله حاوية الويب، لأن TLS ينتهي عند Traefik: يجب أن يأتي من Traefik (وسيط ترويسات) إن أُريد، وهو تعديل على الخادم يحتاج موافقة مستقلة ولم يُجرَ.
+- على كل رد: `Content-Security-Policy` (`default-src 'self'` و`connect-src 'self'` و`frame-ancestors 'none'`…) و`X-Content-Type-Options: nosniff` و`Referrer-Policy: no-referrer`.
+
+**11أ · الوسم والبناء.** (موافقة، دفع وسم) `git tag web-v0.1.0 && git push origin web-v0.1.0`. يبني `.github/workflows/web-image.yml` الصورة (ومرحلة البناء تفشل إن تجاوز جافاسكربت التحميل الأول 80 كيلوبايت gzip)، ثم يشغّلها ويفحص الترويسات وقواعد التخزين المؤقت وuid 101 قبل الدفع إلى `ghcr.io/nexgen94/yawmi-web:0.1.0`. القيد القائم: Actions معطّل (Issue #5) ولا Docker على جهاز التطوير، فإلى أن يُحل لا تُبنى الصورة. التراجع: حذف الحزمة والوسم (`git push origin :refs/tags/web-v0.1.0`).
+
+**11ب · السحب.** (موافقة) يتم داخل الخطوة 6، في نافذة الدخول والخروج نفسها لصورة `yawmi-api`: `docker login ghcr.io` بـPAT قراءة فقط يكتبه عبدالله بنفسه، ثم `docker pull ghcr.io/nexgen94/yawmi-web:0.1.0`، ثم `docker logout ghcr.io` فوراً. التراجع: `docker logout ghcr.io` وإلغاء الرمز من GitHub، و`docker rmi ghcr.io/nexgen94/yawmi-web:0.1.0` (على ألا يكون مشروع قائم يستعملها).
+
+**11ج · التحديث اللاحق.** (موافقة) أول نشر للويب يحدث مع المشروع في الخطوة 7. وإصدار الويب التالي: وسم `web-vX.Y.Z` جديد، ثم سحبه (11ب) ثم تغيير وسم `yawmi-web` في الملف وتحديث المشروع. التراجع: إعادة الوسم السابق وتحديث المشروع (والصورة السابقة ما زالت محلية). وللتراجع عن الخدمة نفسها: حذف خدمة `yawmi-web` من الملف وتحديث المشروع، فيعود المضيف إلى الواجهة البرمجية وحدها. وإن بقيت حاوية `yawmi-web` تعمل بعد التحديث (قد يترك مدير Hostinger الحاويات اليتيمة) فتُوقف وتُحذف: `docker rm -f yawmi-web`، **بموافقة مستقلة**. ولا أثر على القاعدة ولا على n8n.
+
+**11د · فحص (قراءة فقط، موافقة):**
+
+```sh
+curl -sSI "https://$YAWMI_API_HOST/"            | grep -i -e '^HTTP' -e '^cache-control' -e '^content-security-policy'
+curl -sSI "https://$YAWMI_API_HOST/sw.js"       | grep -i -e '^HTTP' -e '^cache-control'
+curl -sS  "https://$YAWMI_API_HOST/v1/health/live"
+```
+
+- **المطبوع المتوقع:** `200` و`cache-control: no-cache` وسياسة CSP للأولين، و`{"ok":true}` للثالث (لو عاد 404 من nginx فتوجيه `/v1` خاطئ: قاعدة `yawmi-api` أو أولويتها).
+- **إن فشل:** `404` على `/` ← قاعدة `yawmi-web` أو `YAWMI_API_HOST`؛ وعودة 404 من Traefik نفسه (لا من nginx) تعني غالباً أن الحاوية ليست `healthy` فسقط موجّهها، و`502` أن الشبكة خاطئة؛ ويُفحص الاثنان بـ`docker ps --filter name=yawmi-web` و`docker logs yawmi-web`.
+
+**11هـ · الإشعارات (بعد دمج مهمة الإشعارات، موافقة لكل عملية):** وسم إصدار الواجهة البرمجية التالي (مثلاً `api-v0.2.0`) وتحديث الوسم في الملف؛ تشغيل `yawmi-vapid-keygen` مرة واحدة على الخادم (يطبع المفتاح العام فقط ويحفظ الخاص في volume الأسرار)؛ ثم يضيف عبدالله بيده في متغيرات المشروع `YAWMI_VAPID_SUBJECT` (بالصيغة `mailto:` ببريد على نطاق حقيقي يملكه) و`YAWMI_PUSH_ENABLED=true`؛ والتحقق: `GET /v1/push/vapid-public-key` يعيد مفتاحاً. التراجع: حذف المتغيرين من المشروع وإعادة النشر (يبقى مفتاح VAPID الخاص في volume الأسرار ولا يُطبع)، والرجوع إلى الوسم السابق للواجهة البرمجية.
+
+**11و · على الآيفون (عبدالله):** Safari ← المضيف ← مشاركة ← «إضافة إلى الشاشة الرئيسية». **من الأيقونة لا من Safari** (التخزين منفصل): كود إقران من الخطوة 9 بنوع `web`، ثم «تفعيل التذكيرات».
 
 ## ملحق أ · تحديث الصورة
 
