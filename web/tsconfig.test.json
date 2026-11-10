@@ -1,0 +1,9 @@
+{
+  // Tests run in Node but import browser modules from src/ (document, Request, indexedDB types),
+  // so this is tsconfig.node.json plus the DOM lib. The config files stay on the DOM-free one.
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": ["tests"]
+}

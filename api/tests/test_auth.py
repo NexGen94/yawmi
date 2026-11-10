@@ -4,6 +4,7 @@ Unit tests only: the app is built with the in-memory `DeviceStore`, so no databa
 """
 
 import hashlib
+import json
 import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
@@ -25,6 +26,7 @@ from yawmi.auth.pg_store import AsyncpgDeviceStore
 from yawmi.auth.tokens import (
     AccessClaims,
     AuthError,
+    hash_refresh,
     issue_access,
     new_refresh,
     verify_access,
@@ -231,6 +233,40 @@ async def test_request_bodies_are_never_logged(
     assert body["refresh_token"] not in caplog.text
     access_lines = [r.getMessage() for r in caplog.records if r.name == "yawmi.access"]
     assert any("/v1/devices/pair" in line and "200" in line for line in access_lines)
+
+
+async def test_access_log_neutralises_control_characters_in_the_path(
+    client: httpx.AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`%0A` decodes to a newline in `scope["path"]`: it must not forge a second log line."""
+    with caplog.at_level(logging.INFO, logger="yawmi.access"):
+        response = await client.get("/v1/nope%0AGET%20/v1/forged%20->%20200%0D%1B%7F%00")
+    assert response.status_code == 404
+    lines = [r.getMessage() for r in caplog.records if r.name == "yawmi.access"]
+    assert len(lines) == 1
+    line = lines[0]
+    assert "404" in line
+    assert line.isprintable()  # no control characters, no line or paragraph separators
+    assert len(line.splitlines()) == 1
+
+
+async def test_access_log_neutralises_unicode_line_separators(
+    client: httpx.AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.INFO, logger="yawmi.access"):
+        await client.get("/v1/nope%E2%80%A8x%C2%85y")  # U+2028 and U+0085
+    line = next(r.getMessage() for r in caplog.records if r.name == "yawmi.access")
+    assert line.isprintable()
+    assert len(line.splitlines()) == 1
+
+
+async def test_access_log_keeps_normal_paths_readable(
+    client: httpx.AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.INFO, logger="yawmi.access"):
+        await client.get("/v1/health/live")
+    line = next(r.getMessage() for r in caplog.records if r.name == "yawmi.access")
+    assert line.startswith("GET /v1/health/live -> 200 ")
 
 
 # --- current_device / require_kind -------------------------------------------------------------
@@ -525,6 +561,35 @@ async def test_refresh_with_wrong_token_or_unknown_device_is_unauthorized(
     assert wrong.json() == unknown.json() == UNAUTHORIZED
 
 
+LONE_SURROGATES = [chr(0xD800), "ab" + chr(0xDFFF) + "cd", chr(0xD83D)]
+
+
+@pytest.mark.parametrize("token", LONE_SURROGATES, ids=["high", "low-inside", "half-emoji"])
+async def test_refresh_with_lone_surrogate_is_a_normal_401(
+    client: httpx.AsyncClient, store: InMemoryDeviceStore, token: str
+) -> None:
+    """A lone surrogate cannot be UTF-8 encoded: it must be a 401, never an unhandled 500."""
+    await seed_code(store, "iphone")
+    paired = (await pair(client)).json()
+    # `json.dumps` writes the lone surrogate as a backslash-u escape, exactly as a client would.
+    payload = json.dumps({"device_id": paired["device_id"], "refresh_token": token})
+    assert "\\ud" in payload.lower()
+    response = await client.post(
+        "/v1/auth/refresh", content=payload, headers={"Content-Type": "application/json"}
+    )
+    assert response.status_code == 401
+    assert response.json() == UNAUTHORIZED
+    assert "x-request-id" in response.headers
+
+
+def test_hash_refresh_never_raises_and_does_not_collide_with_a_replacement_char() -> None:
+    lone = chr(0xD800)
+    assert hash_refresh(lone) != hash_refresh("?")
+    assert hash_refresh(lone) != hash_refresh(chr(0xFFFD))
+    raw, digest = new_refresh()
+    assert hash_refresh(raw) == digest == hashlib.sha256(raw.encode()).hexdigest()
+
+
 # --- revoke ------------------------------------------------------------------------------------
 
 
@@ -602,12 +667,16 @@ async def test_revoke_unknown_device_is_404_and_repeat_is_idempotent(
 def test_module_level_app_exists_and_import_needs_no_environment() -> None:
     assert module_app.title == "yawmi-api"
     assert module_app.state.use_db is True
-    assert set(module_app.openapi()["paths"]) == {
+    paths = set(module_app.openapi()["paths"])
+    # route modules are discovered automatically, so other modules add paths of their own:
+    # these four must exist, and every path (whoever defines it) lives under /v1
+    assert {
         "/v1/health/live",
         "/v1/devices/pair",
         "/v1/auth/refresh",
         "/v1/devices/{device_id}/revoke",
-    }
+    } <= paths
+    assert all(path.startswith("/v1/") for path in paths)
 
 
 async def test_lifespan_leaves_the_database_alone_with_an_injected_store(

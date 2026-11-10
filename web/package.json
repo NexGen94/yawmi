@@ -10,12 +10,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.sw.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.sw.json",
     "test": "vitest run",
     "check:budget": "node scripts/check-budget.mjs",
     "icons": "pwa-assets-generator && node scripts/move-icons.mjs"
   },
   "dependencies": {
+    "idb": "8.0.4",
     "preact": "11.2.0",
     "preact-iso": "2.12.2"
   },
@@ -23,6 +24,7 @@
     "@preact/preset-vite": "2.10.6",
     "@types/node": "24.19.2",
     "@vite-pwa/assets-generator": "2.0.0",
+    "fake-indexeddb": "6.2.8",
     "typescript": "7.0.2",
     "vite": "8.3.7",
     "vite-plugin-pwa": "2.0.0",
