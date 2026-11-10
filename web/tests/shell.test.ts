@@ -98,10 +98,19 @@ describe('vite + pwa config', () => {
     const pkg = JSON.parse(read('package.json')) as {
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
+      overrides?: Record<string, Record<string, string>>;
     };
     const all = { ...pkg.dependencies, ...pkg.devDependencies };
     for (const [name, version] of Object.entries(all)) {
-      expect(version, name).toMatch(/^\d+\.\d+\.\d+$/);
+      // An npm alias (`npm:typescript@5.9.3`, see scripts/ts5-for-openapi.mjs) is pinned the same way.
+      expect(version, name).toMatch(/^(npm:(@[a-z0-9-]+\/)?[a-z0-9.-]+@)?\d+\.\d+\.\d+$/);
+    }
+    // Overrides may only point at an exact version or at a pinned root dependency (`$name`).
+    for (const [parent, inner] of Object.entries(pkg.overrides ?? {})) {
+      for (const [name, version] of Object.entries(inner)) {
+        expect(version, `${parent} > ${name}`).toMatch(/^(\d+\.\d+\.\d+|\$[a-z0-9-]+)$/);
+        if (version.startsWith('$')) expect(all[version.slice(1)], version).toMatch(/^\d+\.\d+\.\d+$/);
+      }
     }
   });
 });
