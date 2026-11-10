@@ -14,6 +14,14 @@
 //   min(T, max(1, ceil(T · k / L − 1e-9))), k its scheduled days and L the full period's days (7,
 //   or the month's length). A daily period is never proportional.
 // - `done ≥ target` and `done ≥ expected` allow a 1e-9 margin for floating-point noise.
+//
+// How exact the floats are: the sums over days use the compensated (Neumaier) summation that
+// Python 3.12+ `sum()` uses, in the same order, so a period's `done` is bit-identical to the
+// reference (ten logs of 0.1 give exactly 1). A day's own total is a plain `+=` in both. The other
+// operations are IEEE-754 divisions and products in the same order, except strength's
+// `0.5 ** x`, where the JS engine and C `pow` may differ in the last bit. So integers, booleans
+// and nulls are identical, while a fraction can differ from the reference by a few ulps (the
+// vectors allow 1e-9). Callers decide with `reached` and `onTrack`, not `===` on fractions.
 
 import { monthIndexOf, toOrdinal } from './days';
 import { checkWeekStart, isScheduledOrd, periodBoundsOrd, scheduleOf, type Schedule } from './periods';
@@ -81,13 +89,22 @@ function aggregate(spec: HabitSpec, s: Schedule, logs: readonly HabitLog[], toda
   return days;
 }
 
+/**
+ * The days' totals from `start` to `end`, summed as CPython 3.12+ `sum()` sums floats: Neumaier's
+ * compensated summation, the compensation added at the end only when it is non-zero and finite.
+ */
 function periodDone(days: Days, start: number, end: number): number {
   let sum = 0;
+  let compensation = 0;
   for (let day = start; day <= end; day += 1) {
     const total = days.get(day);
-    if (total !== undefined) sum += total.done;
+    if (total === undefined) continue;
+    const x = total.done;
+    const next = sum + x;
+    compensation += Math.abs(sum) >= Math.abs(x) ? sum - next + x : x - next + sum;
+    sum = next;
   }
-  return sum;
+  return compensation !== 0 && Number.isFinite(compensation) ? sum + compensation : sum;
 }
 
 function scheduledDays(s: Schedule, start: number, end: number): number[] {
@@ -236,12 +253,13 @@ export function challengeProgress(
   spec: HabitSpec,
   logs: readonly HabitLog[],
   today: Day,
-  weekStart: WeekStart = 'sun',
+  weekStart: WeekStart,
 ): ChallengeProgress | null {
   const s = scheduleOf(spec);
   checkWeekStart(weekStart);
-  if (spec.endDay === null) return null;
+  // `today` is checked before an open habit returns null, so a bad day never passes silently.
   const now = toOrdinal(today);
+  if (spec.endDay === null) return null;
   const days = aggregate(spec, s, logs, now);
   let achieved = 0;
   let total = 0;
@@ -313,5 +331,11 @@ export function goalPrefill(
   if (period === 'day') periods = last - first + 1;
   else if (period === 'week') periods = Math.floor((last - first) / 7) + 1;
   else periods = monthIndexOf(last) - monthIndexOf(first) + 1;
-  return Math.max(1, Math.ceil((goalTarget - current) / Math.max(1, periods) - EPS));
+  const perPeriod = (goalTarget - current) / Math.max(1, periods);
+  // The reference raises here (ValueError for NaN, OverflowError for infinity) instead of
+  // returning NaN or Infinity; so does this port.
+  if (!Number.isFinite(perPeriod)) {
+    throw new RangeError(`goal and current must be finite numbers: ${goalTarget}, ${current}`);
+  }
+  return Math.max(1, Math.ceil(perPeriod - EPS));
 }

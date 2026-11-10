@@ -13,9 +13,12 @@ const FIXED_OFFSETS: Readonly<Record<string, number>> = { 'Asia/Riyadh': 180 };
 
 export const DEFAULT_TZ = 'Asia/Riyadh';
 
-// An ISO 8601 instant with an explicit zone: `Z` or `±HH:MM`, optional fractional seconds. A naive
-// instant would be read in the browser's zone, so it is refused, as the reference does.
-const INSTANT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+// An ISO 8601 instant with an explicit zone: `Z` or `±HH:MM`, optional fractional seconds of any
+// length. A naive instant would be read in the browser's zone, so it is refused, as the reference
+// does. The parts are checked and combined here, not by `Date.parse`, whose handling of impossible
+// dates, hour 24 and fractions longer than three digits differs between engines.
+const INSTANT_PATTERN =
+  /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:Z|([+-])(\d{2}):(\d{2}))$/;
 
 /** The days since 1970-01-01 of a `YYYY-MM-DD` string; throws on anything else. */
 export function toOrdinal(day: Day): number {
@@ -36,11 +39,6 @@ export function fromOrdinal(ordinal: number): Day {
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
   const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
-}
-
-/** `day` plus `days` (negative to go back). */
-export function addDays(day: Day, days: number): Day {
-  return fromOrdinal(toOrdinal(day) + days);
 }
 
 /** Day of the week of an ordinal: 0 = Sunday ... 6 = Saturday, the bit of `weekday_mask`. */
@@ -74,13 +72,25 @@ export function floorMod(a: number, n: number): number {
 /**
  * The calendar day `instantIso` falls on in `tz`. The day follows the instant, not the offset it
  * was written with: `2026-11-09T23:30:00+03:00` is 20:30Z, so still 2026-11-09 in Riyadh.
+ *
+ * `tz` is required (the reference has no default) and must be a zone with a fixed offset here.
+ * The date part must be a real calendar day, the hour 0..23, minutes and seconds 0..59, the offset
+ * below 24 hours; a fraction is truncated to milliseconds, never rounded up into the next second.
  */
-export function dayKey(instantIso: string, tz: string = DEFAULT_TZ): Day {
-  const offset = FIXED_OFFSETS[tz];
+export function dayKey(instantIso: string, tz: string): Day {
+  const offset = Object.hasOwn(FIXED_OFFSETS, tz) ? FIXED_OFFSETS[tz] : undefined;
   if (offset === undefined) throw new RangeError(`unknown tz: ${JSON.stringify(tz)}`);
-  const time = INSTANT_PATTERN.test(instantIso) ? Date.parse(instantIso) : Number.NaN;
-  if (Number.isNaN(time)) {
-    throw new RangeError(`instant must be ISO 8601 with Z or an offset: ${JSON.stringify(instantIso)}`);
-  }
-  return fromOrdinal(Math.floor((time + offset * 60_000) / MS_PER_DAY));
+  const invalid = () =>
+    new RangeError(`instant must be ISO 8601 with Z or an offset: ${JSON.stringify(instantIso)}`);
+  const match = INSTANT_PATTERN.exec(instantIso);
+  if (!match) throw invalid();
+  const [, date = '', hh, mm, ss, fraction = '', sign, oh, om] = match;
+  const [hour, minute, second] = [Number(hh), Number(mm), Number(ss)];
+  const [offsetHours, offsetMinutes] = [Number(oh ?? 0), Number(om ?? 0)];
+  if (hour > 23 || minute > 59 || second > 59 || offsetHours > 23 || offsetMinutes > 59) throw invalid();
+  const millis = Number(fraction.slice(0, 3).padEnd(3, '0'));
+  const written = toOrdinal(date) * MS_PER_DAY + ((hour * 60 + minute) * 60 + second) * 1000 + millis;
+  const zoneMinutes = (sign === '-' ? -1 : 1) * (offsetHours * 60 + offsetMinutes);
+  const utc = written - zoneMinutes * 60_000;
+  return fromOrdinal(Math.floor((utc + offset * 60_000) / MS_PER_DAY));
 }
