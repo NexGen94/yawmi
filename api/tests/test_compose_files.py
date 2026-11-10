@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 from urllib.parse import unquote, urlsplit
@@ -264,12 +265,14 @@ def test_loaders_are_one_shot_on_the_raqib_network_only(path: Path) -> None:
     assert data["volumes"]["raqib_secrets"]["external"] is True
 
 
-def test_loader_1_creates_the_secrets_volume_and_loader_2_only_reads_it() -> None:
+def test_the_secrets_volume_is_external_everywhere_so_compose_never_recreates_it() -> None:
+    """It is created by hand (RUNBOOK step 3): a compose change or `down -v` cannot lose the password."""
     first, second = _yaml(LOADER_1), _yaml(LOADER_2)
+    # loader 1 writes the secret, loader 2 only reads it
     assert "yawmi_secrets:/run/yawmi" in first["services"]["yawmi-loader"]["volumes"]
-    assert "external" not in first["volumes"]["yawmi_secrets"]
     assert "yawmi_secrets:/run/yawmi:ro" in second["services"]["yawmi-loader"]["volumes"]
-    assert second["volumes"]["yawmi_secrets"]["external"] is True
+    for data in (first, second, _yaml(API_COMPOSE)):
+        assert data["volumes"]["yawmi_secrets"] == {"name": "yawmi_secrets", "external": True}
 
 
 @pytest.mark.parametrize("path", [LOADER_1, LOADER_2], ids=lambda p: p.name)
@@ -371,6 +374,86 @@ def test_check_mode_flags_a_stale_loader(tmp_path: Path) -> None:
     (migrations / build_loaders.SCHEMA_FILE).write_bytes(b"SELECT 1; SELECT 9;\n")
     assert build_loaders.main([*args, "--check"]) == 1
     assert build_loaders.main([*args, "--check", "--out", str(tmp_path / "nowhere")]) == 1
+
+
+@pytest.fixture
+def generated(tmp_path: Path) -> tuple[list[str], Path]:
+    """CLI arguments and the output directory of a freshly generated pair of loaders."""
+    migrations = tmp_path / "m"
+    migrations.mkdir()
+    (migrations / build_loaders.SCHEMA_FILE).write_bytes(b"CREATE TABLE yawmi.t (x int);\n")
+    (migrations / build_loaders.ROLE_FILE).write_bytes(b"SELECT 2;\n")
+    seed = tmp_path / "seed.sql"
+    seed.write_bytes(b"SELECT 3;\n")
+    out = tmp_path / "out"
+    args = ["--migrations-dir", str(migrations), "--seed", str(seed), "--out", str(out)]
+    assert build_loaders.main(args) == 0
+    assert build_loaders.main([*args, "--check"]) == 0
+    return args, out
+
+
+def _edit(path: Path, change: Callable[[str], str]) -> None:
+    text = path.read_bytes().decode("utf-8")
+    edited = change(text)
+    assert edited != text
+    path.write_bytes(edited.encode("utf-8"))
+
+
+def test_check_mode_flags_a_hand_edit_of_a_committed_loader(generated) -> None:
+    args, out = generated
+    _edit(out / build_loaders.LOADER_1, lambda text: text + "# edited by hand\n")
+    assert build_loaders.main([*args, "--check"]) == 1
+
+
+def test_check_mode_flags_a_hand_edited_script_line(generated) -> None:
+    args, out = generated
+    _edit(
+        out / build_loaders.LOADER_2,
+        lambda text: text.replace("role step done", "role step finished"),
+    )
+    assert build_loaders.main([*args, "--check"]) == 1
+
+
+def test_check_mode_flags_a_change_to_a_script_template(
+    generated, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    args, _ = generated
+    for name in ("_LOADER_1", "_LOADER_2", "_COMPOSE"):
+        original = getattr(build_loaders, name)
+        marker = original.splitlines()[1]  # a line that exists in each template
+        with monkeypatch.context() as patch:
+            patch.setattr(build_loaders, name, original.replace(marker, marker + " ", 1))
+            assert build_loaders.main([*args, "--check"]) == 1, name
+    assert build_loaders.main([*args, "--check"]) == 0  # and the patches are gone again
+
+
+def test_check_mode_flags_a_crlf_copy_and_a_damaged_payload(generated) -> None:
+    args, out = generated
+    original = (out / build_loaders.LOADER_1).read_bytes()
+    (out / build_loaders.LOADER_1).write_bytes(original.replace(b"\n", b"\r\n"))
+    assert build_loaders.main([*args, "--check"]) == 1
+    (out / build_loaders.LOADER_1).write_bytes(original)
+    not_gzip = base64.b64encode(b"valid base64, but not a gzip stream").decode("ascii")
+    _edit(
+        out / build_loaders.LOADER_1,
+        lambda text: re.sub(
+            r"(  p0001:\n    content: \|\n)(?:      \S+\n?)+", rf"\1      {not_gzip}\n", text
+        ),
+    )
+    assert build_loaders.main([*args, "--check"]) == 1  # reported as stale, not a crash
+
+
+def test_check_mode_accepts_the_same_sql_packed_by_another_compressor(generated) -> None:
+    """The packed bytes are compared by what they unpack to, so another zlib build is no drift."""
+    args, out = generated
+    path = out / build_loaders.LOADER_1
+    text = path.read_bytes().decode("utf-8")
+    body = re.search(r"content: \|\n((?:      \S+\n?)+)", text.split("  p0001:")[1])[1]
+    sql = gzip.decompress(base64.b64decode("".join(body.split())))
+    other = base64.b64encode(gzip.compress(sql, 1, mtime=12345)).decode("ascii")
+    assert other != "".join(body.split())
+    path.write_bytes(text.replace(body, f"      {other}\n").encode("utf-8"))
+    assert build_loaders.main([*args, "--check"]) == 0
 
 
 # --- the loader scripts, run against stub psql/pg_isready --------------------------------------
@@ -558,13 +641,24 @@ def test_loader_2_passes_the_password_by_file_and_env_never_by_argument(tmp_path
 
     assert box.psql_calls() == 2
     admin_sql, api_sql = box.sql(1), box.sql(2)
-    # the role is created with the password from the file, in the same transaction as 0002
-    assert admin_sql.index(r"\set yawmi_api_pw `cat ") < admin_sql.index(
-        "SET LOCAL yawmi_migrate.yawmi_api_pw"
-    )
-    assert admin_sql.index("SET LOCAL yawmi_migrate.yawmi_api_pw") < admin_sql.index(r"\i ")
-    assert "ALTER ROLE yawmi_api PASSWORD :'yawmi_api_pw';" in admin_sql
-    assert r"\unset yawmi_api_pw" in admin_sql
+    # The password goes into exactly ONE statement (the ALTER ROLE), read from the file just before
+    # it, inside a transaction that first switches off every kind of statement logging, and the
+    # psql variable is dropped right after. 0002 itself gets no password setting.
+    assert admin_sql.count(":'yawmi_api_pw'") == 1
+    assert admin_sql.count(r"\set yawmi_api_pw") == 1
+    assert "yawmi_migrate" not in admin_sql
+    set_at = admin_sql.index(r"\set yawmi_api_pw `cat ")
+    begin_at = admin_sql.index("BEGIN;", set_at)
+    alter_at = admin_sql.index("ALTER ROLE yawmi_api PASSWORD :'yawmi_api_pw';")
+    for setting in (
+        "SET LOCAL log_statement = 'none';",
+        "SET LOCAL log_min_error_statement = 'panic';",
+        "SET LOCAL log_min_duration_statement = -1;",
+    ):
+        assert begin_at < admin_sql.index(setting) < alter_at, setting
+    commit_at = admin_sql.index("COMMIT;", alter_at)
+    assert alter_at < commit_at < admin_sql.index(r"\unset yawmi_api_pw")
+    assert admin_sql.index(r"\i ") < set_at  # 0002 is applied before the password is touched
     # the seed goes in after the role is set up, in a transaction of its own
     seed_at = admin_sql.index("seed.sql")
     assert (
@@ -795,3 +889,42 @@ def test_runbook_says_a_service_token_is_revoked_only_by_rotating_the_jwt_secret
     assert "فلا يُبطَل إلا بتدوير `YAWMI_JWT_SECRET`" in RUNBOOK
     assert "السبيل الوحيد لإبطاله هو تدوير `YAWMI_JWT_SECRET`" in _runbook_steps()[10]
     assert "عديم الحالة" in _runbook_steps()[10]
+
+
+def test_runbook_step_4_separates_verification_only_failures_from_failures_that_change_nothing() -> (
+    None
+):
+    body = _runbook_steps()[4]
+    marker = "system habits upserted"
+    assert f"بعد سطر `yawmi-loader: {marker}`" in body
+    after = body.split(f"بعد سطر `yawmi-loader: {marker}`", 1)[1]
+    assert "فشل تحقق فقط" in after and "التغييرات مثبتة" in after
+    assert "فيتخطى `0002`" in after  # and what to do: fix the cause, re-run the same loader
+
+
+def test_runbook_documents_how_the_password_is_kept_out_of_logs() -> None:
+    fixed_rules = RUNBOOK.split("### متغيرات المشروع", 1)[0]
+    for setting in ("log_statement", "log_min_error_statement", "log_min_duration_statement"):
+        assert setting in fixed_rules
+    assert "ALTER ROLE yawmi_api PASSWORD" in fixed_rules
+    assert "permission denied to set parameter" in fixed_rules
+
+
+def test_runbook_creates_the_external_secrets_volume_before_loader_1() -> None:
+    body = _runbook_steps()[3]
+    assert body.index("docker volume create yawmi_secrets") < body.index("3ب")
+    assert "docker volume rm yawmi_secrets" in body
+    assert "external: true" in RUNBOOK.split("### متغيرات المشروع", 1)[0]
+
+
+def test_runbook_counts_two_new_projects_not_three() -> None:
+    assert "مشروعان جديدان مستقلان" in RUNBOOK
+    assert "ثلاثة مشاريع" not in RUNBOOK
+
+
+def test_runbook_step_6_ends_with_docker_logout_after_the_pull() -> None:
+    body = _runbook_steps()[6]
+    assert body.index("docker pull") < body.index("docker logout ghcr.io")
+    sub_steps = re.findall(r"^(\d)\. ", body, re.MULTILINE)
+    last = body.split(f"\n{sub_steps[-1]}. ", 1)[1]
+    assert last.startswith("**آخر خطوة فرعية") and "docker logout ghcr.io" in last
