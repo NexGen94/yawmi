@@ -260,6 +260,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/push/subscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * تسجيل اشتراك الإشعارات لهذا الجهاز
+         * @description يحفظ اشتراك Web Push مربوطاً بالجهاز المصادَق، ويستبدل مفاتيح العنوان نفسه إن وُجد ويلغي أي تأجيل عليه. العنوان https على خدمة دفع مسموح بها فقط. رمز الخدمة والجهاز الملغى لا يشتركان، وللجهاز 5 اشتراكات على الأكثر.
+         */
+        post: operations["subscribe_v1_push_subscribe_post"];
+        /**
+         * إلغاء اشتراك الإشعارات لهذا الجهاز
+         * @description يحذف الاشتراك إن كان لهذا الجهاز، وإلا لا يغيّر شيئاً (204 في الحالتين).
+         */
+        delete: operations["unsubscribe_v1_push_subscribe_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/push/vapid-public-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** مفتاح VAPID العام للاشتراك في الإشعارات */
+        get: operations["vapid_public_key_v1_push_vapid_public_key_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/reviews": {
         parameters: {
             query?: never;
@@ -1108,6 +1149,28 @@ export interface components {
             /** Tz */
             tz: string;
         };
+        /** SubscribeIn */
+        SubscribeIn: {
+            /**
+             * Endpoint
+             * @description عنوان https من خدمة الدفع
+             */
+            endpoint: string;
+            keys: components["schemas"]["SubscriptionKeys"];
+        };
+        /** SubscriptionKeys */
+        SubscriptionKeys: {
+            /**
+             * Auth
+             * @description سر المصادقة 16 بايتاً، base64url
+             */
+            auth: string;
+            /**
+             * P256Dh
+             * @description نقطة P-256 غير مضغوطة، base64url
+             */
+            p256dh: string;
+        };
         /** ToHabitIn */
         ToHabitIn: {
             /**
@@ -1202,6 +1265,14 @@ export interface components {
             /** Recovery Score */
             recovery_score: number | null;
         };
+        /** UnsubscribeIn */
+        UnsubscribeIn: {
+            /**
+             * Endpoint
+             * @description عنوان https من خدمة الدفع
+             */
+            endpoint: string;
+        };
         /** ValidationErrorBody */
         ValidationErrorBody: {
             /** Detail */
@@ -1215,6 +1286,14 @@ export interface components {
             loc: (string | number)[];
             /** Type */
             type: string;
+        };
+        /** VapidKeyOut */
+        VapidKeyOut: {
+            /**
+             * Key
+             * @description المفتاح العام لـVAPID: نقطة P-256 غير مضغوطة، base64url
+             */
+            key: string;
         };
     };
     responses: never;
@@ -1972,6 +2051,151 @@ export interface operations {
             };
             /** @description غير مسموح */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    subscribe_v1_push_subscribe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscribeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description بلغ هذا الجهاز الحد الأقصى من الاشتراكات */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    unsubscribe_v1_push_subscribe_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnsubscribeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    vapid_public_key_v1_push_vapid_public_key_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VapidKeyOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description الإشعارات غير مفعّلة */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
