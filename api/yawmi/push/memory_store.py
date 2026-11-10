@@ -1,19 +1,22 @@
 """In-memory `PushStore`: for tests and local experiments, never for production.
 
 It applies the same rules as the SQL in `yawmi.push.store`, so the same tests run against both.
+There is no devices table here: a device is alive until `forget_device` marks it revoked, which
+`InMemoryDeviceStore(on_revoke=store.forget_device)` does when the device is revoked.
 """
 
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from uuid import UUID
 
-from yawmi.push.store import Reminder, Subscription
+from yawmi.push.store import MAX_PER_DEVICE, Reminder, Subscription, UpsertResult
 from yawmi.today.reader import HabitRow, LogRow
 
 
 @dataclass
 class InMemoryPushStore:
     subs: dict[str, Subscription] = field(default_factory=dict)
+    revoked: set[UUID] = field(default_factory=set)
     reminders: list[Reminder] = field(default_factory=list)
     inactive_reminders: set[UUID] = field(default_factory=set)
     habits: list[HabitRow] = field(default_factory=list)
@@ -21,9 +24,20 @@ class InMemoryPushStore:
     logs: list[LogRow] = field(default_factory=list)
     sends: set[tuple[UUID, date]] = field(default_factory=set)
 
+    def forget_device(self, device_id: UUID) -> None:
+        """The device was revoked: it may no longer subscribe, and its subscriptions go."""
+        self.revoked.add(device_id)
+        for endpoint in [e for e, s in self.subs.items() if s.device_id == device_id]:
+            del self.subs[endpoint]
+
     async def upsert_subscription(
         self, device_id: UUID, endpoint: str, p256dh: str, auth: str
-    ) -> None:
+    ) -> UpsertResult:
+        if device_id in self.revoked:
+            return "revoked"
+        others = sum(1 for e, s in self.subs.items() if s.device_id == device_id and e != endpoint)
+        if others >= MAX_PER_DEVICE:
+            return "limit"
         old = self.subs.get(endpoint)
         self.subs[endpoint] = Subscription(
             endpoint=endpoint,
@@ -33,6 +47,7 @@ class InMemoryPushStore:
             retry_after=None,
             last_ok_at=old.last_ok_at if old else None,
         )
+        return "ok"
 
     async def delete_subscription(self, device_id: UUID, endpoint: str) -> None:
         sub = self.subs.get(endpoint)
@@ -40,7 +55,11 @@ class InMemoryPushStore:
             del self.subs[endpoint]
 
     async def subscriptions(self) -> list[Subscription]:
-        return [self.subs[e] for e in sorted(self.subs)]
+        return [
+            self.subs[e]
+            for e in sorted(self.subs)
+            if self.subs[e].device_id is not None and self.subs[e].device_id not in self.revoked
+        ]
 
     async def mark_ok(self, endpoint: str, at: datetime) -> None:
         if endpoint in self.subs:

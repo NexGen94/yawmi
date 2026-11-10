@@ -27,7 +27,8 @@ self.addEventListener('message', (event) => {
 const pushTarget: PushTarget = {
   origin: self.location.origin,
   showNotification: (title, options) => self.registration.showNotification(title, options),
-  setAppBadge: (n) => self.navigator.setAppBadge(n),
+  // only where the worker has the Badging API; show() also catches a throwing one
+  ...(typeof self.navigator.setAppBadge === 'function' ? { setAppBadge: (n: number) => self.navigator.setAppBadge(n) } : {}),
   windows: () => self.clients.matchAll({ type: 'window', includeUncontrolled: true }),
   openWindow: (url) => self.clients.openWindow(url),
 };

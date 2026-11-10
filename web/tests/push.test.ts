@@ -187,3 +187,65 @@ describe('service worker handlers', () => {
     expect(empty.opened).toEqual(['https://yawmi.example/']);
   });
 });
+
+describe('fix round 1', () => {
+  const run = async (fn: (wait: (p: Promise<unknown>) => void) => void): Promise<void> => {
+    const pending: Array<Promise<unknown>> = [];
+    fn((p) => pending.push(p));
+    await Promise.all(pending);
+  };
+  const base = (): PushTarget & { shown: string[]; opened: string[] } => {
+    const t = {
+      shown: [] as string[],
+      opened: [] as string[],
+      origin: 'https://yawmi.example',
+      showNotification: async (title: string) => void t.shown.push(title),
+      windows: async () => [] as never[],
+      openWindow: async (url: string) => void t.opened.push(url),
+    };
+    return t;
+  };
+  const message = { web_push: 8030, notification: { title: 'يومي', body: 'المشي', navigate: '/', app_badge: 2 } };
+
+  it('a badge API that throws synchronously does not reject the push handling', async () => {
+    const t = {
+      ...base(),
+      setAppBadge: (): Promise<void> => {
+        throw new TypeError('no badging here');
+      },
+    };
+    await expect(run((waitUntil) => handlePush({ data: { json: () => message }, waitUntil }, t))).resolves.toBeUndefined();
+    expect(t.shown).toEqual(['يومي']);
+  });
+
+  it('a window this worker does not control: navigate rejects, so a new window opens', async () => {
+    const focus = vi.fn(async () => undefined);
+    const t = {
+      ...base(),
+      windows: async () => [{ url: 'https://yawmi.example/x', navigate: async () => Promise.reject(new TypeError('not controlled')), focus }],
+    };
+    await run((waitUntil) => handleNotificationClick({ notification: { data: { navigate: '/' }, close: () => undefined }, waitUntil }, t));
+    expect(t.opened).toEqual(['https://yawmi.example/']);
+  });
+
+  it('a window already at the target is only focused, not navigated (no reload)', async () => {
+    const navigate = vi.fn(async () => undefined);
+    const focus = vi.fn(async () => undefined);
+    const t = { ...base(), windows: async () => [{ url: 'https://yawmi.example/', navigate, focus }] };
+    await run((waitUntil) => handleNotificationClick({ notification: { data: { navigate: '/' }, close: () => undefined }, waitUntil }, t));
+    expect(navigate).not.toHaveBeenCalled();
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(t.opened).toEqual([]);
+  });
+
+  it('an existing subscription without options is replaced instead of throwing', async () => {
+    const unsubscribe = vi.fn(async () => true);
+    const existing = { ...subscription, options: undefined, unsubscribe };
+    vi.stubGlobal('navigator', {
+      serviceWorker: { ready: Promise.resolve({ pushManager: { getSubscription: async () => existing, subscribe } }) },
+    });
+    expect(await enablePush()).toBe('granted');
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(subscribe).toHaveBeenCalledTimes(1);
+  });
+});

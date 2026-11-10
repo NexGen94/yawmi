@@ -71,7 +71,13 @@ function read(data: PushData | null): Shown {
 
 async function show(shown: Shown, target: PushTarget): Promise<void> {
   await target.showNotification(shown.title, shown.options);
-  if (shown.badge !== undefined) await target.setAppBadge?.(shown.badge).catch(() => undefined);
+  if (shown.badge === undefined) return;
+  try {
+    // inside try/await, so a badge API that throws synchronously is caught as well
+    await target.setAppBadge?.(shown.badge);
+  } catch {
+    // no Badging API or no permission: the badge is a nicety
+  }
 }
 
 export function handlePush(event: PushEventLike, target: PushTarget): void {
@@ -93,9 +99,18 @@ function sameOrigin(navigate: unknown, origin: string): string {
 async function open(url: string, target: PushTarget): Promise<void> {
   const [window] = await target.windows();
   if (window) {
-    await window.navigate?.(url);
-    await window.focus();
-    return;
+    try {
+      // already there: focus only, since navigate() would reload the app
+      if (window.url !== url) {
+        if (!window.navigate) throw new TypeError('navigate is not available');
+        await window.navigate(url);
+      }
+      await window.focus();
+      return;
+    } catch {
+      // navigate() rejects for a window this worker does not control (first session after
+      // install): open a new one instead
+    }
   }
   await target.openWindow(url);
 }

@@ -6,14 +6,18 @@ A reminder is due at `now` when, in the plan's zone (`settings.tz`, Asia/Riyadh)
   set in its `weekday_mask` (bit 0 = Sunday ... bit 6 = Saturday);
 * its habit is active on that day and scheduled on it (`is_scheduled`);
 * the habit's current period is not reached yet (`period_progress(...).reached` is false), with
-  the week start passed explicitly (`settings.week_start`).
+  the week start passed explicitly (`settings.week_start`);
+* that day is not marked `skip` or `vacation` for the habit (owner's ruling: no nagging on a day
+  set aside). Such a habit is not counted in the badge either.
 
 For a due reminder with at least one subscription that is not backing off, the tick inserts
 `(reminder_id, day)` into `reminder_sends ... ON CONFLICT DO NOTHING`, and sends only if that row
 was new: two ticks, a restart or a second process can never send the same reminder twice in a
 day. With no deliverable subscription nothing is claimed, so the reminder can still go out later
-in its window. A failure on one subscription never stops the others, and the loop logs a failed
-tick (exception class only, never a payload or an endpoint) and carries on.
+in its window. A subscription whose endpoint is no longer an allowed push host is dropped and
+never contacted. A failure on one subscription (send or bookkeeping) never stops the others, a
+habit row that breaks the rules engine is skipped alone, and the loop logs a failed tick
+(exception class only, never a payload or an endpoint) and carries on.
 """
 
 import asyncio
@@ -25,9 +29,10 @@ from typing import Any
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
+from yawmi.domain.days import is_valid_tz
 from yawmi.domain.habits import HabitLog, HabitSpec, period_progress
 from yawmi.domain.periods import WeekStart, is_scheduled, period_bounds, weekday_bit
-from yawmi.push.sender import WebPushSender
+from yawmi.push.sender import WebPushSender, default_check
 from yawmi.push.store import AsyncpgPushStore, PushStore, Reminder, Subscription
 from yawmi.today.assemble import habit_spec
 from yawmi.today.reader import LogRow
@@ -39,6 +44,7 @@ INTERVAL_SECONDS = 60.0
 TITLE = "يومي"
 NAVIGATE = "/"
 _ONE_DAY = timedelta(days=1)
+_SET_ASIDE = frozenset({"skip", "vacation"})
 
 
 def build_payload(body: str, badge: int) -> dict[str, Any]:
@@ -88,19 +94,37 @@ def _logs_by_code(rows: list[LogRow]) -> dict[str, list[HabitLog]]:
 async def _open_habits(
     store: PushStore, day: date, week_start: WeekStart
 ) -> tuple[dict[str, str], int]:
-    """Titles of the habits due on `day` and not reached yet, and how many there are."""
+    """Titles of the habits due on `day`, not set aside that day and not reached yet; their count.
+
+    A habit whose row the rules refuse (a bad schedule, say) is logged by code and left out; the
+    others are still reminded.
+    """
     rows = {h.code: h for h in await store.active_habits(day)}
-    specs: dict[str, HabitSpec] = {code: habit_spec(h) for code, h in rows.items()}
-    due = [code for code, spec in specs.items() if is_scheduled(day, spec)]
-    if not due:
+    specs: dict[str, HabitSpec] = {}
+    for code, row in rows.items():
+        try:
+            spec = habit_spec(row)
+            if is_scheduled(day, spec):
+                specs[code] = spec
+        except Exception as exc:  # noqa: BLE001  # one bad habit row must not stop the others
+            log.warning("habit %s skipped: %s", code, type(exc).__name__)
+    if not specs:
         return {}, 0
-    first = min(period_bounds(day, specs[code].period, week_start)[0] for code in due)
-    logs = _logs_by_code(await store.habit_logs(first, day))
-    open_ = {
-        code: rows[code].title_ar
-        for code in due
-        if not period_progress(specs[code], logs.get(code, []), day, week_start).reached
-    }
+    first = min(period_bounds(day, spec.period, week_start)[0] for spec in specs.values())
+    rows_logs = await store.habit_logs(first, day)
+    set_aside = {r.habit_code for r in rows_logs if r.day == day and r.status in _SET_ASIDE}
+    logs = _logs_by_code(rows_logs)
+    open_: dict[str, str] = {}
+    for code, spec in specs.items():
+        if code in set_aside:
+            continue
+        try:
+            reached = period_progress(spec, logs.get(code, []), day, week_start).reached
+        except Exception as exc:  # noqa: BLE001  # same: isolate the habit
+            log.warning("habit %s skipped: %s", code, type(exc).__name__)
+            continue
+        if not reached:
+            open_[code] = rows[code].title_ar
     return open_, len(open_)
 
 
@@ -111,22 +135,26 @@ async def _deliver(
     payload: dict[str, Any],
     now: datetime,
 ) -> bool:
+    host = _host(sub.endpoint)
+    # send and bookkeeping alike: one bad subscription (or one failed write) must not stop the rest
     try:
         result = await sender.send(sub, payload, now=now)
-    except Exception as exc:  # noqa: BLE001  # one bad subscription must not stop the rest
-        log.warning("push send error %s host=%s", type(exc).__name__, _host(sub.endpoint))
-        return False
-    if result.outcome == "sent":
-        await store.mark_ok(sub.endpoint, now)
-        return True
-    if result.outcome == "gone":
-        await store.drop(sub.endpoint)
-        log.info("push subscription gone (%s) host=%s", result.status, _host(sub.endpoint))
-    elif result.outcome == "retry" and result.retry_after is not None:
-        await store.set_retry_after(sub.endpoint, result.retry_after)
-        log.info("push service busy (%s) host=%s", result.status, _host(sub.endpoint))
-    else:
-        log.warning("push send failed (%s) host=%s", result.status, _host(sub.endpoint))
+        if result.outcome == "sent":
+            await store.mark_ok(sub.endpoint, now)
+            return True
+        if result.outcome == "refused":
+            await store.drop(sub.endpoint)
+            log.warning("push subscription dropped: host not allowed host=%s", host)
+        elif result.outcome == "gone":
+            await store.drop(sub.endpoint)
+            log.info("push subscription gone (%s) host=%s", result.status, host)
+        elif result.outcome == "retry" and result.retry_after is not None:
+            await store.set_retry_after(sub.endpoint, result.retry_after)
+            log.info("push service busy (%s) host=%s", result.status, host)
+        else:
+            log.warning("push send failed (%s) host=%s", result.status, host)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("push send error %s host=%s", type(exc).__name__, host)
     return False
 
 
@@ -216,11 +244,13 @@ def start_reminders(pool: Any, config: Any) -> ReminderLoop:
         raise RuntimeError(
             "push_enabled needs YAWMI_VAPID_PRIVATE_KEY_FILE and YAWMI_VAPID_SUBJECT"
         )
+    if not is_valid_tz(config.tz):
+        raise RuntimeError("push_enabled, but YAWMI_TZ is not a known time zone")
     try:
         key = load_private_key(config.vapid_private_key_file)
     except VapidKeyError as exc:
         raise RuntimeError(f"push_enabled, but {exc}") from None
-    sender = WebPushSender(key, config.vapid_subject)
+    sender = WebPushSender(key, config.vapid_subject, check=default_check(config.push_hosts))
 
     async def tick_once(now: datetime) -> int:
         # the module-level `tick` is looked up on every call, so tests can patch it

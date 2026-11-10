@@ -18,6 +18,7 @@ import os
 import secrets
 import subprocess
 import sys
+import time as pytime
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
@@ -29,6 +30,7 @@ from uuid import UUID, uuid4
 import asyncpg
 import http_ece
 import httpx
+import jwt
 import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestServer
@@ -39,21 +41,28 @@ from httpx import ASGITransport
 from multidict import CIMultiDict
 from pydantic import SecretStr
 
+from yawmi.auth.deps import DeviceStore
 from yawmi.auth.memory_store import InMemoryDeviceStore
+from yawmi.auth.pg_store import AsyncpgDeviceStore
 from yawmi.auth.tokens import issue_access
 from yawmi.db.pool import create_pool, set_pool
 from yawmi.main import create_app
 from yawmi.push import keygen
+from yawmi.push.hosts import DEFAULT_PUSH_HOSTS, endpoint_problem
 from yawmi.push.memory_store import InMemoryPushStore
 from yawmi.push.scheduler import ReminderLoop, build_payload, tick
 from yawmi.push.sender import (
     MAX_PAYLOAD_BYTES,
+    GlobalOnlyResolver,
+    NotGlobalAddress,
     PayloadTooLarge,
     WebPushSender,
     encode_payload,
+    retry_at,
 )
-from yawmi.push.store import AsyncpgPushStore, PushStore, Reminder, Subscription
+from yawmi.push.store import ALL_SQL, AsyncpgPushStore, PushStore, Reminder, Subscription
 from yawmi.push.vapid import VapidKeyError, load_private_key, public_key_b64url
+from yawmi.routes.push import SubscribeIn
 from yawmi.settings import Settings
 from yawmi.today.reader import HabitRow, LogRow
 
@@ -157,9 +166,21 @@ def vapid_key() -> ec.EllipticCurvePrivateKey:
     return ec.generate_private_key(ec.SECP256R1())
 
 
+def allow_fake_service(endpoint: str) -> str | None:
+    """The injected endpoint check: the real one, plus the loopback fake push service only."""
+    if endpoint.startswith("http://127.0.0.1:") and "/push/" in endpoint:
+        return None
+    return endpoint_problem(endpoint, DEFAULT_PUSH_HOSTS)
+
+
+def local_sender(key: ec.EllipticCurvePrivateKey) -> WebPushSender:
+    """A sender that may reach the loopback fake service (injected check, no resolver guard)."""
+    return WebPushSender(key, SUBJECT, check=allow_fake_service, global_only=False)
+
+
 @pytest.fixture
 async def sender(vapid_key: ec.EllipticCurvePrivateKey) -> AsyncIterator[WebPushSender]:
-    s = WebPushSender(vapid_key, SUBJECT)
+    s = local_sender(vapid_key)
     try:
         yield s
     finally:
@@ -201,6 +222,11 @@ class Backend:
         self.pool = pool
         self.dsn = dsn
         self.extra_pools: list[asyncpg.Pool] = []
+        self.devices: DeviceStore = (
+            InMemoryDeviceStore(on_revoke=self.memory.forget_device)
+            if pool is None
+            else AsyncpgDeviceStore(pool)
+        )
 
     @property
     def memory(self) -> InMemoryPushStore:
@@ -289,23 +315,35 @@ class Backend:
             )
 
     async def device(self, kind: str = "web") -> UUID:
-        device_id = uuid4()
-        if self.pool is not None:
-            await self.pool.execute(
-                "INSERT INTO yawmi.devices (id, name, kind, paired_at) VALUES ($1, $2, $3, now())",
-                device_id,
-                CODE_PREFIX + "device",
-                kind,
-            )
-        return device_id
+        return await self.devices.create_device(CODE_PREFIX + "device", kind, "hash")
 
     async def subscribe(self, endpoint: str, receiver: Receiver, device_id: UUID | None = None):
         if device_id is None:
             device_id = await self.device()
-        await self.store.upsert_subscription(
+        result = await self.store.upsert_subscription(
             device_id, endpoint, receiver.p256dh, b64url(receiver.auth)
         )
+        assert result == "ok"
         return device_id
+
+    async def mark_revoked_only(self, device_id: UUID) -> None:
+        """Set `revoked_at` without the revoke path's delete: the read itself must filter."""
+        if self.pool is None:
+            self.memory.revoked.add(device_id)
+        else:
+            await self.pool.execute(
+                "UPDATE yawmi.devices SET revoked_at = now() WHERE id = $1", device_id
+            )
+
+    async def stored_endpoints(self, device_id: UUID) -> list[str]:
+        """Rows as stored, revoked or not (the scheduler's read hides revoked devices)."""
+        if self.pool is None:
+            return sorted(e for e, s in self.memory.subs.items() if s.device_id == device_id)
+        rows = await self.pool.fetch(
+            "SELECT endpoint FROM yawmi.push_subscriptions WHERE device_id = $1 ORDER BY 1",
+            device_id,
+        )
+        return [r["endpoint"] for r in rows]
 
     async def subscription(self, endpoint: str) -> Subscription | None:
         return next((s for s in await self.store.subscriptions() if s.endpoint == endpoint), None)
@@ -546,11 +584,11 @@ async def test_tick_after_a_restart_does_not_send_again(
     await backend.reminder("walk", 7, 0)
     await backend.subscribe(service.endpoint("a"), Receiver())
 
-    first = WebPushSender(vapid_key, SUBJECT)
+    first = local_sender(vapid_key)
     assert await run_tick(backend, first, at(7, 5)) == 1
     await first.close()
 
-    restarted = WebPushSender(vapid_key, SUBJECT)  # a new process: new sender, new connection
+    restarted = local_sender(vapid_key)  # a new process: new sender, new connection
     try:
         assert await run_tick(backend, restarted, at(7, 7), await backend.reopen()) == 0
     finally:
@@ -593,15 +631,23 @@ async def test_a_weekly_habit_reached_earlier_in_the_week_is_not_reminded(
     assert await run_tick(backend, sender, at(7, 5)) == 0
 
 
-async def test_a_skipped_day_still_reminds_but_a_vacation_period_does_not_matter_here(
-    backend: Backend, service: PushService, sender: WebPushSender
+@pytest.mark.parametrize("status", ["skip", "vacation"])
+async def test_a_day_set_aside_gets_no_reminder_and_is_not_counted_in_the_badge(
+    backend: Backend, service: PushService, sender: WebPushSender, status: str
 ) -> None:
-    # `skip` does not reach the target: reached is still false, so the reminder goes out
+    # owner's ruling: no reminder on a day marked skip or vacation, and no badge for it
     await backend.habit("walk", "المشي")
     await backend.reminder("walk", 7, 0)
-    await backend.log("walk", DAY, status="skip")
-    await backend.subscribe(service.endpoint("a"), Receiver())
+    await backend.log("walk", DAY, status=status)
+    await backend.habit("read", "القراءة")
+    await backend.reminder("read", 7, 1)
+    await backend.log("read", DAY - timedelta(days=1), status=status)  # yesterday: no effect
+    receiver = Receiver()
+    await backend.subscribe(service.endpoint("a"), receiver)
     assert await run_tick(backend, sender, at(7, 5)) == 1
+    [hit] = service.hits
+    notification = receiver.decrypt(hit.body)["notification"]
+    assert (notification["body"], notification["app_badge"]) == ("القراءة", 1)
 
 
 async def test_weekday_mask_inactive_reminder_inactive_and_unscheduled_habits_send_nothing(
@@ -850,6 +896,13 @@ async def test_subscribe_again_updates_keys_and_clears_the_back_off(
             {**sub_body(), "keys": {"p256dh": Receiver().p256dh, "auth": "!!!!"}},
             ["body", "keys", "auth"],
         ),
+        (
+            {
+                **sub_body(),
+                "keys": {"p256dh": b64url(b"" + b"" * 64), "auth": b64url(b"1" * 16)},
+            },
+            ["body", "keys", "p256dh"],
+        ),
         (sub_body(extra="x"), ["body", "extra"]),
     ],
 )
@@ -884,7 +937,7 @@ async def test_unsubscribe_removes_only_the_callers_own_subscription(
     client: httpx.AsyncClient, backend: Backend
 ) -> None:
     mine, other = await backend.device(), await backend.device()
-    a, b = sub_body("https://push.example/a"), sub_body("https://push.example/b")
+    a, b = sub_body("https://web.push.apple.com/a"), sub_body("https://web.push.apple.com/b")
     await client.post("/v1/push/subscribe", json=a, headers=auth(mine))
     await client.post("/v1/push/subscribe", json=b, headers=auth(other))
 
@@ -929,7 +982,9 @@ async def test_vapid_public_key_is_503_when_push_is_disabled(client: httpx.Async
 def test_an_empty_vapid_subject_means_none_and_a_non_mailto_one_is_refused() -> None:
     assert settings(vapid_subject="").vapid_subject is None
     with pytest.raises(ValueError):
-        settings(vapid_subject="https://example.com")
+        settings(push_enabled=True, vapid_subject="https://example.com")
+    # with push off a mistyped subject must not stop the API (Minor 8)
+    assert settings(vapid_subject="https://example.com").push_enabled is False
 
 
 def test_with_push_disabled_the_app_never_imports_the_push_stack() -> None:
@@ -1001,6 +1056,7 @@ async def test_lifespan_starts_and_stops_the_scheduler_only_when_push_is_enabled
         {"vapid_subject": SUBJECT},  # no key file
         {"vapid_private_key_file": Path("missing.pem"), "vapid_subject": SUBJECT},
         {"vapid_private_key_file": None},
+        {"tz": "Mars/Olympus_Mons"},
     ],
 )
 async def test_lifespan_refuses_to_start_push_without_a_key_and_a_subject(
@@ -1010,10 +1066,359 @@ async def test_lifespan_refuses_to_start_push_without_a_key_and_a_subject(
         return FakePool()
 
     monkeypatch.setattr("yawmi.main.create_pool", fake_create_pool)
-    if extra.get("vapid_private_key_file") is None and "vapid_subject" not in extra:
+    if "tz" in extra:  # key and subject fine, the zone is not
+        extra = {
+            **extra,
+            "vapid_private_key_file": write_pem(tmp_path / "k.pem", vapid_key),
+            "vapid_subject": SUBJECT,
+        }
+    elif extra.get("vapid_private_key_file") is None and "vapid_subject" not in extra:
         extra = {"vapid_private_key_file": write_pem(tmp_path / "k.pem", vapid_key)}  # no subject
     app = create_app(settings=settings(push_enabled=True, **extra))
     with pytest.raises(RuntimeError) as info:
         async with app.router.lifespan_context(app):
             pass
     assert "BEGIN" not in str(info.value)  # names settings, never key material
+
+
+# --- fix round 1: SSRF (finding A) --------------------------------------------------------------
+
+# Global addresses built from parts, as `FAKE_IP` in test_compose_files.py (no literal in the file).
+GLOBAL_V4 = ".".join(("17", "253", "144", "10"))  # noqa: FLY002
+GLOBAL_V6 = ":".join(("2620", "149", "a44", "", "1"))  # noqa: FLY002
+
+UNSAFE_ENDPOINTS = [
+    "https://127.0.0.1/x",
+    "https://127.0.0.1:8443/x",
+    "https://localhost/x",
+    "https://169.254.169.254/latest",
+    "https://[::1]:5432/",
+    "https://10.0.0.5/a",
+    "https://192.168.1.10/a",
+    "https://yawmi-db/a",  # a single-label Docker name
+    "https://web.push.apple.com:8443/a",  # an allowed host on another port
+    "https://evil.example/a",
+    "https://push.apple.com.evil.example/a",  # suffix trick
+    "https://evilpush.apple.com/a",  # not a dot-suffix
+    "http://web.push.apple.com/a",
+]
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "problem"),
+    [
+        ("https://web.push.apple.com/abc", None),
+        ("https://WEB.Push.Apple.COM/abc", None),
+        ("https://push.apple.com/abc", None),
+        ("https://fcm.googleapis.com/fcm/send/abc", None),
+        ("https://updates.push.services.mozilla.com/wpush/v2/abc", None),
+        ("https://wns2-par02p.notify.windows.com/w/?token=abc", None),
+        ("https://web.push.apple.com:443/abc", None),
+        ("https://127.0.0.1/x", "ip_literal"),
+        ("https://[::1]:5432/", "ip_literal"),
+        ("https://10.0.0.5/a", "ip_literal"),
+        ("https://web.push.apple.com:8443/a", "port"),
+        ("https://localhost/x", "host_not_allowed"),
+        ("https://yawmi-db/a", "host_not_allowed"),
+        ("https://push.apple.com.evil.example/a", "host_not_allowed"),
+        ("https://evilpush.apple.com/a", "host_not_allowed"),
+        ("http://web.push.apple.com/a", "not_https"),
+        ("https://u:p@web.push.apple.com/a", "credentials"),
+        ("https:///a", "no_host"),
+        ("https://web.push.apple.com/a b", "unprintable"),
+    ],
+)
+def test_endpoint_problem_is_the_shared_host_check(endpoint: str, problem: str | None) -> None:
+    assert endpoint_problem(endpoint, DEFAULT_PUSH_HOSTS) == problem
+
+
+def test_settings_default_push_hosts_are_the_four_push_services() -> None:
+    assert settings().push_hosts == [
+        "push.apple.com",
+        "fcm.googleapis.com",
+        "updates.push.services.mozilla.com",
+        "notify.windows.com",
+    ]
+
+
+@pytest.mark.parametrize("endpoint", UNSAFE_ENDPOINTS)
+async def test_subscribe_refuses_internal_non_443_and_unlisted_hosts(
+    client: httpx.AsyncClient, backend: Backend, endpoint: str
+) -> None:
+    device = await backend.device()
+    response = await client.post(
+        "/v1/push/subscribe", json=sub_body(endpoint), headers=auth(device)
+    )
+    assert response.status_code == 422, response.text
+    data = response.json()
+    assert [e["loc"] for e in data["errors"]] == [["body", "endpoint"]]
+    assert data["errors"][0]["type"] in ("endpoint_not_https", "endpoint_not_allowed")
+    assert await backend.store.subscriptions() == []
+
+
+async def test_subscribe_follows_the_allow_list_in_the_settings(backend: Backend) -> None:
+    app = create_app(settings=settings(push_hosts=["push.example"]), devices=InMemoryDeviceStore())
+    app.state.push_store = backend.store
+    device = await backend.device()
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        ok = await c.post(
+            "/v1/push/subscribe", json=sub_body("https://a.push.example/x"), headers=auth(device)
+        )
+        apple = await c.post("/v1/push/subscribe", json=sub_body(), headers=auth(device))
+    assert ok.status_code == 204
+    assert apple.status_code == 422
+
+
+async def test_sender_refuses_a_disallowed_endpoint_without_any_request(
+    service: PushService, vapid_key
+) -> None:
+    strict = WebPushSender(vapid_key, SUBJECT)  # the production check: the fake is not listed
+    receiver = Receiver()
+    sub = Subscription(service.endpoint("a"), receiver.p256dh, b64url(receiver.auth), None, None)
+    try:
+        result = await strict.send(sub, build_payload("x", 1))
+    finally:
+        await strict.close()
+    assert result.outcome == "refused"
+    assert service.hits == []
+
+
+async def test_tick_drops_a_stored_row_that_fails_the_check_without_contacting_it(
+    backend: Backend, service: PushService, vapid_key
+) -> None:
+    await backend.habit("walk", "المشي")
+    await backend.reminder("walk", 7, 0)
+    await backend.subscribe(service.endpoint("planted"), Receiver())
+    strict = WebPushSender(vapid_key, SUBJECT)
+    try:
+        assert await run_tick(backend, strict, at(7, 5)) == 0
+    finally:
+        await strict.close()
+    assert service.hits == []
+    assert await backend.subscription(service.endpoint("planted")) is None
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+async def test_sender_never_follows_a_redirect(
+    service: PushService, sender: WebPushSender, status: int
+) -> None:
+    second = PushService()
+    await second.start()
+    try:
+        service.reply["/push/a"] = (status, {"Location": second.endpoint("b")})
+        receiver = Receiver()
+        sub = Subscription(
+            service.endpoint("a"), receiver.p256dh, b64url(receiver.auth), None, None
+        )
+        result = await sender.send(sub, build_payload("x", 1), now=at(7, 5))
+    finally:
+        await second.close()
+    assert (result.outcome, result.status) == ("failed", status)
+    assert len(service.hits) == 1
+    assert second.hits == []
+
+
+async def test_sender_classifies_by_status_and_never_decodes_the_body(
+    sender: WebPushSender,
+) -> None:
+    async def gone_with_junk(request: web.Request) -> web.Response:
+        return web.Response(status=410, body=b"\xff\xfe\x00" * 1000)
+
+    junk = web.Application()
+    junk.router.add_post("/{tail:.*}", gone_with_junk)
+    server = TestServer(junk, host="127.0.0.1")
+    await server.start_server()
+    try:
+        receiver = Receiver()
+        endpoint = str(server.make_url("/push/junk"))
+        sub = Subscription(endpoint, receiver.p256dh, b64url(receiver.auth), None, None)
+        result = await sender.send(sub, build_payload("x", 1), now=at(7, 5))
+    finally:
+        await server.close()
+    assert (result.outcome, result.status) == ("gone", 410)
+
+
+class FakeResolver:
+    def __init__(self, *addresses: str) -> None:
+        self.addresses = addresses
+
+    async def resolve(self, host: str, port: int = 0, family: int = 0) -> list[dict[str, Any]]:
+        return [
+            {"hostname": host, "host": a, "port": port, "family": family, "proto": 0, "flags": 0}
+            for a in self.addresses
+        ]
+
+    async def close(self) -> None:
+        return None
+
+
+@pytest.mark.parametrize(
+    "addresses",
+    [
+        ("127.0.0.1",),
+        ("10.0.0.5",),
+        ("172.18.0.4",),
+        ("192.168.1.10",),
+        ("169.254.169.254",),
+        ("::1",),
+        ("fe80::1%eth0",),
+        (GLOBAL_V4, "10.0.0.5"),  # one bad address is enough
+        (),
+    ],
+)
+async def test_the_resolver_refuses_any_non_global_address(addresses: tuple[str, ...]) -> None:
+    guard = GlobalOnlyResolver(FakeResolver(*addresses))  # type: ignore[arg-type]
+    with pytest.raises(NotGlobalAddress):
+        await guard.resolve("web.push.apple.com", 443)
+
+
+async def test_the_resolver_passes_global_addresses() -> None:
+    guard = GlobalOnlyResolver(FakeResolver(GLOBAL_V4, GLOBAL_V6))  # type: ignore[arg-type]
+    resolved = await guard.resolve("web.push.apple.com", 443)
+    assert [r["host"] for r in resolved] == [GLOBAL_V4, GLOBAL_V6]
+
+
+async def test_a_device_holds_at_most_five_subscriptions(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    device = await backend.device()
+    bodies = [sub_body(f"https://web.push.apple.com/{i}") for i in range(6)]
+    for body in bodies[:5]:
+        response = await client.post("/v1/push/subscribe", json=body, headers=auth(device))
+        assert response.status_code == 204
+    response = await client.post("/v1/push/subscribe", json=bodies[5], headers=auth(device))
+    assert response.status_code == 409
+    assert response.json() == {"detail": "بلغ هذا الجهاز الحد الأقصى من الاشتراكات"}
+    again = await client.post("/v1/push/subscribe", json=bodies[0], headers=auth(device))
+    assert again.status_code == 204  # renewing one it already has is fine
+    assert len(await backend.stored_endpoints(device)) == 5
+
+
+# --- fix round 1: revocation (finding B) --------------------------------------------------------
+
+
+async def test_revoking_a_device_deletes_its_subscriptions_and_stops_its_reminders(
+    backend: Backend, service: PushService, sender: WebPushSender
+) -> None:
+    await backend.habit("walk", "المشي")
+    await backend.reminder("walk", 7, 0)
+    lost, kept = await backend.device(), await backend.device()
+    await backend.subscribe(service.endpoint("lost"), Receiver(), lost)
+    await backend.subscribe(service.endpoint("kept"), Receiver(), kept)
+
+    assert await backend.devices.revoke(lost) is True
+    assert await backend.stored_endpoints(lost) == []
+    assert await backend.stored_endpoints(kept) == [service.endpoint("kept")]
+
+    assert await run_tick(backend, sender, at(7, 5)) == 1
+    assert service.hits_for("lost") == []
+    assert len(service.hits_for("kept")) == 1
+
+
+async def test_the_scheduler_read_skips_a_revoked_device_even_if_its_rows_remain(
+    backend: Backend, service: PushService, sender: WebPushSender
+) -> None:
+    await backend.habit("walk", "المشي")
+    await backend.reminder("walk", 7, 0)
+    lost, kept = await backend.device(), await backend.device()
+    await backend.subscribe(service.endpoint("lost"), Receiver(), lost)
+    await backend.subscribe(service.endpoint("kept"), Receiver(), kept)
+    await backend.mark_revoked_only(lost)
+    assert [s.endpoint for s in await backend.store.subscriptions()] == [service.endpoint("kept")]
+    assert await run_tick(backend, sender, at(7, 5)) == 1
+    assert service.hits_for("lost") == []
+
+
+async def test_a_revoked_device_cannot_subscribe_with_a_still_valid_token(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    device = await backend.device()
+    await backend.devices.revoke(device)
+    response = await client.post("/v1/push/subscribe", json=sub_body(), headers=auth(device))
+    assert response.status_code == 403
+    assert response.json() == {"detail": "غير مسموح"}
+    assert await backend.stored_endpoints(device) == []
+
+
+def test_the_subscription_read_joins_devices_and_no_statement_selects_star() -> None:
+    reads = [sql for sql in ALL_SQL if "push_subscriptions AS s" in sql]
+    assert len(reads) == 1
+    assert "JOIN yawmi.devices AS d ON d.id = s.device_id" in reads[0]
+    assert "d.revoked_at IS NULL" in reads[0]
+    for sql in ALL_SQL:
+        assert "SELECT *" not in sql.upper()
+
+
+# --- fix round 1: minors ------------------------------------------------------------------------
+
+
+class FlakyBookkeeping(InMemoryPushStore):
+    """`mark_ok` fails once, as a database error after the first send would."""
+
+    failed = False
+
+    async def mark_ok(self, endpoint: str, at: datetime) -> None:
+        if not self.failed:
+            self.failed = True
+            raise ConnectionError("database went away")
+        await super().mark_ok(endpoint, at)
+
+
+async def test_a_bookkeeping_error_after_one_send_does_not_stop_the_others(
+    service: PushService, sender: WebPushSender
+) -> None:
+    backend = Backend(FlakyBookkeeping())
+    await backend.habit("walk", "المشي")
+    await backend.reminder("walk", 7, 0)
+    device = await backend.device()
+    await backend.subscribe(service.endpoint("a"), Receiver(), device)
+    await backend.subscribe(service.endpoint("b"), Receiver(), device)
+    assert await run_tick(backend, sender, at(7, 5)) == 1  # a: sent but unrecorded; b: sent
+    assert len(service.hits) == 2
+
+
+async def test_one_broken_habit_row_does_not_stop_the_other_reminders(
+    service: PushService, sender: WebPushSender
+) -> None:
+    backend = Backend(InMemoryPushStore())
+    await backend.habit("broken", "معطوبة", schedule_kind="weekdays", weekday_mask=None)
+    await backend.reminder("broken", 7, 0)
+    await backend.habit("walk", "المشي")
+    await backend.reminder("walk", 7, 0)
+    receiver = Receiver()
+    await backend.subscribe(service.endpoint("a"), receiver)
+    assert await run_tick(backend, sender, at(7, 5)) == 1
+    assert receiver.decrypt(service.hits[0].body)["notification"]["body"] == "المشي"
+
+
+@pytest.mark.parametrize("value", ["²", "١٢٠", " ", "-5", "1.5"])
+def test_retry_after_ignores_non_ascii_digits_and_junk(value: str) -> None:
+    now = at(7, 5)
+    assert retry_at(value, now) == now + timedelta(minutes=1)
+
+
+async def test_the_vapid_jwt_carries_sub_aud_and_an_exp_within_a_day(
+    service: PushService, sender: WebPushSender, vapid_key
+) -> None:
+    receiver = Receiver()
+    endpoint = service.endpoint("a")
+    sub = Subscription(endpoint, receiver.p256dh, b64url(receiver.auth), None, None)
+    assert (await sender.send(sub, build_payload("x", 1))).outcome == "sent"
+    header = service.hits[0].headers["Authorization"]
+    token = header.removeprefix("vapid t=").split(",k=", 1)[0]
+    origin = endpoint.split("/push/", 1)[0]
+    claims = jwt.decode(token, vapid_key.public_key(), algorithms=["ES256"], audience=origin)
+    assert claims["sub"] == SUBJECT
+    assert claims["aud"] == origin
+    assert 0 < claims["exp"] - pytime.time() <= 24 * 3600
+
+
+def test_p256dh_off_the_curve_is_refused() -> None:
+    off_curve = b64url(b"\x04" + b"\x01" * 64)
+    with pytest.raises(ValueError):
+        SubscribeIn.model_validate(
+            {
+                "endpoint": "https://web.push.apple.com/a",
+                "keys": {"p256dh": off_curve, "auth": b64url(b"1" * 16)},
+            }
+        )

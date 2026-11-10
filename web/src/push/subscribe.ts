@@ -78,7 +78,7 @@ export async function enablePush(): Promise<PushOutcome> {
   const key = await serverKey();
   const registration = await navigator.serviceWorker.ready;
   let subscription = await registration.pushManager.getSubscription();
-  if (subscription && !sameKey(subscription.options.applicationServerKey, key)) {
+  if (subscription && !sameKey(subscription.options?.applicationServerKey, key)) {
     await subscription.unsubscribe();
     subscription = null;
   }

@@ -19,8 +19,14 @@ class InMemoryDeviceStore:
     `clock` is public so tests can move time without patching globals.
     """
 
-    def __init__(self, clock: Callable[[], datetime] = _utc_now) -> None:
+    def __init__(
+        self,
+        clock: Callable[[], datetime] = _utc_now,
+        on_revoke: Callable[[UUID], None] | None = None,
+    ) -> None:
         self.clock = clock
+        # stands in for the Postgres store's second statement (deleting push subscriptions)
+        self.on_revoke = on_revoke
         self._codes: dict[str, tuple[PairingCode, bool]] = {}  # code -> (row, used)
         self._devices: dict[UUID, Device] = {}
 
@@ -73,4 +79,6 @@ class InMemoryDeviceStore:
             refresh_hash=None,
             revoked_at=device.revoked_at or self.clock(),
         )
+        if self.on_revoke is not None:
+            self.on_revoke(device_id)
         return True

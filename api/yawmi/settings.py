@@ -7,10 +7,12 @@ No `.env` file is read: values come from the container environment or the secret
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from yawmi.push.hosts import DEFAULT_PUSH_HOSTS
 
 
 class Settings(BaseSettings):
@@ -38,6 +40,8 @@ class Settings(BaseSettings):
     push_enabled: bool = False
     vapid_private_key_file: Path | None = None
     vapid_subject: str | None = None
+    # Push services the server may contact (exact host or any subdomain); JSON list in the env.
+    push_hosts: list[str] = Field(default_factory=lambda: list(DEFAULT_PUSH_HOSTS))
 
     @field_validator("vapid_private_key_file", "vapid_subject", mode="before")
     @classmethod
@@ -45,12 +49,13 @@ class Settings(BaseSettings):
         # compose passes `${YAWMI_VAPID_SUBJECT:-}` as an empty string until it is filled in
         return None if value == "" else value
 
-    @field_validator("vapid_subject")
-    @classmethod
-    def _vapid_subject_is_mailto(cls, value: str | None) -> str | None:
-        if value is not None and not value.startswith("mailto:"):
+    @model_validator(mode="after")
+    def _vapid_subject_is_mailto(self) -> Self:
+        # Checked only when push is on: a mistyped subject must not stop an API that has push off.
+        subject = self.vapid_subject
+        if self.push_enabled and subject is not None and not subject.startswith("mailto:"):
             raise ValueError("vapid_subject must start with 'mailto:'")
-        return value
+        return self
 
 
 @lru_cache

@@ -1,9 +1,13 @@
 """Push persistence: the `PushStore` contract and its Postgres implementation.
 
 Tables (`api/db/migrations/0001_yawmi_schema.sql`): `push_subscriptions` (one row per browser
-endpoint), `habit_reminders` and `reminder_sends`, plus reads of `habits` and `habit_logs`.
-Grants (`0002_yawmi_role.sql`): SELECT/INSERT/UPDATE everywhere in `yawmi`, DELETE on
-`push_subscriptions`; nothing here needs more.
+endpoint), `habit_reminders` and `reminder_sends`, plus reads of `devices`, `habits` and
+`habit_logs`. Grants (`0002_yawmi_role.sql`): SELECT/INSERT/UPDATE everywhere in `yawmi`,
+DELETE on `push_subscriptions`; nothing here needs more.
+
+Revocation: a subscription is only ever read for sending through a join on `devices` that keeps
+`revoked_at IS NULL`, a revoked device cannot subscribe, and revoking a device deletes its
+subscriptions in the same transaction (`AsyncpgDeviceStore.revoke`).
 
 `claim_send` is the only thing that authorises a reminder: it inserts `(reminder_id, day)` with
 `ON CONFLICT DO NOTHING` and reports whether the row was new. The primary key makes that hold
@@ -12,12 +16,16 @@ across ticks, restarts and concurrent processes.
 
 from dataclasses import dataclass
 from datetime import date, datetime, time
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import UUID
 
 import asyncpg
 
 from yawmi.today.reader import ACTIVE_HABITS, HABIT_LOGS, HabitRow, LogRow
+
+MAX_PER_DEVICE = 5
+
+UpsertResult = Literal["ok", "limit", "revoked"]
 
 
 @dataclass(frozen=True)
@@ -41,11 +49,13 @@ class Reminder:
 class PushStore(Protocol):
     async def upsert_subscription(
         self, device_id: UUID, endpoint: str, p256dh: str, auth: str
-    ) -> None:
+    ) -> UpsertResult:
         """Insert, or replace keys and owner of an existing endpoint and clear its back-off.
 
         The endpoint is an unguessable capability URL held by the browser, so whoever presents
         it with its keys owns it: a re-paired browser (new device id) takes its endpoint over.
+        `revoked`: the device is revoked (or unknown), nothing is written. `limit`: the device
+        already has `MAX_PER_DEVICE` other subscriptions, nothing is written.
         """
         ...
 
@@ -54,7 +64,7 @@ class PushStore(Protocol):
         ...
 
     async def subscriptions(self) -> list[Subscription]:
-        """Every subscription (one user), by endpoint."""
+        """Every subscription of a device that is not revoked (one user), by endpoint."""
         ...
 
     async def mark_ok(self, endpoint: str, at: datetime) -> None:
@@ -64,7 +74,7 @@ class PushStore(Protocol):
     async def set_retry_after(self, endpoint: str, until: datetime) -> None: ...
 
     async def drop(self, endpoint: str) -> None:
-        """The push service says the subscription is gone (404/410): forget it."""
+        """Forget the subscription: gone at the push service, or no longer an allowed host."""
         ...
 
     async def active_reminders(self) -> list[Reminder]: ...
@@ -80,6 +90,13 @@ class PushStore(Protocol):
         ...
 
 
+# Locks the device row: a revoke (an UPDATE of that row) and a subscribe never interleave.
+_DEVICE_ALIVE = "SELECT revoked_at IS NULL FROM yawmi.devices WHERE id = $1 FOR UPDATE"
+
+_OTHERS_OF_DEVICE = """
+SELECT count(*) FROM yawmi.push_subscriptions WHERE device_id = $1 AND endpoint <> $2
+"""
+
 _UPSERT = """
 INSERT INTO yawmi.push_subscriptions (endpoint, device_id, p256dh, auth)
 VALUES ($1, $2, $3, $4)
@@ -93,9 +110,11 @@ SET device_id = excluded.device_id,
 _DELETE_OWN = "DELETE FROM yawmi.push_subscriptions WHERE endpoint = $1 AND device_id = $2"
 
 _SUBSCRIPTIONS = """
-SELECT endpoint, p256dh, auth, device_id, retry_after, last_ok_at
-FROM yawmi.push_subscriptions
-ORDER BY endpoint
+SELECT s.endpoint, s.p256dh, s.auth, s.device_id, s.retry_after, s.last_ok_at
+FROM yawmi.push_subscriptions AS s
+JOIN yawmi.devices AS d ON d.id = s.device_id
+WHERE d.revoked_at IS NULL
+ORDER BY s.endpoint
 """
 
 _MARK_OK = (
@@ -118,6 +137,8 @@ RETURNING reminder_id
 """
 
 ALL_SQL = (
+    _DEVICE_ALIVE,
+    _OTHERS_OF_DEVICE,
     _UPSERT,
     _DELETE_OWN,
     _SUBSCRIPTIONS,
@@ -135,8 +156,14 @@ class AsyncpgPushStore:
 
     async def upsert_subscription(
         self, device_id: UUID, endpoint: str, p256dh: str, auth: str
-    ) -> None:
-        await self._pool.execute(_UPSERT, endpoint, device_id, p256dh, auth)
+    ) -> UpsertResult:
+        async with self._pool.acquire() as conn, conn.transaction():
+            if not await conn.fetchval(_DEVICE_ALIVE, device_id):
+                return "revoked"
+            if await conn.fetchval(_OTHERS_OF_DEVICE, device_id, endpoint) >= MAX_PER_DEVICE:
+                return "limit"
+            await conn.execute(_UPSERT, endpoint, device_id, p256dh, auth)
+        return "ok"
 
     async def delete_subscription(self, device_id: UUID, endpoint: str) -> None:
         await self._pool.execute(_DELETE_OWN, endpoint, device_id)

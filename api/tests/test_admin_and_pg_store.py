@@ -7,7 +7,7 @@ pool. The statements are checked against a real database only once the schema (t
 
 import argparse
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Self
 from uuid import uuid4
 
 import pytest
@@ -156,6 +156,20 @@ class FakePool:
         self.calls.append(("fetchrow", sql, args))
         return self._fetchrow
 
+    def acquire(self) -> "FakePool":
+        """`async with pool.acquire() as conn`: the fake is its own connection."""
+        return self
+
+    def transaction(self) -> "FakePool":
+        return self
+
+    async def __aenter__(self) -> Self:
+        self.calls.append(("begin", "", ()))
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        self.calls.append(("end", "", ()))
+
 
 async def test_pg_rotate_refresh_reports_whether_a_row_changed() -> None:
     device_id = uuid4()
@@ -170,6 +184,18 @@ async def test_pg_revoke_reports_whether_the_device_exists() -> None:
     device_id = uuid4()
     assert await AsyncpgDeviceStore(FakePool(execute="UPDATE 1")).revoke(device_id) is True  # type: ignore[arg-type]
     assert await AsyncpgDeviceStore(FakePool(execute="UPDATE 0")).revoke(device_id) is False  # type: ignore[arg-type]
+
+
+async def test_pg_revoke_deletes_the_devices_push_subscriptions_in_the_same_transaction() -> None:
+    device_id = uuid4()
+    pool = FakePool(execute="UPDATE 1")
+    await AsyncpgDeviceStore(pool).revoke(device_id)  # type: ignore[arg-type]
+    kinds = [c[0] for c in pool.calls]
+    assert kinds[0] == "begin" and kinds[-1] == "end"
+    statements = [c for c in pool.calls if c[0] == "execute"]
+    assert "UPDATE yawmi.devices" in statements[0][1]
+    assert "DELETE FROM yawmi.push_subscriptions WHERE device_id = $1" in statements[1][1]
+    assert statements[1][2] == (device_id,)
 
 
 async def test_pg_get_device_returns_none_when_missing_or_a_device_when_found() -> None:

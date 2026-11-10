@@ -7,9 +7,13 @@
 * `DELETE /v1/push/subscribe` `{endpoint}` -> 204: removes it if the calling device owns it
   (idempotent: an unknown or foreign endpoint is a 204 that changes nothing).
 
-Any paired device may subscribe except a service token. Endpoints must be `https` URLs with a
-host and no credentials; every field is bounded. This module imports neither pywebpush nor
-aiohttp: sending lives in `yawmi.push.sender`, loaded only when push is enabled.
+Any paired device may subscribe except a service token, and not once it is revoked (403). A
+device holds at most `MAX_PER_DEVICE` subscriptions (409 beyond). Endpoints pass the shared
+check in `yawmi.push.hosts`: `https`, no credentials, no IP literal, port 443, and a host on the
+settings' allow-list of push services (422 `endpoint_not_allowed` otherwise); the sender checks
+again before every send. Every field is bounded, and `p256dh` must be a point on P-256. This
+module imports neither pywebpush nor aiohttp: sending lives in `yawmi.push.sender`, loaded only
+when push is enabled.
 """
 
 import base64
@@ -17,17 +21,19 @@ import binascii
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import urlsplit
 
+from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 from pydantic_core import PydanticCustomError
 
-from yawmi.auth.deps import CurrentDevice, SettingsDep, require_kind
+from yawmi.auth.deps import CurrentDevice, SettingsDep, forbidden, require_kind
 from yawmi.auth.tokens import AccessClaims
 from yawmi.db.pool import get_pool
 from yawmi.errors import FORBIDDEN, INVALID, UNAUTHORIZED, ErrorDetail
-from yawmi.push.store import AsyncpgPushStore, PushStore
+from yawmi.push.hosts import endpoint_problem
+from yawmi.push.store import MAX_PER_DEVICE, AsyncpgPushStore, PushStore
 from yawmi.push.vapid import VapidKeyError, load_private_key, public_key_b64url
 from yawmi.text import StorableText
 
@@ -37,7 +43,9 @@ SUBSCRIBER_KINDS = ("iphone", "watch", "web")  # every kind but `service`
 MAX_ENDPOINT = 2048
 PUSH_OFF = "الإشعارات غير مفعّلة"
 
-_NOT_HTTPS = "عنوان الاشتراك يجب أن يكون https بمضيف وبلا بيانات دخول"
+_NOT_HTTPS = "عنوان الاشتراك يجب أن يكون https بمضيف وبلا بيانات دخول ولا عنوان IP ولا منفذ آخر"
+_NOT_ALLOWED = "عنوان الاشتراك ليس من خدمات الدفع المسموح بها"
+TOO_MANY = "بلغ هذا الجهاز الحد الأقصى من الاشتراكات"
 _BAD_P256DH = "مفتاح p256dh ليس نقطة P-256 غير مضغوطة"
 _BAD_AUTH = "سر auth ليس 16 بايتاً"
 
@@ -63,6 +71,10 @@ class SubscriptionKeys(BaseModel):
         raw = _b64url_bytes(value)
         if raw is None or len(raw) != 65 or raw[0] != 4:
             raise PydanticCustomError("p256dh_invalid", _BAD_P256DH)
+        try:
+            ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), raw)
+        except ValueError:  # 65 bytes, but not a point on the curve
+            raise PydanticCustomError("p256dh_invalid", _BAD_P256DH) from None
         return value
 
     @field_validator("auth")
@@ -81,22 +93,25 @@ Endpoint = Annotated[
 
 
 def _check_endpoint(value: str) -> str:
-    try:
-        parts = urlsplit(value)
-        host = parts.hostname
-    except ValueError:
-        host = None
-        parts = None
-    if (
-        parts is None
-        or parts.scheme != "https"
-        or not host
-        or parts.username is not None
-        or parts.password is not None
-        or any(c.isspace() or not c.isprintable() for c in value)
-    ):
+    """The shape half of the shared check; the allow-list half needs the settings (route)."""
+    if endpoint_problem(value, None) is not None:
         raise PydanticCustomError("endpoint_not_https", _NOT_HTTPS)
     return value
+
+
+def _require_allowed_host(endpoint: str, allowed: list[str]) -> None:
+    """422 in the app's usual shape when the endpoint's host is not an allowed push service."""
+    if endpoint_problem(endpoint, allowed) is not None:
+        raise RequestValidationError(
+            [
+                {
+                    "loc": ("body", "endpoint"),
+                    "type": "endpoint_not_allowed",
+                    "msg": _NOT_ALLOWED,
+                    "input": None,
+                }
+            ]
+        )
 
 
 class SubscribeIn(BaseModel):
@@ -131,6 +146,7 @@ PushStoreDep = Annotated[PushStore, Depends(get_push_store)]
 Subscriber = Annotated[AccessClaims, Depends(require_kind(*SUBSCRIBER_KINDS))]
 
 UNAVAILABLE = {503: {"model": ErrorDetail, "description": PUSH_OFF}}
+CONFLICT = {409: {"model": ErrorDetail, "description": TOO_MANY}}
 
 
 @lru_cache(maxsize=4)
@@ -159,12 +175,22 @@ async def vapid_public_key(_: CurrentDevice, settings: SettingsDep) -> VapidKeyO
     summary="تسجيل اشتراك الإشعارات لهذا الجهاز",
     description=(
         "يحفظ اشتراك Web Push مربوطاً بالجهاز المصادَق، ويستبدل مفاتيح العنوان نفسه إن وُجد ويلغي "
-        "أي تأجيل عليه. العنوان https فقط. رمز الخدمة لا يشترك."
+        "أي تأجيل عليه. العنوان https على خدمة دفع مسموح بها فقط. رمز الخدمة والجهاز الملغى لا "
+        f"يشتركان، وللجهاز {MAX_PER_DEVICE} اشتراكات على الأكثر."
     ),
-    responses={**UNAUTHORIZED, **FORBIDDEN, **INVALID},
+    responses={**UNAUTHORIZED, **FORBIDDEN, **CONFLICT, **INVALID},
 )
-async def subscribe(body: SubscribeIn, claims: Subscriber, store: PushStoreDep) -> Response:
-    await store.upsert_subscription(claims.sub, body.endpoint, body.keys.p256dh, body.keys.auth)
+async def subscribe(
+    body: SubscribeIn, claims: Subscriber, store: PushStoreDep, settings: SettingsDep
+) -> Response:
+    _require_allowed_host(body.endpoint, settings.push_hosts)
+    result = await store.upsert_subscription(
+        claims.sub, body.endpoint, body.keys.p256dh, body.keys.auth
+    )
+    if result == "revoked":
+        raise forbidden()
+    if result == "limit":
+        raise HTTPException(status_code=409, detail=TOO_MANY)
     return Response(status_code=204)
 
 
