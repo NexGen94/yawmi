@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { Unauthorized } from '../src/api/auth';
 import { installFlushTriggers } from '../src/sync/triggers';
 
 // The module only needs `document` and `window` as event targets, so plain EventTargets stand
@@ -98,6 +99,53 @@ describe('installFlushTriggers', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
       expect(unhandled).not.toHaveBeenCalled();
       expect(flushFn).toHaveBeenCalledTimes(2);
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
+  });
+
+  it('hands a session that is gone (Unauthorized) to the app instead of swallowing it', async () => {
+    const dead = new Unauthorized();
+    const flushFn = vi.fn().mockRejectedValue(dead);
+    const onError = vi.fn();
+    uninstall = installFlushTriggers(flushFn, { onError });
+
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    expect(onError).toHaveBeenCalledWith(dead);
+
+    win.dispatchEvent(new Event('online'));
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(2));
+  });
+
+  it('hands every other failure to the app too, including a synchronous throw', async () => {
+    const boom = new Error('boom');
+    const flushFn = vi.fn(() => {
+      throw boom;
+    });
+    const onError = vi.fn();
+    uninstall = installFlushTriggers(flushFn, { onError });
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(boom));
+  });
+
+  it('does not call onError for a flush that succeeds or only finds the network down', async () => {
+    const flushFn = vi.fn().mockResolvedValue({ sent: 0, offline: true });
+    const onError = vi.fn();
+    uninstall = installFlushTriggers(flushFn, { onError });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('survives an onError handler that throws', async () => {
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      const onError = vi.fn(() => {
+        throw new Error('handler bug');
+      });
+      uninstall = installFlushTriggers(vi.fn().mockRejectedValue(new Unauthorized()), { onError });
+      await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(unhandled).not.toHaveBeenCalled();
     } finally {
       process.off('unhandledRejection', unhandled);
     }
