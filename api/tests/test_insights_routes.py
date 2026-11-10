@@ -354,7 +354,7 @@ async def test_postgres_store_first_closure_wins_and_lists():
     pool = await create_pool(os.environ["TEST_DATABASE_URL"])
     day = date(2099, 1, 1)
     try:
-        await pool.execute("DELETE FROM ai_insights WHERE day = $1", day)
+        await pool.execute("DELETE FROM yawmi.ai_insights WHERE day = $1", day)
         store = AsyncpgInsightStore(pool)
         reply = InsightResponse(lines=["أ"], question=None, source_ids=["s"], priorities=[])
         first = await store.save_closure(new_insight("evening", day, "anthropic", "m", "h", reply))
@@ -368,5 +368,133 @@ async def test_postgres_store_first_closure_wins_and_lists():
         ]
         assert await store.list_reviews("evening", 5, day) == []
     finally:
-        await pool.execute("DELETE FROM ai_insights WHERE day = $1", day)
+        await pool.execute("DELETE FROM yawmi.ai_insights WHERE day = $1", day)
         await pool.close()
+
+
+# --- fix round 1: text guard, wording, size caps -------------------------------------------
+
+BAD_TEXTS = [("lone surrogate", "س\ud800س"), ("NUL", "a\x00b")]
+
+
+def _bad_bodies(route: str, text: str) -> list[tuple[dict[str, Any], str]]:
+    base = ask_body if route == "/v1/ask" else close_body
+    bodies: list[tuple[dict[str, Any], str]] = [
+        (base(context={"k": text}), "context"),
+        (base(context={text: 1}), "context"),
+        (base(sources=[{"id": "a", "kind": "k", "text": text}]), "sources"),
+        (base(sources=[{"id": text, "kind": "k", "text": "t"}]), "sources"),
+        (base(sources=[{"id": "a", "kind": text, "text": "t"}]), "sources"),
+    ]
+    if route == "/v1/ask":
+        bodies.append((ask_body(question=text), "question"))
+    return bodies
+
+
+@pytest.mark.parametrize("route", ["/v1/ask", "/v1/day/close"])
+@pytest.mark.parametrize(("label", "text"), BAD_TEXTS)
+async def test_unstorable_text_is_a_422_not_a_500(client, anthropic, route, label, text):
+    route_mock = anthropic.mock(return_value=anthropic_reply(GOOD))
+    for body, field in _bad_bodies(route, text):
+        raw = json.dumps(body, ensure_ascii=True).encode()  # ascii escapes carry the surrogate
+        response = await client.post(
+            route, content=raw, headers={**auth(), "Content-Type": "application/json"}
+        )
+        assert response.status_code == 422, (label, field, response.text)
+        payload = response.json()
+        assert payload["detail"] == "طلب غير صالح"
+        [error] = payload["errors"]
+        assert error["loc"][:2] == ["body", field]
+        # pydantic itself rejects a lone surrogate in a plain `str` field (string_unicode)
+        assert error["type"] in {"text_invalid", "string_unicode"}
+        if field == "context":
+            assert error["type"] == "text_invalid"
+    assert route_mock.call_count == 0
+
+
+def test_route_messages_are_gender_neutral():
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    from yawmi.routes.insights import USER_MESSAGES
+
+    if shutil.which("node") is None:
+        pytest.skip("node is not installed")
+    module = str(Path(__file__).resolve().parents[1] / "eval" / "promptfoo_support.js")
+    script = (
+        "const m = require(process.argv[1]); let d='';"
+        "process.stdin.on('data', x => d += x);"
+        "process.stdin.on('end', () => console.log(JSON.stringify("
+        "JSON.parse(d).map(t => m.runChecks({lines:[t],question:null,source_ids:[],priorities:[]},"
+        "{config:{checks:['no_gendered_forms'],request:{}}})))));"
+    )
+    messages = sorted(USER_MESSAGES)
+    assert len(messages) >= 5
+    run = subprocess.run(
+        ["node", "-e", script, module],
+        input=json.dumps(messages),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    for message, result in zip(messages, json.loads(run.stdout), strict=True):
+        assert result["pass"], (message, result)
+
+
+async def test_oversized_inputs_are_422(client, anthropic):
+    route_mock = anthropic.mock(return_value=anthropic_reply(GOOD))
+    cases = [
+        ("question", "/v1/ask", ask_body(question="س" * 501), ["body", "question"]),
+        ("context", "/v1/ask", ask_body(context={"k": "x" * 20000}), ["body", "context"]),
+        ("context", "/v1/day/close", close_body(context={"k": "x" * 20000}), ["body", "context"]),
+        (
+            "id",
+            "/v1/ask",
+            ask_body(sources=[{"id": "i" * 65, "kind": "k", "text": "t"}]),
+            ["body", "sources", 0, "id"],
+        ),
+        (
+            "kind",
+            "/v1/ask",
+            ask_body(sources=[{"id": "i", "kind": "k" * 33, "text": "t"}]),
+            ["body", "sources", 0, "kind"],
+        ),
+        (
+            "text",
+            "/v1/day/close",
+            close_body(sources=[{"id": "i", "kind": "k", "text": "ن" * 501}]),
+            ["body", "sources", 0, "text"],
+        ),
+    ]
+    for label, route, body, loc in cases:
+        response = await client.post(route, json=body, headers=auth())
+        assert response.status_code == 422, label
+        assert response.json()["errors"][0]["loc"] == loc, label
+    assert route_mock.call_count == 0
+
+
+async def test_caps_allow_the_limits_exactly(client, anthropic):
+    cited = {**GOOD, "source_ids": ["i" * 64], "priorities": []}
+    anthropic.mock(return_value=anthropic_reply(cited))
+    sources = [{"id": "i" * 64, "kind": "k" * 32, "text": "ن" * 500}] * 50
+    response = await client.post(
+        "/v1/ask", json=ask_body(sources=sources, question="س" * 500), headers=auth()
+    )
+    assert response.status_code == 200
+
+
+async def test_ask_strips_raw_samples_before_the_provider(client, anthropic):
+    route = anthropic.mock(return_value=anthropic_reply(GOOD))
+    ctx = {"raw_samples": [{"t": "2026-11-10T01:00:00Z"}]}
+    response = await client.post("/v1/ask", json=ask_body(context=ctx), headers=auth())
+    assert response.status_code == 200
+    assert "raw_samples" not in route.calls.last.request.content.decode()
+
+
+async def test_the_question_never_reaches_a_log(client, anthropic, caplog):
+    anthropic.mock(return_value=anthropic_reply(GOOD))
+    with caplog.at_level(logging.DEBUG):
+        await client.post("/v1/ask", json=ask_body(question="سؤال-خاص-فريد"), headers=auth())
+    assert "سؤال-خاص-فريد" not in caplog.text

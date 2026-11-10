@@ -11,17 +11,20 @@ The client sends the day's aggregates and the citable sources; the grounded `Ins
 Provider failures never reach the client as a 500 and never carry a provider message or key:
 a refusal or a withheld raw-health payload is a 422 (`ai_refusal`, `raw_health_not_allowed`), a
 reply still invalid after the repair attempt or any provider failure is a 502, a missing key a 503.
+`reviews` is open to device tokens only (`service` tokens get 403), stricter than `GET /v1/events`.
 This module is discovered automatically (see `yawmi.routes`).
 """
 
-from datetime import date, datetime, timedelta
+import json
+from datetime import date, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, field_validator
+from pydantic_core import PydanticCustomError
 
 from yawmi.ai.base import (
     PolicyViolation,
@@ -41,16 +44,35 @@ from yawmi.ai.store import (
 from yawmi.auth.deps import SettingsDep, require_kind
 from yawmi.auth.tokens import AccessClaims
 from yawmi.db.pool import get_pool
+from yawmi.domain.days import day_key
 from yawmi.events import models as event_models
+from yawmi.events.models import check_text
 from yawmi.routes.devices import ErrorDetail
 
 router = APIRouter(prefix="/v1", tags=["insights"])
 
 # `service` tokens revoke devices; they have no day to close or question to ask
 SOURCE_KINDS = ("iphone", "watch", "web")
+# Caps on what a client may send (all 422 when exceeded):
+#   question <= 500 characters; context <= 16 KiB serialised; <= 50 sources, each with
+#   id <= 64, kind <= 32 and text <= 500 characters. A day's aggregates fit well inside them.
 MAX_SOURCES = 50
 MAX_QUESTION = 500
-RIYADH_OFFSET = timedelta(hours=3)  # UTC+3, no daylight saving
+MAX_CONTEXT_BYTES = 16 * 1024
+MAX_SOURCE_ID = 64
+MAX_SOURCE_KIND = 32
+MAX_SOURCE_TEXT = 500
+TEXT_INVALID = "text_invalid"
+
+# Every user-visible message of this module (checked for gendered wording by the tests).
+MSG_REFUSAL = "تعذّر الرد على هذا الطلب"
+MSG_RAW_HEALTH = "لا تُرسل بيانات صحية خام إلى هذا المزوّد"
+MSG_INVALID_REPLY = "تعذّر إنتاج ردّ صالح؛ يمكن المحاولة لاحقاً"
+MSG_NOT_CONFIGURED = "الخدمة الذكية غير مفعّلة"
+MSG_UNAVAILABLE = "تعذّر الاتصال بالخدمة الذكية؛ يمكن المحاولة لاحقاً"
+USER_MESSAGES = frozenset(
+    {MSG_REFUSAL, MSG_RAW_HEALTH, MSG_INVALID_REPLY, MSG_NOT_CONFIGURED, MSG_UNAVAILABLE}
+)
 
 
 def get_insight_store(request: Request) -> InsightStore:
@@ -82,19 +104,64 @@ ServiceDep = Annotated[InsightService, Depends(get_insight_service)]
 DeviceDep = Annotated[AccessClaims, Depends(require_kind(*SOURCE_KINDS))]
 
 
-class DayCloseRequest(BaseModel):
+class ClientSource(Source):
+    """A citable fact from the client, with bounded field sizes."""
+
+    id: str = Field(max_length=MAX_SOURCE_ID)
+    kind: str = Field(max_length=MAX_SOURCE_KIND)
+    text: str = Field(max_length=MAX_SOURCE_TEXT)
+
+
+def _clean_text(value: Any) -> Any:
+    check_text(value, TEXT_INVALID)
+    return value
+
+
+def _bounded_context(value: dict[str, Any]) -> dict[str, Any]:
+    _clean_text(value)
+    try:
+        size = len(json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+    except ValueError:
+        raise PydanticCustomError("context_not_finite", "الملخصات تحوي رقماً غير منتهٍ") from None
+    if size > MAX_CONTEXT_BYTES:
+        raise PydanticCustomError("context_too_large", "الملخصات أكبر من الحد المسموح")
+    return value
+
+
+class _ClientInput(BaseModel):
+    """Shared checks for the free text a client sends: storable, encodable, bounded."""
+
     day: date
+    # TODO(#19): context and sources are client-supplied aggregates until the server builds them
+    # from stored data (tasks 8b/10b); then client sources are ignored for day/close.
     context: dict[str, Any] = Field(default_factory=dict, description="ملخصات اليوم المجمّعة")
-    sources: list[Source] = Field(default_factory=list, max_length=MAX_SOURCES)
+    sources: list[ClientSource] = Field(default_factory=list, max_length=MAX_SOURCES)
+
+    @field_validator("context")
+    @classmethod
+    def _context_ok(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return _bounded_context(value)
+
+    @field_validator("sources")
+    @classmethod
+    def _sources_ok(cls, value: list[ClientSource]) -> list[ClientSource]:
+        _clean_text([s.model_dump() for s in value])
+        return value
 
 
-class AskRequest(BaseModel):
-    day: date
+class DayCloseRequest(_ClientInput):
+    pass
+
+
+class AskRequest(_ClientInput):
     question: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_QUESTION)
     ]
-    context: dict[str, Any] = Field(default_factory=dict)
-    sources: list[Source] = Field(default_factory=list, max_length=MAX_SOURCES)
+
+    @field_validator("question")
+    @classmethod
+    def _question_ok(cls, value: str) -> str:
+        return _clean_text(value)
 
 
 class InsightOut(InsightResponse):
@@ -120,12 +187,8 @@ def _out(row: StoredInsight) -> InsightOut:
     )
 
 
-def _riyadh_today() -> date:
-    return (event_models.server_now() + RIYADH_OFFSET).date()
-
-
-def _check_day(day: date) -> None:
-    if day > _riyadh_today():
+def _check_day(day: date, tz: str) -> None:
+    if day > day_key(event_models.server_now(), tz):
         raise RequestValidationError(
             [{"type": "day_in_future", "loc": ("body", "day"), "msg": "future day", "input": None}]
         )
@@ -141,15 +204,15 @@ async def _generate(service: InsightService, req: InsightRequest) -> InsightResp
     try:
         return await service.generate(req)
     except ProviderRefusal:
-        return _problem(422, "تعذّر الرد على هذا الطلب", "ai_refusal")
+        return _problem(422, MSG_REFUSAL, "ai_refusal")
     except PolicyViolation:
-        return _problem(422, "لا تُرسل بيانات صحية خام إلى هذا المزوّد", "raw_health_not_allowed")
+        return _problem(422, MSG_RAW_HEALTH, "raw_health_not_allowed")
     except InsightInvalid:
-        return _problem(502, "تعذّر إنتاج ردّ صالح، حاول لاحقاً", "ai_invalid_reply")
+        return _problem(502, MSG_INVALID_REPLY, "ai_invalid_reply")
     except ProviderNotConfigured:
-        return _problem(503, "الخدمة الذكية غير مفعّلة", "ai_not_configured")
+        return _problem(503, MSG_NOT_CONFIGURED, "ai_not_configured")
     except ProviderError:  # includes empty/malformed replies, transport errors, truncation
-        return _problem(502, "تعذّر الاتصال بالخدمة الذكية، حاول لاحقاً", "ai_unavailable")
+        return _problem(502, MSG_UNAVAILABLE, "ai_unavailable")
 
 
 _ERRORS: dict[int | str, dict[str, Any]] = {
@@ -167,14 +230,15 @@ _ERRORS: dict[int | str, dict[str, Any]] = {
     summary="إغلاق اليوم بملخص من سطرين (متكرر الأثر)",
     description=(
         "يستلم ملخصات اليوم ومصادره، ويعيد ملخصاً من سطرين كحد أقصى لا يستشهد إلا بمصادر الطلب. "
-        "أول إغلاق لليوم يُحفظ، وكل تكرار لليوم نفسه يعيده دون استدعاء المزوّد."
+        "أول إغلاق لليوم يُحفظ، وكل تكرار لليوم نفسه يعيده دون استدعاء المزوّد. "
+        "الملخصات والمصادر يرسلها العميل حالياً إلى أن يبنيها الخادم (المهمتان 8b و10b)."
     ),
     responses=_ERRORS,
 )
 async def close_day(
     body: DayCloseRequest, _: DeviceDep, store: StoreDep, service: ServiceDep, settings: SettingsDep
 ) -> InsightOut | JSONResponse:
-    _check_day(body.day)
+    _check_day(body.day, settings.tz)
     existing = await store.get_closure(body.day)
     if existing is not None:
         return _out(existing)
@@ -203,9 +267,9 @@ async def close_day(
     responses=_ERRORS,
 )
 async def ask(
-    body: AskRequest, _: DeviceDep, service: ServiceDep
+    body: AskRequest, _: DeviceDep, service: ServiceDep, settings: SettingsDep
 ) -> InsightResponse | JSONResponse:
-    _check_day(body.day)
+    _check_day(body.day, settings.tz)
     req = InsightRequest(
         kind="ask", day=body.day, question=body.question, context=body.context, sources=body.sources
     )

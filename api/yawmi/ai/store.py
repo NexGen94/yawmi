@@ -110,7 +110,7 @@ class AsyncpgInsightStore:
 
     async def get_closure(self, day: date) -> StoredInsight | None:
         row = await self._pool.fetchrow(
-            f"SELECT {_COLUMNS} FROM ai_insights WHERE kind = $1 AND day = $2"
+            f"SELECT {_COLUMNS} FROM yawmi.ai_insights WHERE kind = $1 AND day = $2"
             " ORDER BY created_at, id LIMIT 1",
             CLOSURE_KIND,
             day,
@@ -122,7 +122,7 @@ class AsyncpgInsightStore:
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute("SELECT pg_advisory_xact_lock($1, $2)", *CLOSURE_LOCK_KEYS)
             row = await conn.fetchrow(
-                f"SELECT {_COLUMNS} FROM ai_insights WHERE kind = $1 AND day = $2"
+                f"SELECT {_COLUMNS} FROM yawmi.ai_insights WHERE kind = $1 AND day = $2"
                 " ORDER BY created_at, id LIMIT 1",
                 CLOSURE_KIND,
                 insight.day,
@@ -130,7 +130,7 @@ class AsyncpgInsightStore:
             if row is not None:
                 return _from_record(row)
             row = await conn.fetchrow(
-                "INSERT INTO ai_insights (id, kind, day, provider, model, request_hash, lines,"
+                "INSERT INTO yawmi.ai_insights (id, kind, day, provider, model, request_hash, lines,"
                 " question, source_ids, priorities)"
                 " VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb, $10::jsonb)"
                 f" RETURNING {_COLUMNS}",
@@ -150,7 +150,7 @@ class AsyncpgInsightStore:
 
     async def list_reviews(self, kind: str, limit: int, before: date | None) -> list[StoredInsight]:
         rows = await self._pool.fetch(
-            f"SELECT {_COLUMNS} FROM ai_insights WHERE kind = $1"
+            f"SELECT {_COLUMNS} FROM yawmi.ai_insights WHERE kind = $1"
             " AND ($2::date IS NULL OR day < $2) ORDER BY day DESC, created_at DESC, id LIMIT $3",
             kind,
             before,
