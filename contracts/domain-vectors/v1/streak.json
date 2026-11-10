@@ -1,0 +1,1925 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "value": 0
+      },
+      "id": "streak-001",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-08",
+        "week_start": "sun"
+      },
+      "source": "قبل start_day: صفر"
+    },
+    {
+      "expect": {
+        "value": 3
+      },
+      "id": "streak-002",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "اليوم محقق فيُعد"
+    },
+    {
+      "expect": {
+        "value": 3
+      },
+      "id": "streak-003",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-12",
+        "week_start": "sun"
+      },
+      "source": "اليوم بلا سجل محايد لا يكسر"
+    },
+    {
+      "expect": {
+        "value": 0
+      },
+      "id": "streak-004",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-12",
+        "week_start": "sun"
+      },
+      "source": "يوم 2 فائت: تنقطع"
+    },
+    {
+      "expect": {
+        "value": 3
+      },
+      "id": "streak-005",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-12",
+        "week_start": "sun"
+      },
+      "source": "تعديل بأثر رجعي للحالة 004: يوم 2 سُجل لاحقاً"
+    },
+    {
+      "expect": {
+        "value": 0
+      },
+      "id": "streak-006",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "missed",
+            "value": null
+          }
+        ],
+        "today": "2026-11-12",
+        "week_start": "sun"
+      },
+      "source": "missed صريح يقطع"
+    },
+    {
+      "expect": {
+        "value": 2
+      },
+      "id": "streak-007",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "skip",
+            "value": null
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "تخطٍّ يجسر ولا يُعد"
+    },
+    {
+      "expect": {
+        "value": 2
+      },
+      "id": "streak-008",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "إجازة تجسر ولا تُعد"
+    },
+    {
+      "expect": {
+        "value": 3
+      },
+      "id": "streak-009",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "weekdays",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": 6
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-16",
+        "week_start": "sun"
+      },
+      "source": "الأيام غير المجدولة تجسر"
+    },
+    {
+      "expect": {
+        "value": 3
+      },
+      "id": "streak-010",
+      "input": {
+        "habit": {
+          "anchor_day": "2026-11-09",
+          "end_day": null,
+          "every_n": 3,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-17",
+        "week_start": "sun"
+      },
+      "source": "كل 3 أيام: ثلاث فترات"
+    },
+    {
+      "expect": {
+        "value": 1
+      },
+      "id": "streak-011",
+      "input": {
+        "habit": {
+          "anchor_day": "2026-11-09",
+          "end_day": null,
+          "every_n": 3,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-17",
+        "week_start": "sun"
+      },
+      "source": "كل 3 أيام: فاتت d3"
+    },
+    {
+      "expect": {
+        "value": 3
+      },
+      "id": "streak-012",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-11",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "تحدٍّ مكتمل في آخر يوم"
+    },
+    {
+      "expect": {
+        "value": 3
+      },
+      "id": "streak-013",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-11",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-29",
+        "week_start": "sun"
+      },
+      "source": "تحدٍّ مكتمل بعد الانتهاء"
+    },
+    {
+      "expect": {
+        "value": 0
+      },
+      "id": "streak-014",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-11",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-12",
+        "week_start": "sun"
+      },
+      "source": "آخر يوم فائت يُحكم صارماً بعد الانتهاء"
+    },
+    {
+      "expect": {
+        "value": 2
+      },
+      "id": "streak-015",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-11",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "يوم النهاية نفسه حالي فلا يكسر"
+    },
+    {
+      "expect": {
+        "value": 2
+      },
+      "id": "streak-016",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-16",
+        "week_start": "sun"
+      },
+      "source": "أسبوعان محققان والحالي محايد"
+    },
+    {
+      "expect": {
+        "value": 3
+      },
+      "id": "streak-017",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-17",
+        "week_start": "sun"
+      },
+      "source": "الأسبوع الحالي يُعد حين يتحقق"
+    },
+    {
+      "expect": {
+        "value": 2
+      },
+      "id": "streak-018",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-09",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-10",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-11",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-12",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-13",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-14",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-22",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-23",
+        "week_start": "sun"
+      },
+      "source": "أسبوع إجازة كامل يجسر ولا يُعد"
+    },
+    {
+      "expect": {
+        "value": 2
+      },
+      "id": "streak-019",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "skip",
+            "value": null
+          },
+          {
+            "day": "2026-11-09",
+            "status": "skip",
+            "value": null
+          },
+          {
+            "day": "2026-11-10",
+            "status": "skip",
+            "value": null
+          },
+          {
+            "day": "2026-11-11",
+            "status": "skip",
+            "value": null
+          },
+          {
+            "day": "2026-11-12",
+            "status": "skip",
+            "value": null
+          },
+          {
+            "day": "2026-11-13",
+            "status": "skip",
+            "value": null
+          },
+          {
+            "day": "2026-11-14",
+            "status": "skip",
+            "value": null
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-23",
+        "week_start": "sun"
+      },
+      "source": "أسبوع تخطٍّ كامل يجسر"
+    },
+    {
+      "expect": {
+        "value": 1
+      },
+      "id": "streak-020",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-23",
+        "week_start": "sun"
+      },
+      "source": "أسبوع بلا سجلات يقطع"
+    },
+    {
+      "expect": {
+        "value": 1
+      },
+      "id": "streak-021",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-09",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-10",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-11",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-12",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-13",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-23",
+        "week_start": "sun"
+      },
+      "source": "إجازة 6 أيام من 7 ليست محايدة"
+    },
+    {
+      "expect": {
+        "value": 2
+      },
+      "id": "streak-022",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "month",
+          "schedule_kind": "every_day",
+          "start_day": "2026-09-01",
+          "target_per_period": 2.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-09-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-09-20",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-10-01",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-02",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-03",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-04",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-05",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-06",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-07",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-08",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-09",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-10",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-11",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-12",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-13",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-14",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-15",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-16",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-17",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-18",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-19",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-20",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-21",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-22",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-23",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-24",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-25",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-26",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-27",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-28",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-29",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-30",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-10-31",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-05",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "شهرية: سبتمبر ونوفمبر وأكتوبر محايد"
+    },
+    {
+      "expect": {
+        "value": 3
+      },
+      "id": "streak-023",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-14",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "سجل مستقبلي يُهمل"
+    },
+    {
+      "expect": {
+        "value": 2
+      },
+      "id": "streak-024",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 5.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-13",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-14",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-18",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-19",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-22",
+        "week_start": "sun"
+      },
+      "source": "أسبوع أول مقصوص + كامل = 2"
+    },
+    {
+      "expect": {
+        "value": 0
+      },
+      "id": "streak-025",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 5.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-13",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-14",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-18",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-22",
+        "week_start": "sun"
+      },
+      "source": "أسبوع ثانٍ ناقص يقطع"
+    },
+    {
+      "expect": {
+        "value": 5
+      },
+      "id": "streak-026",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-12-07",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-08",
+          "target_per_period": 5.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-13",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-14",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-18",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-19",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-20",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-21",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-22",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-23",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-24",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-25",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-26",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-27",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-28",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-29",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-30",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-04",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-05",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-06",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-07",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-12-08",
+        "week_start": "sun"
+      },
+      "source": "تحدي 30 يوماً أسبوعي من الأحد: 5 فترات"
+    },
+    {
+      "expect": {
+        "value": 0
+      },
+      "id": "streak-027",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-12-07",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-08",
+          "target_per_period": 5.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-13",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-14",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-18",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-19",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-20",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-21",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-22",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-23",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-24",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-25",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-26",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-27",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-28",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-29",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-30",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-04",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-05",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-06",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-12-08",
+        "week_start": "sun"
+      },
+      "source": "ينقص يوم النهاية: الفترة الأخيرة المقصوصة فائتة"
+    },
+    {
+      "expect": {
+        "value": 2
+      },
+      "id": "streak-028",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-16",
+        "week_start": "sat"
+      },
+      "source": "الحالة 016 ببداية السبت"
+    },
+    {
+      "expect": {
+        "value": 0
+      },
+      "id": "streak-029",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-16",
+        "week_start": "mon"
+      },
+      "source": "الحالة 016 ببداية الاثنين"
+    },
+    {
+      "expect": {
+        "value": 11
+      },
+      "id": "streak-030",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2028-02-20",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2028-02-20",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-21",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-22",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-23",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-24",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-25",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-26",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-27",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-28",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-29",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-03-01",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2028-03-01",
+        "week_start": "sun"
+      },
+      "source": "يومية تعبر يوم الكبيسة"
+    }
+  ],
+  "function": "streak",
+  "rulesVersion": 1
+}

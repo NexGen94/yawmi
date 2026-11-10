@@ -1,0 +1,138 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "value": 8.357428714953977
+      },
+      "id": "trimp-001",
+      "input": {
+        "female": false,
+        "hr_reserve": 0.5,
+        "minutes": 10
+      },
+      "source": "القيمة المرجعية للذكور: ≈ 8.357"
+    },
+    {
+      "expect": {
+        "value": 9.910700407634154
+      },
+      "id": "trimp-002",
+      "input": {
+        "female": true,
+        "hr_reserve": 0.5,
+        "minutes": 10
+      },
+      "source": "الثوابت الأنثوية (0.86، 1.67)"
+    },
+    {
+      "expect": {
+        "value": 0.0
+      },
+      "id": "trimp-003",
+      "input": {
+        "female": false,
+        "hr_reserve": 0.5,
+        "minutes": 0
+      },
+      "source": "بلا دقائق: 0"
+    },
+    {
+      "expect": {
+        "value": 0.0
+      },
+      "id": "trimp-004",
+      "input": {
+        "female": false,
+        "hr_reserve": 0.0,
+        "minutes": 10
+      },
+      "source": "بلا احتياطي نبض: 0"
+    },
+    {
+      "expect": {
+        "value": 0.0
+      },
+      "id": "trimp-005",
+      "input": {
+        "female": false,
+        "hr_reserve": 0.5,
+        "minutes": -5
+      },
+      "source": "الدقائق السالبة تُقصّ إلى 0"
+    },
+    {
+      "expect": {
+        "value": 43.6541342034608
+      },
+      "id": "trimp-006",
+      "input": {
+        "female": false,
+        "hr_reserve": 1.5,
+        "minutes": 10
+      },
+      "source": "r فوق 1 يُقصّ إلى 1"
+    },
+    {
+      "expect": {
+        "value": 43.6541342034608
+      },
+      "id": "trimp-007",
+      "input": {
+        "female": false,
+        "hr_reserve": 1.0,
+        "minutes": 10
+      },
+      "source": "r = 1 بالضبط = الحالة 006"
+    },
+    {
+      "expect": {
+        "value": 0.0
+      },
+      "id": "trimp-008",
+      "input": {
+        "female": false,
+        "hr_reserve": -0.2,
+        "minutes": 10
+      },
+      "source": "r سالب يُقصّ إلى 0"
+    },
+    {
+      "expect": {
+        "value": 142.72417311499552
+      },
+      "id": "trimp-009",
+      "input": {
+        "female": false,
+        "hr_reserve": 0.8,
+        "minutes": 60
+      },
+      "source": "ساعة بجهد عالٍ"
+    },
+    {
+      "expect": {
+        "value": 74.48194030185181
+      },
+      "id": "trimp-010",
+      "input": {
+        "female": true,
+        "hr_reserve": 0.65,
+        "minutes": 45
+      },
+      "source": "45 دقيقة بالثوابت الأنثوية"
+    },
+    {
+      "expect": {
+        "value": 18.363022820507204
+      },
+      "id": "trimp-011",
+      "input": {
+        "female": false,
+        "hr_reserve": 0.42,
+        "minutes": 30.5
+      },
+      "source": "كسور في الدقائق والاحتياطي"
+    }
+  ],
+  "function": "trimp",
+  "rulesVersion": 1
+}
