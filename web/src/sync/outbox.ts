@@ -13,14 +13,52 @@ const STORE = 'outbox';
 const EVENTS_URL = '/v1/events';
 const TIMEZONE = 'Asia/Riyadh';
 
+/**
+ * The closed set of event types the server accepts (`EventType` in `api/yawmi/events/project.py`).
+ * The server rejects a whole batch with a 422 if one event has any other type, so an unknown
+ * type is refused here, before it can reach the queue and block every later send.
+ * Replace with the generated `EventIn['type']` once `schema.d.ts` lands (16b).
+ */
+export const EVENT_TYPES = [
+  'habit_logged',
+  'habit_skipped',
+  'habit_vacation',
+  'day_closed',
+  'focus_started',
+  'focus_ended',
+  'breath_ended',
+  'mood_logged',
+  'confounder_tagged',
+  'app_opened',
+] as const;
+
+export type EventType = (typeof EVENT_TYPES)[number];
+
+/** The server requires a JSON object; the fields it expects depend on the type and are its to check. */
+export type EventPayload = Record<string, unknown>;
+
 export interface OutboxEvent {
   /** UUIDv7: sorts by creation time, and is the idempotency key on the server. */
   id: string;
-  type: string;
-  payload: unknown;
+  type: EventType;
+  payload: EventPayload;
   /** When it happened (ISO 8601, milliseconds, `Z`), not when it was sent. */
   occurred_at: string;
   tz: string;
+}
+
+/** `flush` result. `offline` is true only when a request was attempted and the network failed. */
+export interface FlushResult {
+  sent: number;
+  offline: boolean;
+}
+
+/** `enqueue` refused the event: an unknown type or a payload that is not a plain object. Nothing was stored. */
+export class InvalidEventError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidEventError';
+  }
 }
 
 interface YawmiDB extends DBSchema {
@@ -30,6 +68,19 @@ interface YawmiDB extends DBSchema {
 export type SendFn = (input: string, init: RequestInit) => Promise<Response>;
 
 let dbPromise: Promise<IDBPDatabase<YawmiDB>> | null = null;
+
+/** The millisecond timestamp inside a UUIDv7, or NaN if `id` does not look like one. */
+const idTime = (id: string): number => Number.parseInt(id.slice(0, 8) + id.slice(9, 13), 16);
+
+// Ids are the queue order, so the next id must never sort before one already issued.
+let lastIdTime = 0;
+
+/** Start the id clock from the newest queued id, so a reload (and a clock set back) keeps FIFO. */
+async function seedIdClock(db: IDBPDatabase<YawmiDB>): Promise<void> {
+  const cursor = await db.transaction(STORE).store.openCursor(null, 'prev');
+  const newest = cursor ? idTime(cursor.key) : Number.NaN;
+  if (Number.isFinite(newest)) lastIdTime = Math.max(lastIdTime, newest);
+}
 
 /** The shared connection, opened on first use. */
 export function openDb(): Promise<IDBPDatabase<YawmiDB>> {
@@ -45,10 +96,20 @@ export function openDb(): Promise<IDBPDatabase<YawmiDB>> {
       // The browser dropped the connection (Safari does this); open a new one next time.
       dbPromise = null;
     },
-  }).catch((error: unknown) => {
-    dbPromise = null;
-    throw error;
-  });
+  })
+    .then(async (db) => {
+      try {
+        await seedIdClock(db);
+      } catch (error) {
+        db.close();
+        throw error;
+      }
+      return db;
+    })
+    .catch((error: unknown) => {
+      dbPromise = null;
+      throw error;
+    });
   return dbPromise;
 }
 
@@ -59,17 +120,26 @@ export function closeDb(): void {
   void closing?.then((db) => db.close()).catch(() => undefined);
 }
 
-let lastIdTime = 0;
+function isPlainObject(value: unknown): value is EventPayload {
+  if (typeof value !== 'object' || value === null) return false;
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
 
-/** Queue an event. Resolves with its id once it is safely stored. */
-export async function enqueue(type: string, payload: unknown, occurredAt: Date = new Date()): Promise<string> {
-  // Ids are the queue order. Never reuse a millisecond so that events queued back to back keep
-  // the order they were queued in.
+/**
+ * Queue an event. Resolves with its id once it is safely stored. Rejects with `InvalidEventError`,
+ * storing nothing, if `type` is not one of `EVENT_TYPES` or `payload` is not a plain object.
+ */
+export async function enqueue(type: EventType, payload: EventPayload, occurredAt: Date = new Date()): Promise<string> {
+  if (!EVENT_TYPES.includes(type)) throw new InvalidEventError(`unknown event type: ${JSON.stringify(type)}`);
+  if (!isPlainObject(payload)) throw new InvalidEventError('event payload must be a plain object');
+  const occurred_at = occurredAt.toISOString();
+
+  const db = await openDb();
+  // Never reuse a millisecond, so that events queued back to back keep the order they were queued in.
   lastIdTime = Math.max(Date.now(), lastIdTime + 1);
   const id = uuidv7(lastIdTime);
-  const event: OutboxEvent = { id, type, payload, occurred_at: occurredAt.toISOString(), tz: TIMEZONE };
-  const db = await openDb();
-  await db.add(STORE, event);
+  await db.add(STORE, { id, type, payload, occurred_at, tz: TIMEZONE });
   return id;
 }
 
@@ -78,10 +148,10 @@ export async function pending(): Promise<number> {
   return (await openDb()).count(STORE);
 }
 
-async function sendBatch(batch: number, send: SendFn): Promise<number> {
+async function sendBatch(batch: number, send: SendFn): Promise<FlushResult> {
   const db = await openDb();
   const events = await db.getAll(STORE, null, batch);
-  if (events.length === 0) return 0;
+  if (events.length === 0) return { sent: 0, offline: false };
 
   let res: Response;
   try {
@@ -92,10 +162,14 @@ async function sendBatch(batch: number, send: SendFn): Promise<number> {
     });
   } catch (error) {
     // Offline or the connection dropped: not an error, everything stays queued for the next trigger.
-    if (error instanceof TypeError) return 0;
+    if (error instanceof TypeError) return { sent: 0, offline: true };
     throw error;
   }
 
+  // Server contract (`post_events` in api/yawmi/routes/events.py): success is exactly HTTP 200
+  // with `{accepted, duplicates}`. Anything else keeps the events. Deliberately strict: if the
+  // route ever answers 201/202, change this together with the server, or the events would be
+  // resent forever (harmless, since duplicates are ignored by id, but wasteful).
   if (res.status !== 200) throw new Error(`events rejected: HTTP ${res.status}`);
   // Delete only on an acknowledged answer that parses: a captive portal or proxy can answer 200
   // with something that is not the server's reply.
@@ -105,18 +179,18 @@ async function sendBatch(batch: number, send: SendFn): Promise<number> {
   const tx = db.transaction(STORE, 'readwrite');
   for (const event of events) void tx.store.delete(event.id);
   await tx.done;
-  return events.length;
+  return { sent: events.length, offline: false };
 }
 
-let inFlight: Promise<number> | null = null;
+let inFlight: Promise<FlushResult> | null = null;
 
 /**
  * Send up to `batch` of the oldest events in one request and delete them once the server answers
- * 200. Concurrent callers share a single request. Resolves with the number of events sent: 0 when
- * the queue is empty or the network is down. Rejects (events kept) on `Unauthorized` or any
- * answer that is not a parsable 200.
+ * 200. Concurrent callers share a single request and its result. Resolves with how many events
+ * were sent, and `offline: true` when the network was down (0 sent with `offline: false` means the
+ * queue was empty). Rejects (events kept) on `Unauthorized` or any answer that is not a parsable 200.
  */
-export function flush(batch = 100, send: SendFn = authedFetch): Promise<number> {
+export function flush(batch = 100, send: SendFn = authedFetch): Promise<FlushResult> {
   inFlight ??= sendBatch(batch, send).finally(() => {
     inFlight = null;
   });
