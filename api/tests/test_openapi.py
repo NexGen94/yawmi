@@ -176,7 +176,7 @@ def test_closed_value_sets_are_enums_in_the_contract(exporter: ModuleType) -> No
     due = schemas["HabitDue"]["properties"]
     assert _enum(due["kind"]) == ["boolean", "count", "duration"]
     assert _enum(due["period"]) == ["day", "month", "week"]
-    assert _enum(due["unit"]) == ["hour", "min", "session"]
+    assert _enum(due["unit"]) == ["", "hour", "min", "session"]  # '' = no unit, as in /v1/habits
     quality = ["low", "missing", "ok"]
     assert _enum(schemas["TodayHealth"]["properties"]["data_quality"]) == quality
     assert _enum(schemas["DailyScoresOut"]["properties"]["data_quality"]) == quality

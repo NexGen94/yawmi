@@ -57,7 +57,7 @@ class HabitSpec:
 
     - `target_per_period` بوحدة العادة (مرة، جلسة، دقيقة، ساعة) وأكبر من الصفر.
     - `weekday_mask`: بتّ 0 = الأحد ... 6 = السبت، ومطلوب لـ`weekdays` (1..127).
-    - `every_n` و`anchor_day`: مطلوبان لـ`every_n_days`.
+    - `every_n` (2 فأكثر، كقيد قاعدة البيانات) و`anchor_day`: مطلوبان لـ`every_n_days`.
     - `end_day`: آخر يوم في تحدٍّ بنهاية، و`None` لعادة مفتوحة.
     - الفترة الأسبوعية والشهرية تقبل الجدولة `every_day` وحدها.
     """
@@ -89,9 +89,9 @@ class HabitSpec:
         ):
             raise ValueError("جدولة أيام الأسبوع تحتاج قناعاً بين 1 و127")
         if self.schedule_kind == "every_n_days" and (
-            self.every_n is None or self.every_n < 1 or self.anchor_day is None
+            self.every_n is None or self.every_n < 2 or self.anchor_day is None
         ):
-            raise ValueError("جدولة كل n يوماً تحتاج n ≥ 1 ويوم مرسى")
+            raise ValueError("جدولة كل n يوماً تحتاج n ≥ 2 ويوم مرسى")
         if self.end_day is not None and self.end_day < self.start_day:
             raise ValueError("يوم النهاية قبل يوم البداية")
 

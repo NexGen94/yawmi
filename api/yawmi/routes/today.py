@@ -2,15 +2,16 @@
 
 Both are read-only. The local day is the server's day in Asia/Riyadh. The pieces are built by
 `yawmi.today.assemble` from rows read through a `TodayReader`; this module only wires them.
-`priorities` stays empty until the insight service fills it, and `cards[].habits` until the
-habit routes do (task 10b); both extensions are additive.
+`priorities` stays empty until the insight service fills it. Habit indicators (each due
+habit's `period_progress`, each card's linked habits with their adherence) come from the pure
+rules in `yawmi.domain.habits`, with the week starting on the `week_start` setting.
 """
 
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
-from yawmi.auth.deps import require_kind
+from yawmi.auth.deps import SettingsDep, require_kind
 from yawmi.db.pool import get_pool
 from yawmi.domain.days import DEFAULT_TZ, day_key
 from yawmi.errors import FORBIDDEN, UNAUTHORIZED
@@ -23,6 +24,7 @@ from yawmi.today.assemble import (
     build_health,
     build_outcomes,
     build_plan,
+    logs_window,
     trend_window,
 )
 from yawmi.today.reader import AsyncpgTodayReader, TodayReader
@@ -54,13 +56,17 @@ TodayReaderDep = Annotated[TodayReader, Depends(get_today_reader)]
         "واتجاه سبعة أيام (يوم بلا ساعة «ناقص» لا صفر)؛ و`plan` الدورة الحالية من مرآة Notion."
     ),
 )
-async def get_today(reader: TodayReaderDep) -> TodayOut:
+async def get_today(reader: TodayReaderDep, settings: SettingsDep) -> TodayOut:
     day = day_key(event_models.server_now(), DEFAULT_TZ)
     first, last = trend_window(day)
+    logs_first, logs_last = logs_window(day, settings.week_start)
     return TodayOut(
         day=day,
         habits_due=build_habits_due(
-            day, await reader.active_habits(day), await reader.habit_logs(day, day)
+            day,
+            await reader.active_habits(day),
+            await reader.habit_logs(logs_first, logs_last),
+            settings.week_start,
         ),
         priorities=[],
         health=build_health(day, await reader.daily_metrics(first, last)),
@@ -76,9 +82,13 @@ async def get_today(reader: TodayReaderDep) -> TodayOut:
         "مفتوحة، والبطاقات بمخرجاتها."
     ),
 )
-async def get_overview(reader: TodayReaderDep) -> OverviewOut:
+async def get_overview(reader: TodayReaderDep, settings: SettingsDep) -> OverviewOut:
+    day = day_key(event_models.server_now(), DEFAULT_TZ)
     milestones = await reader.milestones()
+    linked = await reader.linked_habits()
+    first = min((h.start_day for h in linked), default=day)
+    logs = await reader.habit_logs_of([h.code for h in linked], first, day) if linked else []
     return OverviewOut(
         outcomes=build_outcomes(await reader.goals(), milestones),
-        cards=build_cards(await reader.cards()),
+        cards=build_cards(await reader.cards(), linked, logs, day, settings.week_start),
     )

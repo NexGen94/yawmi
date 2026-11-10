@@ -33,6 +33,7 @@ from yawmi.db.pool import create_pool, set_pool
 from yawmi.main import create_app
 from yawmi.settings import Settings
 from yawmi.today.assemble import (
+    build_cards,
     build_habits_due,
     build_outcomes,
     build_plan,
@@ -114,7 +115,7 @@ def test_habits_due_follow_the_schedule_and_the_window() -> None:
         habit("g-not-started", start_day=DAY + timedelta(days=1)),
         habit("h-ended", end_day=DAY - timedelta(days=1)),
     ]
-    due = build_habits_due(DAY, rows, [])
+    due = build_habits_due(DAY, rows, [], "sun")
     assert [h.code for h in due] == [
         PREFIX + c for c in ("a-daily", "b-tuesdays", "d-every3", "f-weekly")
     ]
@@ -135,7 +136,7 @@ def test_done_today_needs_a_done_log_on_the_day() -> None:
         log("c", day=DAY - timedelta(days=1)),
         log("d", status="done", value="2"),
     ]
-    assert {h.code: h.done_today for h in build_habits_due(DAY, rows, logs)} == {
+    assert {h.code: h.done_today for h in build_habits_due(DAY, rows, logs, "sun")} == {
         PREFIX + "a": True,
         PREFIX + "b": False,
         PREFIX + "c": False,
@@ -273,8 +274,8 @@ class PostgresBackend:
                     await self.pool.execute(
                         "INSERT INTO yawmi.habits (code, title_ar, kind, unit, target_per_period,"
                         " period, schedule_kind, weekday_mask, every_n, anchor_day, start_day,"
-                        " end_day, created_by) VALUES"
-                        " ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'user')",
+                        " end_day, goal_ref, created_by) VALUES"
+                        " ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'user')",
                         row.code,
                         row.title_ar,
                         row.kind,
@@ -287,6 +288,7 @@ class PostgresBackend:
                         row.anchor_day,
                         row.start_day,
                         row.end_day,
+                        row.goal_ref,
                     )
                 case LogRow():
                     await self.pool.execute(
@@ -471,6 +473,15 @@ async def test_today_brings_habits_health_and_plan_together(
             "target_per_period": 20.0,
             "period": "day",
             "done_today": True,
+            "period_progress": {
+                "done": 25.0,
+                "target": 20.0,
+                "completion": 1.0,
+                "reached": True,
+                "expected": 20.0,
+                "on_track": True,
+                "need_per_day": 0.0,
+            },
         }
     ]
     health = body["health"]
@@ -560,5 +571,142 @@ async def test_overview_lists_outcomes_and_cards_without_private_text(
             "status": "نشطة",
             "outcome_codes": ["O1", "O2"],
             "habits": [],
+            "habits_adherence_avg": None,
         }
     ]
+
+
+async def test_today_shows_how_far_the_period_has_come(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    await backend.add(
+        habit("weekly", kind="count", unit="session", target_per_period=Decimal(4), period="week"),
+        habit("month", kind="duration", unit="min", target_per_period=Decimal(300), period="month"),
+        log("weekly", day=date(2026, 11, 8), value="1"),  # Sunday: the week started
+        log("weekly", day=date(2026, 11, 7), value="5"),  # the week before
+        log("month", day=date(2026, 11, 2), value="100"),
+        log("month", day=date(2026, 10, 31), value="900"),  # the month before
+    )
+    body = (await client.get("/v1/today", headers=auth())).json()
+    due = {h["code"]: h for h in body["habits_due"] if h["code"].startswith(PREFIX)}
+    weekly = due[PREFIX + "weekly"]
+    assert weekly["done_today"] is False
+    # 1 of 4; 2 of 7 days elapsed before today (no log today) and 5 days left, today included
+    assert weekly["period_progress"] == {
+        "done": 1.0,
+        "target": 4.0,
+        "completion": 0.25,
+        "reached": False,
+        "expected": 4 * 2 / 7,
+        "on_track": False,
+        "need_per_day": 3 / 5,
+    }
+    month = due[PREFIX + "month"]["period_progress"]
+    # the habit started on 2026-11-01, so November is a full month: 100 of 300
+    assert (month["done"], month["target"], month["need_per_day"]) == (100.0, 300.0, 200 / 21)
+
+
+async def test_overview_cards_carry_their_habits_and_the_average_adherence(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    card = PREFIX + "card"
+    await backend.add(
+        habit("a", goal_ref=card, start_day=date(2026, 11, 7)),
+        habit(
+            "b",
+            goal_ref=card,
+            kind="count",
+            unit="session",
+            target_per_period=Decimal(3),
+            period="week",
+            start_day=DAY,
+        ),
+        habit("c", goal_ref=PREFIX + "other", start_day=date(2026, 11, 7)),
+        habit("d"),
+        log("a", day=date(2026, 11, 7)),
+        log("a", day=date(2026, 11, 8)),
+        log("a", day=date(2026, 11, 9), status="missed"),
+        log("c", day=date(2026, 11, 7)),
+    )
+    await backend.add_card(CardRow(card, "بطاقة", None, ("O1",)), {})
+    await backend.add_card(CardRow(PREFIX + "empty", "بطاقة بلا عادات", None, ()), {})
+    body = (await client.get("/v1/overview", headers=auth())).json()
+    cards = {c["page_id"]: c for c in body["cards"] if c["page_id"].startswith(PREFIX)}
+    assert cards[card]["habits"] == [
+        {"code": PREFIX + "a", "title_ar": "عادة a", "adherence": 2 / 3},
+        {"code": PREFIX + "b", "title_ar": "عادة b", "adherence": None},
+    ]
+    assert cards[card]["habits_adherence_avg"] == 2 / 3
+    assert (cards[PREFIX + "empty"]["habits"], cards[PREFIX + "empty"]["habits_adherence_avg"]) == (
+        [],
+        None,
+    )
+
+
+def test_cards_average_only_the_habits_with_an_adherence() -> None:
+    card = CardRow("p", "بطاقة", None, ())
+    rows = [
+        habit("x", goal_ref="p", start_day=date(2026, 11, 8)),
+        habit("y", goal_ref="p", start_day=date(2026, 11, 8)),
+        habit("z", goal_ref="p", start_day=DAY),
+    ]
+    logs = [log("x", day=date(2026, 11, 8)), log("x", day=date(2026, 11, 9))]
+    (out,) = build_cards([card], rows, logs, DAY, "sun")
+    assert [h.adherence for h in out.habits] == [1.0, 0.0, None]
+    assert out.habits_adherence_avg == 0.5
+
+
+async def test_archived_habits_are_not_linked() -> None:
+    reader = InMemoryTodayReader(
+        habits=[habit("x", goal_ref="p"), habit("y", goal_ref="p"), habit("z")],
+        inactive={PREFIX + "y"},
+    )
+    assert [h.code for h in await reader.linked_habits()] == [PREFIX + "x"]
+
+
+def test_no_unit_is_the_empty_string_as_in_the_habit_routes() -> None:
+    (due,) = build_habits_due(DAY, [habit("a")], [], "sun")
+    assert due.unit == ""
+
+
+async def test_overview_reads_only_the_logs_of_linked_habits() -> None:
+    card = PREFIX + "card"
+    reader = InMemoryTodayReader(
+        habits=[habit("a", goal_ref=card), habit("b", start_day=date(2000, 1, 1))],
+        logs=[log("a"), log("b", day=date(2000, 1, 1))],
+    )
+    linked = await reader.linked_habits()
+    logs = await reader.habit_logs_of([h.code for h in linked], date(2000, 1, 1), DAY)
+    assert [lg.habit_code for lg in logs] == [PREFIX + "a"]
+
+
+async def test_overview_answers_for_the_widest_linked_habits(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    card = PREFIX + "card"
+    widest = {"start_day": date(2000, 1, 1), "end_day": date(2099, 12, 31), "goal_ref": card}
+    await backend.add(
+        habit("daily", **widest),
+        habit(
+            "weekly",
+            kind="count",
+            unit="session",
+            target_per_period=Decimal(3),
+            period="week",
+            **widest,
+        ),
+        habit(
+            "monthly",
+            kind="duration",
+            unit="min",
+            target_per_period=Decimal(600),
+            period="month",
+            **widest,
+        ),
+        log("daily"),
+    )
+    await backend.add_card(CardRow(card, "بطاقة", None, ()), {})
+    response = await client.get("/v1/overview", headers=auth())
+    assert response.status_code == 200, response.text
+    today = await client.get("/v1/today", headers=auth())
+    assert today.status_code == 200, today.text

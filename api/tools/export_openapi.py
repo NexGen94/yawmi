@@ -38,6 +38,10 @@ REQUIRED_PATHS: tuple[str, ...] = (
     "/v1/day/close",
     "/v1/ask",
     "/v1/reviews",
+    "/v1/habits",
+    "/v1/habits/{code}",
+    "/v1/habits/{code}/progress",
+    "/v1/goals/{ref}/to-habit",
     "/v1/push/subscribe",
     "/v1/push/vapid-public-key",
 )
@@ -45,11 +49,6 @@ REQUIRED_PATHS: tuple[str, ...] = (
 # Not built yet. The task that adds a route moves its path to REQUIRED_PATHS and regenerates
 # openapi.json in its own pull request (the --check test fails otherwise).
 PENDING_PATHS: tuple[str, ...] = (
-    # task 10b (habits and goals)
-    "/v1/habits",
-    "/v1/habits/{code}",
-    "/v1/habits/{code}/progress",
-    "/v1/goals/{ref}/to-habit",
     # no owning task yet in the plan (calls n8n)
     "/v1/notion/refresh",
 )
