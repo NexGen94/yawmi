@@ -217,12 +217,12 @@ describe('fix round 1', () => {
     }
   });
 
-  it('normalizes null unit and anchor from a seeded system habit', () => {
-    const seeded = { ...systemHabit, unit: null, anchor: null } as unknown as HabitOut;
-    const f = fromHabit(seeded);
-    expect(f.unit).toBe('');
-    expect(f.anchor).toBe('free');
-    expect(validate(f)).toEqual({});
+  it('takes unit and anchor as the server sends them (it never sends null: `to_api` fills them)', () => {
+    const f = fromHabit({ ...systemHabit, kind: 'count', unit: 'session', anchor: 'before_sleep' });
+    expect(f.unit).toBe('session');
+    expect(f.anchor).toBe('before_sleep');
+    expect(fromHabit(systemHabit).unit).toBe('');
+    expect(validate(fromHabit(systemHabit))).toEqual({});
   });
 
   it('throws on a chip length below 1', () => {
@@ -299,5 +299,41 @@ describe('server limits (HabitIn in openapi/openapi.json)', () => {
     expect(f.duration).toBe(30);
     expect(f.system).toBe(false);
     expect(f.created_by).toBe('user');
+  });
+});
+
+describe('server day range and end before today', () => {
+  it.each([
+    ['start_day', { start_day: '1999-12-31' }],
+    ['start_day', { start_day: '2100-01-01' }],
+    ['end_day', { duration: 'custom' as const, end_day: '2100-01-01' }],
+    ['anchor_day', { schedule_kind: 'every_n_days' as const, every_n: 2, anchor_day: '1999-12-31' }],
+  ])('refuses %s outside 2000-01-01..2099-12-31', (field, patch) => {
+    expect(validate(form(patch))[field as keyof HabitForm]).toBeTruthy();
+  });
+
+  it('accepts the first and last days of the range', () => {
+    expect(validate(form({ start_day: '2000-01-01', duration: 'custom', end_day: '2099-12-31' }))).toEqual({});
+    expect(
+      validate(form({ schedule_kind: 'every_n_days', every_n: 2, anchor_day: '2099-12-31' })).anchor_day,
+    ).toBeUndefined();
+  });
+
+  it('refuses a custom end before today when the start is left to the server (it becomes today)', () => {
+    const f = form({ start_day: null, duration: 'custom', end_day: '2026-11-08' });
+    expect(validate(f, TODAY).end_day).toBeTruthy();
+    expect(validate({ ...f, end_day: TODAY }, TODAY).end_day).toBeUndefined();
+  });
+
+  it('keeps the new messages Arabic and free of imperatives', () => {
+    const messages = [
+      ...Object.values(validate(form({ start_day: '1999-12-31' }))),
+      ...Object.values(validate(form({ start_day: null, duration: 'custom', end_day: '2026-11-08' }), TODAY)),
+    ];
+    expect(messages.length).toBe(2);
+    for (const m of messages) {
+      expect(m).toMatch(/[؀-ۿ]/);
+      expect(m).not.toMatch(/(^|\s)(أدخل|اختر|اكتب|حدد|أضف|اضبط|ضع|استخدم)(\s|$)/);
+    }
   });
 });

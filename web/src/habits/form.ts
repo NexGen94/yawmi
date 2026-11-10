@@ -55,6 +55,10 @@ const MAX_TITLE = 200;
 const MAX_TARGET = 100_000;
 const MIN_EVERY_N = 2;
 const MAX_EVERY_N = 365;
+// Stored days (start, end, anchor) lie in this range on the server (`FIRST_DAY`/`LAST_DAY`).
+const FIRST_DAY = '2000-01-01';
+const LAST_DAY = '2099-12-31';
+const DAY_OUT_OF_RANGE = `اليوم خارج النطاق المقبول (${FIRST_DAY} إلى ${LAST_DAY}).`;
 
 /** The day ordinal of an ISO day (see `domain/days`), or null when it is not a calendar day. */
 function parseDay(day: string): number | null {
@@ -64,6 +68,9 @@ function parseDay(day: string): number | null {
     return null;
   }
 }
+
+/** Whether a calendar day (already parsed) lies in the server's range; ISO days compare as strings. */
+const inRange = (day: string): boolean => day >= FIRST_DAY && day <= LAST_DAY;
 
 /** `end = start + N - 1` (the first and last day both count): the domain rule, re-exported. */
 export { endDay };
@@ -117,15 +124,13 @@ export function emptyForm(today: string): HabitForm {
 }
 
 export function fromHabit(h: HabitOut): HabitForm {
-  // The schema never sends a null unit or anchor; the `??` only shields the editor from a row that
-  // predates those defaults.
   return {
     title_ar: h.title_ar,
     goal_ref: h.goal_ref,
     outcome: h.outcome,
     ac_ref: h.ac_ref,
     kind: h.kind,
-    unit: h.unit ?? '',
+    unit: h.unit,
     period: h.period,
     target_per_period: h.target_per_period,
     schedule_kind: h.schedule_kind,
@@ -134,7 +139,7 @@ export function fromHabit(h: HabitOut): HabitForm {
     anchor_day: h.anchor_day,
     start_day: h.start_day,
     end_day: h.end_day,
-    anchor: h.anchor ?? 'free',
+    anchor: h.anchor,
     reminders: h.reminders.map((r) => ({ ...r })),
     duration: chipFor(h.start_day, h.end_day),
     system: h.system,
@@ -169,7 +174,12 @@ export function fromDraft(d: HabitDraft): HabitForm {
   };
 }
 
-export function validate(f: HabitForm): FormErrors {
+/**
+ * Field errors, in Arabic, for what the server would refuse. `today` (the Riyadh day) is needed for
+ * one rule only: with `start_day` left empty the server starts the habit today, so a custom end
+ * before today is refused; without `today` that case is not checked.
+ */
+export function validate(f: HabitForm, today?: string): FormErrors {
   const errors: FormErrors = {};
 
   if (f.title_ar.trim() === '') errors.title_ar = 'العنوان مطلوب.';
@@ -212,10 +222,13 @@ export function validate(f: HabitForm): FormErrors {
     }
     if (f.anchor_day === null || parseDay(f.anchor_day) === null) {
       errors.anchor_day = 'التكرار «كل N أيام» يحتاج يوم مرساة.';
+    } else if (!inRange(f.anchor_day)) {
+      errors.anchor_day = DAY_OUT_OF_RANGE;
     }
   }
 
   if (f.start_day !== null && parseDay(f.start_day) === null) errors.start_day = 'تاريخ البداية غير صالح.';
+  else if (f.start_day !== null && !inRange(f.start_day)) errors.start_day = DAY_OUT_OF_RANGE;
   else if (f.start_day === null && typeof f.duration === 'number') {
     errors.start_day = 'المدة المحددة تحتاج تاريخ بداية.';
   }
@@ -224,8 +237,12 @@ export function validate(f: HabitForm): FormErrors {
     errors.end_day = 'تاريخ النهاية غير صالح.';
   } else if (f.duration === 'custom' && end === null) {
     errors.end_day = 'المدة المخصصة تحتاج تاريخ نهاية.';
+  } else if (end !== null && !inRange(end)) {
+    errors.end_day = DAY_OUT_OF_RANGE;
   } else if (end !== null && f.start_day !== null && parseDay(end)! < (parseDay(f.start_day) ?? -Infinity)) {
     errors.end_day = 'النهاية لا تسبق البداية.';
+  } else if (end !== null && f.start_day === null && today !== undefined && end < today) {
+    errors.end_day = 'النهاية لا تسبق اليوم، وهو يوم البداية حين يُترك فارغاً.';
   }
 
   if (f.reminders.length > maxReminders) {

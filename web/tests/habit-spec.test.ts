@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { isScheduled } from '../src/domain/periods';
-import { habitSpecOf } from '../src/habits/spec';
+import { habitSpecOf, type HabitSpecSource } from '../src/habits/spec';
 import type { HabitIn, HabitOut } from '../src/habits/types';
 
 const stored: HabitOut = {
@@ -96,5 +98,21 @@ describe('habitSpecOf', () => {
   it('refuses what the rules refuse, such as every_n = 1', () => {
     expect(() => habitSpecOf({ ...stored, every_n: 1 })).toThrow(RangeError);
     expect(() => habitSpecOf({ ...stored, end_day: '2026-10-01' })).toThrow(RangeError);
+  });
+});
+
+describe('habitSpecOf on the shared vectors', () => {
+  // The vectors' `habit` objects have exactly the API field names (snake_case), with `unit: null`
+  // where the API says ''. Each is_scheduled case goes through habitSpecOf and must agree.
+  const file = JSON.parse(
+    readFileSync(new URL('../../contracts/domain-vectors/v1/is_scheduled.json', import.meta.url), 'utf8'),
+  ) as { cases: { id: string; input: { day: string; habit: HabitSpecSource }; expect: { value: boolean } }[] };
+
+  it('has cases to run', () => {
+    expect(file.cases.length).toBeGreaterThan(20);
+  });
+
+  it.each(file.cases.map((c) => [c.id, c] as const))('%s', (_id, c) => {
+    expect(isScheduled(c.input.day, habitSpecOf(c.input.habit))).toBe(c.expect.value);
   });
 });
