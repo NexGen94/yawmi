@@ -6,7 +6,7 @@ cases.
 """
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -112,6 +112,64 @@ def test_a_numeric_occurred_at_is_rejected_only_iso_text_is_accepted(value: Any)
 def test_a_date_only_occurred_at_is_rejected() -> None:
     with pytest.raises(ValidationError):
         ev("app_opened", occurred="2026-11-10")
+
+
+def iso(instant: datetime) -> str:
+    return instant.isoformat().replace("+00:00", "Z")
+
+
+def test_an_event_may_be_dated_up_to_24_hours_ahead_of_the_server(server_now: datetime) -> None:
+    edge = server_now + timedelta(hours=24)
+    assert ev("app_opened", occurred=iso(edge)).occurred_at == edge  # exactly 24 h: accepted
+    assert ev("app_opened", occurred=iso(server_now + timedelta(hours=23)))
+
+
+def test_an_event_dated_more_than_24_hours_ahead_is_rejected(server_now: datetime) -> None:
+    with pytest.raises(ValidationError) as exc:
+        ev("app_opened", occurred=iso(server_now + timedelta(hours=24, seconds=1)))
+    assert "occurred_at_in_future" in error_types(exc)
+    with pytest.raises(ValidationError):
+        ev("app_opened", occurred="2099-01-01T00:00:00Z")
+
+
+def test_the_past_is_never_too_old_to_be_accepted(server_now: datetime) -> None:
+    """A queue replayed after weeks offline carries old events: only the future is bounded."""
+    assert ev("app_opened", occurred=iso(server_now - timedelta(days=400)))
+
+
+def test_the_future_limit_follows_the_clock_that_is_in_force(
+    monkeypatch: pytest.MonkeyPatch, server_now: datetime
+) -> None:
+    later = server_now + timedelta(days=3)
+    event_time = iso(server_now + timedelta(days=2))
+    with pytest.raises(ValidationError):
+        ev("app_opened", occurred=event_time)
+    monkeypatch.setattr("yawmi.events.models.server_now", lambda: later)
+    assert ev("app_opened", occurred=event_time)  # two days ahead of then, one day behind now
+
+
+def test_the_back_date_window_is_anchored_on_the_event_day_not_on_the_server_clock(
+    monkeypatch: pytest.MonkeyPatch, server_now: datetime
+) -> None:
+    """The server is 40 days later than the event: the window still counts from the event."""
+    monkeypatch.setattr("yawmi.events.models.server_now", lambda: server_now + timedelta(days=40))
+    event_time = "2026-11-10T09:00:00Z"
+    ok = project_event(ev("habit_logged", logged(day="2026-11-03"), occurred=event_time), "web")
+    assert isinstance(ok, HabitLog)
+    assert ok.day == date(2026, 11, 3)  # seven days before the event's day
+    with pytest.raises(ValidationError) as exc:
+        ev("habit_logged", logged(day="2026-11-02"), occurred=event_time)  # eight days before
+    assert "day_out_of_window" in error_types(exc)
+
+
+def test_the_back_date_window_of_an_event_at_the_future_limit_counts_from_its_own_day(
+    server_now: datetime,
+) -> None:
+    edge = iso(server_now + timedelta(hours=24))  # 2026-11-11T12:00Z, a day ahead of "now"
+    assert project_event(ev("habit_logged", logged(day="2026-11-04"), occurred=edge), "web")
+    with pytest.raises(ValidationError) as exc:
+        ev("habit_logged", logged(day="2026-11-03"), occurred=edge)
+    assert "day_out_of_window" in error_types(exc)
 
 
 @pytest.mark.parametrize("occurred", ["1999-12-31T23:59:59Z", "2100-01-01T00:00:00Z"])

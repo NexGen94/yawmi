@@ -763,6 +763,28 @@ async def test_a_numeric_occurred_at_is_a_422(client: httpx.AsyncClient, iphone:
     assert (await post(client, iphone, [ev])).status_code == 422
 
 
+async def test_an_event_more_than_24_hours_ahead_is_a_422_and_nothing_is_stored(
+    client: httpx.AsyncClient, backend: Backend, iphone: Device, server_now: datetime
+) -> None:
+    ahead = (server_now + timedelta(hours=24, seconds=1)).isoformat()
+    bad = event("app_opened", at=ahead)
+    response = await post(client, iphone, [event("app_opened"), bad])
+    assert response.status_code == 422
+    assert response.json()["errors"][0]["type"] == "occurred_at_in_future"
+    assert response.json()["errors"][0]["loc"][:3] == ["body", "events", 1]
+    assert await backend.event_count([UUID(bad["id"])]) == 0
+
+
+async def test_an_event_exactly_24_hours_ahead_is_accepted(
+    client: httpx.AsyncClient, iphone: Device, server_now: datetime
+) -> None:
+    edge = (server_now + timedelta(hours=24)).isoformat()
+    assert (await post(client, iphone, [event("app_opened", at=edge)])).json() == {
+        "accepted": 1,
+        "duplicates": 0,
+    }
+
+
 async def test_tz_defaults_to_riyadh_and_unknown_tz_is_a_422(
     client: httpx.AsyncClient, iphone: Device
 ) -> None:

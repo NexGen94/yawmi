@@ -1,7 +1,7 @@
 """Wire models for `/v1/events`: the event envelope, the batch, and the pull page."""
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -20,9 +20,12 @@ from yawmi.events.project import (
 
 MAX_BATCH = 500
 MAX_PAYLOAD_BYTES = 16 * 1024
+# an event may be dated at most this far ahead of the server clock (device clocks drift)
+MAX_FUTURE = timedelta(hours=24)
 
 _BAD_TEXT = "نص الحمولة غير صالح"
 _NOT_FINITE = "الحمولة تحوي رقماً غير منتهٍ"
+_FUTURE = "وقت الحدث يسبق الوقت الحالي بأكثر من 24 ساعة"
 
 
 class PayloadNotJson(ValueError):
@@ -72,6 +75,11 @@ def _check_storable(payload: dict[str, Any]) -> None:
         raise PydanticCustomError("payload_too_large", "حمولة الحدث أكبر من الحد المسموح")
 
 
+def server_now() -> datetime:
+    """The server clock, as a function so tests can pin it (the 24 h future limit)."""
+    return datetime.now(UTC)
+
+
 def clamp_instant(value: datetime) -> datetime:
     """`value` limited to 2000..2099, the range every stored instant lies in."""
     return min(max(value, EARLIEST), LATEST)
@@ -89,6 +97,17 @@ class EventIn(BaseModel):
     payload: dict[str, Any]
     occurred_at: Instant  # timezone-aware ISO-8601 text
     tz: str = DEFAULT_TZ  # IANA zone naming the local day of the event
+
+    @field_validator("occurred_at")
+    @classmethod
+    def _not_far_in_the_future(cls, value: datetime) -> datetime:
+        """At most 24 h ahead of the server: a far-future time would win last-writer-wins for
+        its habit and day, and would sort after every real edit. The past is never limited (a
+        queue replayed after weeks offline is old). The 7-day back-date window is unrelated:
+        it counts from the event's own day, see `project._habit_day`."""
+        if value > server_now() + MAX_FUTURE:
+            raise PydanticCustomError("occurred_at_in_future", _FUTURE)
+        return value
 
     @field_validator("tz")
     @classmethod
