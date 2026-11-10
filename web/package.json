@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.sw.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.sw.json",
     "test": "vitest run",
     "check:budget": "node scripts/check-budget.mjs",
     "icons": "pwa-assets-generator && node scripts/move-icons.mjs"
