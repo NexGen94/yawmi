@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { authedFetch, clearAccessToken, pair, PairError, setAccessToken, Unauthorized } from '../src/api/auth';
+import {
+  authedFetch,
+  clearAccessToken,
+  pair,
+  PairError,
+  RefreshError,
+  setAccessToken,
+  Unauthorized,
+} from '../src/api/auth';
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -147,11 +155,109 @@ describe('authedFetch', () => {
     expect(refreshCalls()).toHaveLength(1);
   });
 
-  it('lets a network failure during refresh surface as a TypeError, not as Unauthorized', async () => {
+  it('lets a network failure during refresh surface as a TypeError, and keeps the token', async () => {
     setAccessToken('old');
     fetchMock.mockResolvedValueOnce(json(UNAUTHORIZED, 401)).mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
-    await expect(authedFetch('/v1/things')).rejects.toBeInstanceOf(TypeError);
+    const error = await authedFetch('/v1/things').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(TypeError);
+    expect(error).not.toBeInstanceOf(Unauthorized);
+
+    fetchMock.mockResolvedValueOnce(json({ ok: true }));
+    await authedFetch('/v1/things');
+    expect(authOf(fetchMock.mock.calls[2])).toBe('Bearer old');
+  });
+
+  it('treats a 403 from the refresh endpoint as a dead session, like 401', async () => {
+    setAccessToken('old');
+    fetchMock.mockResolvedValueOnce(json(UNAUTHORIZED, 401)).mockResolvedValueOnce(json({ detail: 'x' }, 403));
+
+    await expect(authedFetch('/v1/things')).rejects.toBeInstanceOf(Unauthorized);
+
+    fetchMock.mockResolvedValueOnce(json({ ok: true }));
+    await authedFetch('/v1/things');
+    expect(authOf(fetchMock.mock.calls[2])).toBeNull();
+  });
+
+  it.each([429, 500, 502, 503, 504])(
+    'treats a %i from the refresh endpoint as a retryable failure: not Unauthorized, token kept',
+    async (status) => {
+      setAccessToken('old');
+      fetchMock
+        .mockResolvedValueOnce(json(UNAUTHORIZED, 401))
+        .mockResolvedValueOnce(new Response('upstream down', { status }));
+
+      const error = await authedFetch('/v1/things').catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(RefreshError);
+      expect(error).not.toBeInstanceOf(Unauthorized);
+      expect((error as RefreshError).status).toBe(status);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      // The token survived, and the next 401 can refresh again.
+      fetchMock
+        .mockResolvedValueOnce(json({ ok: true }))
+        .mockResolvedValueOnce(json(UNAUTHORIZED, 401))
+        .mockResolvedValueOnce(json(TOKEN_PAIR))
+        .mockResolvedValueOnce(json({ ok: true }));
+      await authedFetch('/v1/things');
+      expect(authOf(fetchMock.mock.calls[2])).toBe('Bearer old');
+
+      const res = await authedFetch('/v1/things');
+      expect(res.status).toBe(200);
+      expect(refreshCalls()).toHaveLength(2);
+    },
+  );
+
+  it('gives every caller sharing a failed refresh the retryable error, not Unauthorized', async () => {
+    setAccessToken('old');
+    let finishRefresh!: (res: Response) => void;
+    const refreshGate = new Promise<Response>((resolve) => {
+      finishRefresh = resolve;
+    });
+    fetchMock.mockImplementation((input: unknown) =>
+      Promise.resolve(String(input) === '/v1/auth/refresh' ? refreshGate : json(UNAUTHORIZED, 401)),
+    );
+
+    const a = authedFetch('/v1/a').catch((e: unknown) => e);
+    const b = authedFetch('/v1/b').catch((e: unknown) => e);
+    await vi.waitFor(() => expect(refreshCalls()).toHaveLength(1));
+    finishRefresh(new Response('', { status: 503 }));
+
+    expect(await a).toBeInstanceOf(RefreshError);
+    expect(await b).toBeInstanceOf(RefreshError);
+    expect(refreshCalls()).toHaveLength(1);
+  });
+
+  it('treats a 200 refresh answer without an access token as a malformed reply, not a dead session', async () => {
+    setAccessToken('old');
+    fetchMock.mockResolvedValueOnce(json(UNAUTHORIZED, 401)).mockResolvedValueOnce(json({ device_id: 'd' }));
+
+    const error = await authedFetch('/v1/things').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(RefreshError);
+    expect(error).not.toBeInstanceOf(Unauthorized);
+    fetchMock.mockResolvedValueOnce(json({ ok: true }));
+    await authedFetch('/v1/things');
+    expect(authOf(fetchMock.mock.calls[2])).toBe('Bearer old');
+  });
+
+  it('rejects a ReadableStream body up front, since it cannot be replayed after a refresh', async () => {
+    setAccessToken('old');
+    const body = new ReadableStream();
+
+    await expect(authedFetch('/v1/upload', { method: 'POST', body, duplex: 'half' } as RequestInit)).rejects.toThrow(
+      /ReadableStream/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('still accepts every replayable body type', async () => {
+    setAccessToken('old');
+    fetchMock.mockImplementation(() => Promise.resolve(json({ ok: true })));
+    for (const body of ['text', new Blob(['x']), new ArrayBuffer(2), new FormData(), new URLSearchParams('a=1')]) {
+      await expect(authedFetch('/v1/upload', { method: 'POST', body })).resolves.toBeInstanceOf(Response);
+    }
   });
 
   it('allows a new refresh after a failed one', async () => {
