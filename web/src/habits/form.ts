@@ -181,35 +181,45 @@ export function fromDraft(d: HabitDraft): HabitForm {
  */
 export function validate(f: HabitForm, today?: string): FormErrors {
   const errors: FormErrors = {};
+  const set = (field: keyof HabitForm, message: string | undefined): void => {
+    if (message !== undefined) errors[field] = message;
+  };
+  set('title_ar', titleError(f.title_ar));
+  set('unit', unitError(f));
+  set('target_per_period', targetError(f));
+  scheduleErrors(f, errors);
+  dayErrors(f, today, errors);
+  set('reminders', remindersError(f.reminders));
+  return errors;
+}
 
-  if (f.title_ar.trim() === '') errors.title_ar = 'العنوان مطلوب.';
+function titleError(title: string): string | undefined {
+  const trimmed = title.trim();
+  if (trimmed === '') return 'العنوان مطلوب.';
   // The server counts characters (code points), as the spread does; `length` would count UTF-16 units.
-  else if ([...f.title_ar.trim()].length > MAX_TITLE) errors.title_ar = `العنوان لا يتجاوز ${MAX_TITLE} حرف.`;
+  if ([...trimmed].length > MAX_TITLE) return `العنوان لا يتجاوز ${MAX_TITLE} حرف.`;
+  return undefined;
+}
 
-  if (f.kind === 'boolean' && f.unit !== '') {
-    errors.unit = 'العادة بنعم أو لا بلا وحدة.';
-  } else if (f.kind === 'count' && f.unit !== '' && f.unit !== 'session') {
-    errors.unit = 'وحدة العدد «جلسة» أو بلا وحدة.';
-  } else if (f.kind === 'duration' && f.unit !== 'min' && f.unit !== 'hour') {
-    errors.unit = 'عادة المدة تحتاج وحدة: دقيقة أو ساعة.';
-  }
+function unitError(f: HabitForm): string | undefined {
+  if (f.kind === 'boolean' && f.unit !== '') return 'العادة بنعم أو لا بلا وحدة.';
+  if (f.kind === 'count' && f.unit !== '' && f.unit !== 'session') return 'وحدة العدد «جلسة» أو بلا وحدة.';
+  if (f.kind === 'duration' && f.unit !== 'min' && f.unit !== 'hour') return 'عادة المدة تحتاج وحدة: دقيقة أو ساعة.';
+  return undefined;
+}
 
-  if (!Number.isFinite(f.target_per_period) || f.target_per_period <= 0) {
-    errors.target_per_period = 'الهدف في الفترة عدد موجب.';
-  } else if (f.target_per_period > MAX_TARGET) {
-    errors.target_per_period = `الهدف في الفترة لا يتجاوز ${MAX_TARGET}.`;
-  } else if (f.kind === 'boolean') {
-    const max = periodDays(f.period);
-    if (!Number.isInteger(f.target_per_period)) {
-      errors.target_per_period = 'هدف عادة نعم أو لا عدد صحيح.';
-    } else if (f.target_per_period > max) {
-      errors.target_per_period =
-        f.period === 'day'
-          ? 'العادة اليومية بنعم أو لا هدفها 1.'
-          : `هدف عادة نعم أو لا لا يتجاوز عدد أيام الفترة (${max}).`;
-    }
-  }
+function targetError(f: HabitForm): string | undefined {
+  const target = f.target_per_period;
+  if (!Number.isFinite(target) || target <= 0) return 'الهدف في الفترة عدد موجب.';
+  if (target > MAX_TARGET) return `الهدف في الفترة لا يتجاوز ${MAX_TARGET}.`;
+  if (f.kind !== 'boolean') return undefined;
+  const max = periodDays(f.period);
+  if (!Number.isInteger(target)) return 'هدف عادة نعم أو لا عدد صحيح.';
+  if (target <= max) return undefined;
+  return f.period === 'day' ? 'العادة اليومية بنعم أو لا هدفها 1.' : `هدف عادة نعم أو لا لا يتجاوز عدد أيام الفترة (${max}).`;
+}
 
+function scheduleErrors(f: HabitForm, errors: FormErrors): void {
   if (f.period !== 'day' && f.schedule_kind !== 'every_day') {
     errors.schedule_kind = 'الجدول الخاص يقتصر على الفترة اليومية.';
   } else if (f.schedule_kind === 'weekdays') {
@@ -226,36 +236,41 @@ export function validate(f: HabitForm, today?: string): FormErrors {
       errors.anchor_day = DAY_OUT_OF_RANGE;
     }
   }
+}
 
-  if (f.start_day !== null && parseDay(f.start_day) === null) errors.start_day = 'تاريخ البداية غير صالح.';
-  else if (f.start_day !== null && !inRange(f.start_day)) errors.start_day = DAY_OUT_OF_RANGE;
-  else if (f.start_day === null && typeof f.duration === 'number') {
-    errors.start_day = 'المدة المحددة تحتاج تاريخ بداية.';
-  }
+function dayErrors(f: HabitForm, today: string | undefined, errors: FormErrors): void {
+  const start = startDayError(f);
+  if (start !== undefined) errors.start_day = start;
+  const end = endDayError(f, today);
+  if (end !== undefined) errors.end_day = end;
+}
+
+function startDayError(f: HabitForm): string | undefined {
+  if (f.start_day === null) return typeof f.duration === 'number' ? 'المدة المحددة تحتاج تاريخ بداية.' : undefined;
+  if (parseDay(f.start_day) === null) return 'تاريخ البداية غير صالح.';
+  return inRange(f.start_day) ? undefined : DAY_OUT_OF_RANGE;
+}
+
+function endDayError(f: HabitForm, today: string | undefined): string | undefined {
   const end = effectiveEnd(f);
-  if (f.duration === 'custom' && end !== null && parseDay(end) === null) {
-    errors.end_day = 'تاريخ النهاية غير صالح.';
-  } else if (f.duration === 'custom' && end === null) {
-    errors.end_day = 'المدة المخصصة تحتاج تاريخ نهاية.';
-  } else if (end !== null && !inRange(end)) {
-    errors.end_day = DAY_OUT_OF_RANGE;
-  } else if (end !== null && f.start_day !== null && parseDay(end)! < (parseDay(f.start_day) ?? -Infinity)) {
-    errors.end_day = 'النهاية لا تسبق البداية.';
-  } else if (end !== null && f.start_day === null && today !== undefined && end < today) {
-    errors.end_day = 'النهاية لا تسبق اليوم، وهو يوم البداية حين يُترك فارغاً.';
+  if (end === null) return f.duration === 'custom' ? 'المدة المخصصة تحتاج تاريخ نهاية.' : undefined;
+  const endOrd = parseDay(end);
+  if (endOrd === null) return f.duration === 'custom' ? 'تاريخ النهاية غير صالح.' : undefined;
+  if (!inRange(end)) return DAY_OUT_OF_RANGE;
+  if (f.start_day === null) {
+    // The server starts an undated habit today, so the end may not come before today.
+    return today !== undefined && end < today ? 'النهاية لا تسبق اليوم، وهو يوم البداية حين يُترك فارغاً.' : undefined;
   }
+  const startOrd = parseDay(f.start_day);
+  return startOrd !== null && endOrd < startOrd ? 'النهاية لا تسبق البداية.' : undefined;
+}
 
-  if (f.reminders.length > maxReminders) {
-    errors.reminders = `الحد الأقصى ${maxReminders} تذكيرات.`;
-  } else if (
-    f.reminders.some(
-      (r) => !CLOCK.test(r.time) || !Number.isInteger(r.days_mask) || r.days_mask < 1 || r.days_mask > 127,
-    )
-  ) {
-    errors.reminders = 'كل تذكير يحتاج وقتاً بصيغة HH:mm ويوماً واحداً على الأقل.';
-  }
-
-  return errors;
+function remindersError(reminders: ReminderIn[]): string | undefined {
+  if (reminders.length > maxReminders) return `الحد الأقصى ${maxReminders} تذكيرات.`;
+  const bad = (r: ReminderIn): boolean =>
+    !CLOCK.test(r.time) || !Number.isInteger(r.days_mask) || r.days_mask < 1 || r.days_mask > 127;
+  if (reminders.some(bad)) return 'كل تذكير يحتاج وقتاً بصيغة HH:mm ويوماً واحداً على الأقل.';
+  return undefined;
 }
 
 export function toHabitIn(f: HabitForm): HabitIn {

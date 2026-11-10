@@ -339,16 +339,11 @@ async function quarantine(
   await tx.done;
 }
 
-/** Send the oldest `size` events once. Every outcome but `empty` and `offline` removes at least one event. */
-async function sendBatch(size: number, send: SendFn): Promise<Step> {
-  const db = await openDb();
-  const events = await db.getAll(STORE, null, size);
-  if (events.length === 0) return { kind: 'empty' };
-
+/** POST one batch. Null when the network failed or no answer came in time (the events stay queued). */
+async function post(events: OutboxEvent[], send: SendFn): Promise<Response | null> {
   const body: Schemas['EventBatch'] = { events };
-  let res: Response;
   try {
-    res = await send(EVENTS_URL, {
+    return await send(EVENTS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -357,24 +352,37 @@ async function sendBatch(size: number, send: SendFn): Promise<Step> {
   } catch (error) {
     // Offline, the connection dropped, or no answer in time: not an error, everything stays queued
     // for the next trigger. (A timeout is a DOMException, not a TypeError.)
-    if (error instanceof TypeError || isAbortOrTimeout(error)) return { kind: 'offline' };
+    if (error instanceof TypeError || isAbortOrTimeout(error)) return null;
     throw error;
   }
+}
 
-  if (res.status === 422) {
-    // Quarantine only what the server pinned on an event of this batch. A refusal that names no
-    // event (the batch shape, a proxy's own 422) keeps everything and stops: resending the same
-    // batch would only be refused again.
-    const errors = await readErrors(res);
-    const blamed = new Map<number, Schemas['ValidationErrorItem'][]>();
-    for (const error of errors) {
-      const index = indexOf(error, events.length);
-      if (index !== null) blamed.set(index, [...(blamed.get(index) ?? []), error]);
-    }
-    if (blamed.size === 0) throw new BatchRejected(422, errors);
-    await quarantine(db, events, blamed);
-    return { kind: 'quarantined', count: blamed.size };
+/**
+ * A 422: quarantine only what the server pinned on an event of this batch. A refusal that names no
+ * event (the batch shape, a proxy's own 422) keeps everything and stops: resending the same batch
+ * would only be refused again.
+ */
+async function quarantineRefused(db: IDBPDatabase<YawmiDB>, events: OutboxEvent[], res: Response): Promise<Step> {
+  const errors = await readErrors(res);
+  const blamed = new Map<number, Schemas['ValidationErrorItem'][]>();
+  for (const error of errors) {
+    const index = indexOf(error, events.length);
+    if (index !== null) blamed.set(index, [...(blamed.get(index) ?? []), error]);
   }
+  if (blamed.size === 0) throw new BatchRejected(422, errors);
+  await quarantine(db, events, blamed);
+  return { kind: 'quarantined', count: blamed.size };
+}
+
+/** Send the oldest `size` events once. Every outcome but `empty` and `offline` removes at least one event. */
+async function sendBatch(size: number, send: SendFn): Promise<Step> {
+  const db = await openDb();
+  const events = await db.getAll(STORE, null, size);
+  if (events.length === 0) return { kind: 'empty' };
+
+  const res = await post(events, send);
+  if (res === null) return { kind: 'offline' };
+  if (res.status === 422) return quarantineRefused(db, events, res);
 
   // Server contract (`post_events` in api/yawmi/routes/events.py): success is exactly HTTP 200
   // with `{accepted, duplicates}`. Anything else keeps the events. Deliberately strict: if the

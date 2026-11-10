@@ -49,7 +49,7 @@ jobs:
       # app's tree, so the app's tsc stays TypeScript 7.
       - name: Install the API type generator
         working-directory: web/tools/openapi-gen
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       # src/api/schema.d.ts is generated from openapi/openapi.json and checked in; a server change
       # that was not regenerated (or a hand edit of the file) fails here.

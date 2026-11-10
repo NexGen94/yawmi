@@ -330,7 +330,7 @@ describe('server day range and end before today', () => {
       ...Object.values(validate(form({ start_day: '1999-12-31' }))),
       ...Object.values(validate(form({ start_day: null, duration: 'custom', end_day: '2026-11-08' }), TODAY)),
     ];
-    expect(messages.length).toBe(2);
+    expect(messages).toHaveLength(2);
     for (const m of messages) {
       expect(m).toMatch(/[؀-ۿ]/);
       expect(m).not.toMatch(/(^|\s)(أدخل|اختر|اكتب|حدد|أضف|اضبط|ضع|استخدم)(\s|$)/);
