@@ -169,28 +169,48 @@ async def tick(
     """Send the reminders due at `now`; returns how many messages the push services accepted."""
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
-    local = now.astimezone(ZoneInfo(tz))
-    due: dict[date, list[Reminder]] = defaultdict(list)
-    for reminder in await store.active_reminders():
-        for day in _due_days(reminder, local):
-            due[day].append(reminder)
+    due = await _due_by_day(store, now.astimezone(ZoneInfo(tz)))
     sent = 0
     for day in sorted(due):
         open_, badge = await _open_habits(store, day, week_start)
         for reminder in due[day]:
             title = open_.get(reminder.habit_code)
-            if title is None:
-                continue
-            targets = [
-                s
-                for s in await store.subscriptions()
-                if s.retry_after is None or s.retry_after <= now
-            ]
-            if not targets or not await store.claim_send(reminder.id, day):
-                continue
-            payload = build_payload(title, badge)
-            for sub in targets:
-                sent += await _deliver(store, sender, sub, payload, now)
+            if title is not None:
+                sent += await _remind(
+                    store, sender, reminder, day, build_payload(title, badge), now
+                )
+    return sent
+
+
+async def _due_by_day(store: PushStore, local: datetime) -> dict[date, list[Reminder]]:
+    """Active reminders whose window holds `local`, by the local day they belong to."""
+    due: dict[date, list[Reminder]] = defaultdict(list)
+    for reminder in await store.active_reminders():
+        for day in _due_days(reminder, local):
+            due[day].append(reminder)
+    return due
+
+
+async def _remind(
+    store: PushStore,
+    sender: WebPushSender,
+    reminder: Reminder,
+    day: date,
+    payload: dict[str, Any],
+    now: datetime,
+) -> int:
+    """Claim `(reminder, day)` and send it to every deliverable subscription; how many accepted.
+
+    Nothing is claimed when no subscription is deliverable (none, or all backing off).
+    """
+    targets = [
+        s for s in await store.subscriptions() if s.retry_after is None or s.retry_after <= now
+    ]
+    if not targets or not await store.claim_send(reminder.id, day):
+        return 0
+    sent = 0
+    for sub in targets:
+        sent += await _deliver(store, sender, sub, payload, now)
     return sent
 
 
@@ -223,12 +243,15 @@ class ReminderLoop:
         self.task = asyncio.create_task(self._run(), name="yawmi-reminders")
 
     async def stop(self) -> None:
-        if self.task is not None:
+        """Cancel the loop and wait until it has really ended, then run `on_stop`.
+
+        `asyncio.wait` waits for the task without raising its (expected) cancellation, so nothing
+        is caught and swallowed here: if the caller of `stop()` is itself cancelled, that
+        `CancelledError` propagates as it should.
+        """
+        if self.task is not None and not self.task.done():
             self.task.cancel()
-            try:
-                await self.task
-            except asyncio.CancelledError:
-                pass
+            await asyncio.wait([self.task])
         if self._on_stop is not None:
             await self._on_stop()
 

@@ -4,7 +4,7 @@ A push endpoint is a URL the browser hands over, so it is attacker-controlled in
 holding a device token. The server only ever talks to the browsers' push services:
 
 * `https`, no credentials in the URL, no IP literal, port absent or 443;
-* the host, lower-cased, is one of `allowed` or a subdomain of one (exact or dot-suffix match);
+* the host, lower-cased, is plain ASCII `[a-z0-9.-]+` and is one of `allowed` or a subdomain of one (exact or dot-suffix match);
 * printable, without whitespace.
 
 The route answers 422 when this fails; the sender checks again before every send and the
@@ -14,6 +14,7 @@ Standard library only: the route module and the settings import this.
 """
 
 import ipaddress
+import re
 from collections.abc import Iterable
 from urllib.parse import urlsplit
 
@@ -24,6 +25,17 @@ DEFAULT_PUSH_HOSTS: tuple[str, ...] = (
     "updates.push.services.mozilla.com",
     "notify.windows.com",
 )
+
+
+_HOST_CHARS = re.compile(r"[a-z0-9.-]+")
+_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+# an allow-list entry: lower-case DNS name of two labels or more, no wildcard, no bare TLD
+_ENTRY = re.compile(rf"(?=.{{1,253}}$){_LABEL}(?:\.{_LABEL})+")
+
+
+def valid_push_host(entry: str) -> bool:
+    """Whether `entry` may stand in the allow-list (`settings.push_hosts`)."""
+    return _ENTRY.fullmatch(entry) is not None
 
 
 def _is_ip_literal(host: str) -> bool:
@@ -65,6 +77,8 @@ def endpoint_problem(endpoint: str, allowed: Iterable[str] | None) -> str | None
         return "credentials"
     if _is_ip_literal(host):
         return "ip_literal"
+    if not _HOST_CHARS.fullmatch(host):  # `hostname` is already lower-cased
+        return "host_charset"
     if port not in (None, 443):
         return "port"
     if allowed is not None and not host_allowed(host, allowed):

@@ -210,6 +210,7 @@ def test_api_compose_passes_push_settings_off_by_default_and_never_a_key() -> No
     assert env["YAWMI_PUSH_ENABLED"] == "${YAWMI_PUSH_ENABLED:-false}"
     assert env["YAWMI_VAPID_SUBJECT"] == "${YAWMI_VAPID_SUBJECT:-}"
     assert env["YAWMI_VAPID_PRIVATE_KEY_FILE"] == "/run/yawmi/vapid_private.pem"
+    assert env["YAWMI_PUSH_HOSTS"] == "${YAWMI_PUSH_HOSTS:-}"  # empty: the default list
 
 
 def test_vapid_keygen_is_one_shot_offline_hardened_and_writes_only_the_secrets_volume() -> None:
@@ -225,16 +226,12 @@ def test_vapid_keygen_is_one_shot_offline_hardened_and_writes_only_the_secrets_v
     assert "no-new-privileges:true" in service["security_opt"]
     assert service["volumes"] == ["yawmi_secrets:/run/yawmi"]
     assert data["volumes"]["yawmi_secrets"] == {"name": "yawmi_secrets", "external": True}
-    assert service["entrypoint"] == [
-        "python",
-        "-I",
-        "-m",
-        "yawmi.push.keygen",
-        "/run/yawmi/vapid_private.pem",
-        "--group",
-        "10001",
-    ]
-    assert "environment" not in service
+    # no path on the command line: the key file comes from the same variable the API reads
+    assert service["entrypoint"] == ["python", "-I", "-m", "yawmi.push.keygen", "--group", "10001"]
+    api_env = _yaml(API_COMPOSE)["services"]["yawmi-api"]["environment"]
+    assert service["environment"] == {
+        "YAWMI_VAPID_PRIVATE_KEY_FILE": api_env["YAWMI_VAPID_PRIVATE_KEY_FILE"]
+    }
 
 
 def test_api_compose_is_hardened() -> None:

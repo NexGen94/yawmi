@@ -59,6 +59,7 @@ from yawmi.push.sender import (
     WebPushSender,
     encode_payload,
     retry_at,
+    vapid_audience,
 )
 from yawmi.push.store import ALL_SQL, AsyncpgPushStore, PushStore, Reminder, Subscription
 from yawmi.push.vapid import VapidKeyError, load_private_key, public_key_b64url
@@ -434,7 +435,7 @@ def test_keygen_creates_the_key_once_and_prints_only_the_public_key(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     path = tmp_path / "vapid_private.pem"
-    assert keygen.main([str(path)]) == 0
+    assert keygen.main([], path=path) == 0
     first = capsys.readouterr()
     pem = path.read_text(encoding="ascii")
     key = load_private_key(path)
@@ -443,11 +444,30 @@ def test_keygen_creates_the_key_once_and_prints_only_the_public_key(
     if os.name == "posix":
         assert path.stat().st_mode & 0o077 == 0o040  # group may read, others never
 
-    assert keygen.main([str(path)]) == 0  # a second run keeps the key
+    assert keygen.main([], path=path) == 0  # a second run keeps the key
     second = capsys.readouterr()
     assert path.read_text(encoding="ascii") == pem
     assert second.out == first.out
     assert "PRIVATE" not in second.out + second.err
+
+
+def test_keygen_takes_no_path_from_the_command_line() -> None:
+    with pytest.raises(SystemExit):
+        keygen.main(["/tmp/elsewhere.pem"])
+
+
+def test_keygen_reads_the_path_from_the_environment_inside_the_secrets_directory(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("YAWMI_VAPID_PRIVATE_KEY_FILE", raising=False)
+    assert keygen.key_path() == Path("/run/yawmi/vapid_private.pem")  # the API's default
+    monkeypatch.setenv("YAWMI_VAPID_PRIVATE_KEY_FILE", "/run/yawmi/other.pem")
+    assert keygen.key_path() == Path("/run/yawmi/other.pem")
+    for outside in ("/etc/passwd", "/run/yawmi/../../etc/x.pem", "relative.pem", "/run/yawmi"):
+        monkeypatch.setenv("YAWMI_VAPID_PRIVATE_KEY_FILE", outside)
+        assert keygen.key_path() is None
+        assert keygen.main([]) == 2
+    assert "outside" in capsys.readouterr().err
 
 
 def test_keygen_refuses_an_unreadable_existing_file_without_replacing_it(
@@ -455,7 +475,7 @@ def test_keygen_refuses_an_unreadable_existing_file_without_replacing_it(
 ) -> None:
     path = tmp_path / "vapid_private.pem"
     path.write_text("damaged", encoding="ascii")
-    assert keygen.main([str(path)]) == 1
+    assert keygen.main([], path=path) == 1
     out = capsys.readouterr()
     assert path.read_text(encoding="ascii") == "damaged"
     assert "damaged" not in out.out + out.err
@@ -899,7 +919,7 @@ async def test_subscribe_again_updates_keys_and_clears_the_back_off(
         (
             {
                 **sub_body(),
-                "keys": {"p256dh": b64url(b"" + b"" * 64), "auth": b64url(b"1" * 16)},
+                "keys": {"p256dh": b64url(b"\x04" + b"\x01" * 64), "auth": b64url(b"1" * 16)},
             },
             ["body", "keys", "p256dh"],
         ),
@@ -1126,6 +1146,9 @@ UNSAFE_ENDPOINTS = [
         ("https://u:p@web.push.apple.com/a", "credentials"),
         ("https:///a", "no_host"),
         ("https://web.push.apple.com/a b", "unprintable"),
+        ("https://wéb.push.apple.com/a", "host_charset"),
+        ("https://we_b.push.apple.com/a", "host_charset"),
+        ("https://xn--wb-9ia.push.apple.com/a", None),
     ],
 )
 def test_endpoint_problem_is_the_shared_host_check(endpoint: str, problem: str | None) -> None:
@@ -1406,10 +1429,10 @@ async def test_the_vapid_jwt_carries_sub_aud_and_an_exp_within_a_day(
     assert (await sender.send(sub, build_payload("x", 1))).outcome == "sent"
     header = service.hits[0].headers["Authorization"]
     token = header.removeprefix("vapid t=").split(",k=", 1)[0]
-    origin = endpoint.split("/push/", 1)[0]
-    claims = jwt.decode(token, vapid_key.public_key(), algorithms=["ES256"], audience=origin)
+    audience = "http://127.0.0.1"  # scheme and lower-cased host, never the port
+    claims = jwt.decode(token, vapid_key.public_key(), algorithms=["ES256"], audience=audience)
     assert claims["sub"] == SUBJECT
-    assert claims["aud"] == origin
+    assert claims["aud"] == audience
     assert 0 < claims["exp"] - pytime.time() <= 24 * 3600
 
 
@@ -1422,3 +1445,66 @@ def test_p256dh_off_the_curve_is_refused() -> None:
                 "keys": {"p256dh": off_curve, "auth": b64url(b"1" * 16)},
             }
         )
+
+
+# --- fix round 2 --------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "audience"),
+    [
+        ("https://WEB.Push.Apple.COM:443/x", "https://web.push.apple.com"),
+        ("https://fcm.googleapis.com/fcm/send/abc", "https://fcm.googleapis.com"),
+    ],
+)
+def test_the_vapid_audience_is_the_lower_cased_host_without_a_port(
+    endpoint: str, audience: str
+) -> None:
+    assert vapid_audience(endpoint) == audience
+
+
+def test_push_hosts_come_from_the_environment_as_json_or_a_comma_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("YAWMI_PUSH_HOSTS", '["push.apple.com", "fcm.googleapis.com"]')
+    assert settings().push_hosts == ["push.apple.com", "fcm.googleapis.com"]
+    monkeypatch.setenv("YAWMI_PUSH_HOSTS", "push.apple.com, Notify.Windows.com")
+    assert settings().push_hosts == ["push.apple.com", "notify.windows.com"]
+    monkeypatch.setenv("YAWMI_PUSH_HOSTS", "")
+    assert settings().push_hosts == list(DEFAULT_PUSH_HOSTS)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["com", "*.push.apple.com", "push_apple.com", "push.apple.com:443", ".", "a..b", "-a.com"],
+)
+def test_a_malformed_push_host_stops_push_but_not_an_api_with_push_off(bad: str) -> None:
+    with pytest.raises(ValueError, match="push_hosts"):
+        settings(push_enabled=True, push_hosts=["push.apple.com", bad])
+    off = settings(push_hosts=["push.apple.com", bad])
+    assert off.push_enabled is False
+    assert off.push_hosts == ["push.apple.com"]  # the malformed entry never matches anything
+
+
+async def test_stop_awaits_the_cancelled_task_and_lets_its_own_cancellation_through() -> None:
+    started = asyncio.Event()
+
+    async def slow(now: datetime) -> int:
+        started.set()
+        await asyncio.sleep(3600)
+        return 0
+
+    loop = ReminderLoop(slow, interval=0.0)
+    loop.start()
+    await started.wait()
+    await loop.stop()  # no exception: the task's cancellation is expected
+    assert loop.task is not None and loop.task.cancelled()
+
+    second = ReminderLoop(slow, interval=0.0)
+    second.start()
+    stopper = asyncio.create_task(second.stop())
+    await asyncio.sleep(0)
+    stopper.cancel()  # cancelling the caller of stop() is not swallowed
+    with pytest.raises(asyncio.CancelledError):
+        await stopper
+    second.task.cancel()  # type: ignore[union-attr]

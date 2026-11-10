@@ -5,14 +5,15 @@ so `repr`/`str` never reveal them.
 No `.env` file is read: values come from the container environment or the secrets volume only.
 """
 
+import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-from yawmi.push.hosts import DEFAULT_PUSH_HOSTS
+from yawmi.push.hosts import DEFAULT_PUSH_HOSTS, valid_push_host
 
 
 class Settings(BaseSettings):
@@ -40,14 +41,43 @@ class Settings(BaseSettings):
     push_enabled: bool = False
     vapid_private_key_file: Path | None = None
     vapid_subject: str | None = None
-    # Push services the server may contact (exact host or any subdomain); JSON list in the env.
-    push_hosts: list[str] = Field(default_factory=lambda: list(DEFAULT_PUSH_HOSTS))
+    # Push services the server may contact (exact host or any subdomain). In the environment a
+    # JSON list or a comma-separated list; empty means the default list.
+    push_hosts: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: list(DEFAULT_PUSH_HOSTS)
+    )
 
     @field_validator("vapid_private_key_file", "vapid_subject", mode="before")
     @classmethod
     def _empty_is_unset(cls, value: object) -> object:
         # compose passes `${YAWMI_VAPID_SUBJECT:-}` as an empty string until it is filled in
         return None if value == "" else value
+
+    @field_validator("push_hosts", mode="before")
+    @classmethod
+    def _hosts_from_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if not text:
+            return list(DEFAULT_PUSH_HOSTS)
+        if text.startswith("["):
+            try:
+                return json.loads(text)
+            except ValueError:
+                return [text]  # kept as one malformed entry: refused below when push is on
+        return [part.strip() for part in text.split(",") if part.strip()]
+
+    @model_validator(mode="after")
+    def _push_hosts_are_host_names(self) -> Self:
+        hosts = [h.strip().lower() for h in self.push_hosts]
+        bad = [h for h in hosts if not valid_push_host(h)]
+        if bad and self.push_enabled:
+            # the count only: an entry is configuration, but nothing here echoes input
+            raise ValueError(f"push_hosts has {len(bad)} malformed entr(y/ies)")
+        # with push off a malformed entry must not stop the API; it is left out, never matched
+        self.push_hosts = [h for h in hosts if valid_push_host(h)]
+        return self
 
     @model_validator(mode="after")
     def _vapid_subject_is_mailto(self) -> Self:

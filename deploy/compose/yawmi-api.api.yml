@@ -29,6 +29,8 @@ services:
       YAWMI_PUSH_ENABLED: ${YAWMI_PUSH_ENABLED:-false}
       YAWMI_VAPID_SUBJECT: ${YAWMI_VAPID_SUBJECT:-}
       YAWMI_VAPID_PRIVATE_KEY_FILE: /run/yawmi/vapid_private.pem
+      # allowed push services; empty keeps the default (Apple, FCM, Mozilla, Windows)
+      YAWMI_PUSH_HOSTS: ${YAWMI_PUSH_HOSTS:-}
     networks:
       - n8n
       - raqib

@@ -5,8 +5,8 @@ The message is a declarative push payload (`{"web_push": 8030, "notification": {
 same notification on browsers that do not know the format.
 
 pywebpush encrypts (`WebPusher.encode`, aes128gcm) and py_vapid signs the VAPID JWT
-(`{"sub": <mailto subject>, "aud": <endpoint origin>, "exp": now + 12 h}`). The POST itself is
-made here with aiohttp rather than by pywebpush, because the endpoint is untrusted input:
+(`sub`: the mailto subject; `aud`: scheme and lower-cased host, no port; `exp`: now + 12 h).
+The POST itself is made here with aiohttp rather than by pywebpush, because the endpoint is untrusted input:
 
 * the endpoint is checked again just before the send (`hosts.endpoint_problem`); a failing one is
   `refused` and never contacted (the caller drops the row);
@@ -142,6 +142,12 @@ class GlobalOnlyResolver(AbstractResolver):
         await self._inner.close()
 
 
+def vapid_audience(endpoint: str) -> str:
+    """The JWT `aud`: scheme and lower-cased host of the push service, never a port or a path."""
+    parts = urlsplit(endpoint)
+    return f"{parts.scheme}://{(parts.hostname or '').lower()}"
+
+
 def default_check(allowed: tuple[str, ...] | list[str] = DEFAULT_PUSH_HOSTS) -> EndpointCheck:
     return partial(endpoint_problem, allowed=tuple(allowed))
 
@@ -184,10 +190,9 @@ class WebPushSender:
             self._session = None
 
     def _headers(self, endpoint: str) -> dict[str, str]:
-        parts = urlsplit(endpoint)
         claims = {
             "sub": self._subject,
-            "aud": f"{parts.scheme}://{parts.netloc}",
+            "aud": vapid_audience(endpoint),
             "exp": int(time.time()) + JWT_LIFETIME_SECONDS,
         }
         return {

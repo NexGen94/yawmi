@@ -9,7 +9,10 @@ services:
   yawmi-vapid-keygen:
     image: ghcr.io/nexgen94/yawmi-api:0.2.0
     user: "0:0"
-    entrypoint: ["python", "-I", "-m", "yawmi.push.keygen", "/run/yawmi/vapid_private.pem", "--group", "10001"]
+    # the key path comes from the same variable the API reads, never from the command line
+    entrypoint: ["python", "-I", "-m", "yawmi.push.keygen", "--group", "10001"]
+    environment:
+      YAWMI_VAPID_PRIVATE_KEY_FILE: /run/yawmi/vapid_private.pem
     restart: "no"
     network_mode: none
     read_only: true
