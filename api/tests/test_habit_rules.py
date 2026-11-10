@@ -1146,3 +1146,11 @@ def test_goal_prefill_epsilon_applies_to_the_quotient():
     assert goal_prefill(56.0000000035, 0, today, deadline, "day", "sun") == 8  # 8.0000000005
     # وفوق الهامش يُقرَّب لأعلى: 56.00000002 / 7 = 8.0000000029
     assert goal_prefill(56.00000002, 0, today, deadline, "day", "sun") == 9
+
+
+@pytest.mark.parametrize("n", [1, 0, -2])
+def test_every_n_days_needs_n_of_two_or_more(n):
+    """`every_n = 1` is `every_day`; the database refuses it (`every_n >= 2`), so the spec does."""
+    with pytest.raises(ValueError):
+        spec(schedule_kind="every_n_days", every_n=n, anchor_day=START)
+    assert spec(schedule_kind="every_n_days", every_n=2, anchor_day=START).every_n == 2
