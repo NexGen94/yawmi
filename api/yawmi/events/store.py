@@ -10,14 +10,16 @@ Two properties of `GET /v1/events?since=` follow from how `received_at` is assig
   holds it until commit, so a later batch always carries a later `received_at` than every
   batch committed before it. Without the lock a slow transaction could commit rows older than
   a cursor a client has already moved past, and that client would never see them.
-* **Unique timestamps.** `now()` is the same for every row of a transaction, which would make
-  a page boundary inside a batch lose the rest of it (`since` is a bare timestamp). Each row of
-  a batch gets the batch time plus one microsecond per position instead, and `pull` also never
-  splits a group of rows sharing one `received_at` (a page may then exceed `limit`).
+* **Unique, increasing timestamps.** `now()` is the same for every row of a transaction, which
+  would make a page boundary inside a batch lose the rest of it (`since` is a bare timestamp).
+  Each row of a batch gets the batch time plus one microsecond per position instead, and the
+  batch time is `max(clock, newest stored received_at + 1 microsecond)`, so a tie or a clock
+  that steps back cannot stamp a batch before one a client may already have passed. `pull` also
+  never splits a group of rows sharing one `received_at` (a page may then exceed `limit`).
 """
 
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 from uuid import UUID
@@ -78,6 +80,22 @@ class EventStore(Protocol):
         ...
 
 
+def next_received_base(now: datetime, last: datetime | None) -> datetime:
+    """The first `received_at` of a new batch: the clock, but never at or before `last`.
+
+    `last` is the newest `received_at` already stored. Clocks tie and can step backwards (NTP,
+    a restart on another host), and the cursor of `GET /v1/events` only moves forward, so a
+    batch stamped before `last` could be skipped by a client that already passed it.
+    """
+    if last is not None and now <= last:
+        return last + timedelta(microseconds=1)
+    return now
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 def received_times(base: datetime, count: int) -> list[datetime]:
     """`count` strictly increasing times starting at `base` (one microsecond apart)."""
     return [base + timedelta(microseconds=i) for i in range(count)]
@@ -94,6 +112,9 @@ FROM unnest(
 ON CONFLICT (id) DO NOTHING
 RETURNING id
 """
+
+# served by the (received_at, id) index: one step from its end
+_NEWEST_RECEIVED = "SELECT max(received_at) FROM yawmi.events"
 
 _KNOWN_HABITS = "SELECT code FROM yawmi.habits WHERE code = ANY($1::text[])"
 
@@ -202,8 +223,9 @@ def stored_event_from_row(row: "asyncpg.Record | dict[str, object]") -> StoredEv
 
 
 class AsyncpgEventStore:
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, clock: Callable[[], datetime] = _utc_now) -> None:
         self._pool = pool
+        self._clock = clock
 
     async def ingest(self, device_id: UUID, planned: Sequence[Planned]) -> BatchResult:
         if not planned:
@@ -211,8 +233,10 @@ class AsyncpgEventStore:
         payloads = dump_payloads(planned)  # before any connection or lock is taken
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(_LOCK, *INGEST_LOCK_KEYS)
-            # the clock is read only now, with the lock held (see the module docstring)
-            received = received_times(datetime.now(UTC), len(planned))
+            # the clock is read only now, with the lock held (see the module docstring), and
+            # never earlier than the newest time already stored
+            last = await conn.fetchval(_NEWEST_RECEIVED)
+            received = received_times(next_received_base(self._clock(), last), len(planned))
             inserted = {
                 row["id"]
                 for row in await conn.fetch(

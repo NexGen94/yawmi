@@ -7,7 +7,7 @@ the same API tests also run against Postgres when `TEST_DATABASE_URL` is set.
 """
 
 from collections.abc import Callable, Sequence
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from yawmi.events.models import BatchResult, StoredEvent
@@ -18,7 +18,7 @@ from yawmi.events.project import (
     Planned,
     habit_codes,
 )
-from yawmi.events.store import UnknownHabits, dump_payloads, received_times
+from yawmi.events.store import UnknownHabits, dump_payloads, next_received_base, received_times
 
 
 def _utc_now() -> datetime:
@@ -33,14 +33,11 @@ class InMemoryEventStore:
         self.habit_logs: dict[tuple[str, date, str], HabitLog] = {}
         self.focus_sessions: list[FocusSession] = []
         self.breath_sessions: list[BreathSession] = []
-        self._last_received: datetime | None = None
 
     async def ingest(self, device_id: UUID, planned: Sequence[Planned]) -> BatchResult:
         dump_payloads(planned)  # same rule as the Postgres store: no NaN / infinity
-        base = self.clock()
-        if self._last_received is not None and base <= self._last_received:
-            base = self._last_received + timedelta(microseconds=1)
-        received = received_times(base, len(planned))
+        newest = max((e.received_at for e in self.events.values()), default=None)
+        received = received_times(next_received_base(self.clock(), newest), len(planned))
 
         new: list[tuple[Planned, datetime]] = []
         seen: set[UUID] = set()
@@ -72,7 +69,6 @@ class InMemoryEventStore:
                 tz=event.tz,
                 received_at=at,
             )
-            self._last_received = at
             intent = item.intent
             if isinstance(intent, HabitLog):
                 key = (intent.habit_code, intent.day, intent.source)

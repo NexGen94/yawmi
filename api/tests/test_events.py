@@ -43,6 +43,7 @@ from yawmi.events.store import (
     breath_args,
     focus_args,
     habit_log_args,
+    next_received_base,
     received_times,
 )
 from yawmi.main import create_app
@@ -1116,3 +1117,70 @@ async def test_the_in_memory_store_keeps_received_at_increasing_across_batches()
     times = [e.received_at for e in store.events.values()]
     assert len(set(times)) == 3
     assert times == sorted(times)
+
+
+# --- received_at is monotonic: later batches always carry later times --------------------------
+
+
+def test_next_received_base_never_goes_backwards() -> None:
+    now = datetime(2026, 11, 10, 9, 0, tzinfo=UTC)
+    one = timedelta(microseconds=1)
+    assert next_received_base(now, None) == now  # empty table: the clock
+    assert next_received_base(now, now - timedelta(seconds=5)) == now  # normal: the clock
+    assert next_received_base(now, now) == now + one  # a tie: one microsecond after
+    assert next_received_base(now, now + timedelta(hours=1)) == now + timedelta(hours=1) + one
+
+
+def new_events(count: int) -> list[EventIn]:
+    return [
+        EventIn(id=uuid4(), type="app_opened", payload={}, occurred_at=NOON) for _ in range(count)
+    ]
+
+
+async def stored_times(store: EventStore, events: list[EventIn]) -> dict[UUID, datetime]:
+    wanted = {e.id for e in events}
+    page = await store.pull(None, 500)
+    return {e.id: e.received_at for e in page if e.id in wanted}
+
+
+async def test_received_at_keeps_increasing_across_batches_under_a_frozen_clock(
+    backend: Backend,
+) -> None:
+    """Two batches in the same clock tick must not share or reorder their times."""
+    frozen = datetime.now(UTC)
+    store = backend.make_store(clock=lambda: frozen)
+    device_id = await backend.new_device("iphone")
+    first, second = new_events(3), new_events(3)
+    await store.ingest(device_id, plan(first, "iphone"))
+    await store.ingest(device_id, plan(second, "iphone"))
+    times_a = [(await stored_times(store, first))[e.id] for e in first]
+    times_b = [(await stored_times(store, second))[e.id] for e in second]
+    assert times_a == sorted(times_a)
+    assert len(set(times_a + times_b)) == 6  # no two events share a time
+    assert min(times_b) > max(times_a)  # the later batch is entirely later
+
+
+async def test_received_at_does_not_go_backwards_when_the_clock_does(backend: Backend) -> None:
+    now = datetime.now(UTC)
+    ticks = [now, now - timedelta(hours=1)]  # the second call sees a clock one hour earlier
+    store = backend.make_store(clock=lambda: ticks[0])
+    device_id = await backend.new_device("iphone")
+    first, second = new_events(2), new_events(2)
+    await store.ingest(device_id, plan(first, "iphone"))
+    ticks[0] = ticks[1]
+    await store.ingest(device_id, plan(second, "iphone"))
+    times_a = await stored_times(store, first)
+    times_b = await stored_times(store, second)
+    assert min(times_b.values()) > max(times_a.values())
+
+
+async def test_a_new_batch_lands_after_the_newest_time_already_stored(backend: Backend) -> None:
+    """Whatever wrote that row (another writer, a stepped clock), the cursor must not skip it."""
+    store = backend.make_store()  # first: in memory this replaces the store the seed goes into
+    ahead = datetime.now(UTC) + timedelta(days=3)
+    [seeded] = await backend.seed_events(1, ahead)
+    device_id = await backend.new_device("iphone")
+    [one] = new_events(1)
+    await store.ingest(device_id, plan([one], "iphone"))
+    assert (await stored_times(store, [one]))[one.id] == ahead + timedelta(microseconds=1)
+    assert seeded  # the seeded row is the one the new event was ordered after
