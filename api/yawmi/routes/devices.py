@@ -13,7 +13,9 @@ from pydantic import BaseModel, StringConstraints
 
 from yawmi.auth.deps import DevicesDep, SettingsDep, forbidden, require_kind, unauthorized
 from yawmi.auth.tokens import hash_refresh, issue_access, new_refresh
+from yawmi.errors import INVALID, ErrorDetail
 from yawmi.settings import Settings
+from yawmi.text import StorableText
 
 COOKIE_NAME = "yawmi_rt"
 COOKIE_PATH = "/v1/auth"
@@ -23,13 +25,12 @@ DEVICE_NOT_FOUND = "الجهاز غير موجود"
 router = APIRouter(prefix="/v1", tags=["devices"])
 
 
-class ErrorDetail(BaseModel):
-    detail: str
-
-
 class PairRequest(BaseModel):
-    code: Annotated[str, StringConstraints(min_length=1, max_length=32)]
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+    # NUL and lone surrogates are a 422 here: Postgres cannot store them (it would be a 500)
+    code: Annotated[StorableText, StringConstraints(min_length=1, max_length=32)]
+    name: Annotated[
+        StorableText, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+    ]
     # `service` is accepted by the schema only so that it can be refused with 403, not 422.
     kind: Literal["iphone", "watch", "web", "service"]
 
@@ -96,6 +97,7 @@ def _credentials(body: RefreshRequest | None, cookie: str | None) -> tuple[UUID,
     responses={
         400: {"model": ErrorDetail, "description": BAD_PAIRING_CODE},
         403: {"model": ErrorDetail, "description": "نوع الجهاز لا يُقرن"},
+        **INVALID,
     },
 )
 async def pair_device(
@@ -115,7 +117,10 @@ async def pair_device(
 @router.post(
     "/auth/refresh",
     summary="تدوير رمز التجديد وإصدار رمز وصول جديد",
-    responses={401: {"model": ErrorDetail, "description": "رمز التجديد غير صالح أو الجهاز مُبطَل"}},
+    responses={
+        401: {"model": ErrorDetail, "description": "رمز التجديد غير صالح أو الجهاز مُبطَل"},
+        **INVALID,
+    },
 )
 async def refresh_tokens(
     response: Response,
@@ -143,6 +148,7 @@ async def refresh_tokens(
     responses={
         403: {"model": ErrorDetail, "description": "غير مسموح"},
         404: {"model": ErrorDetail, "description": DEVICE_NOT_FOUND},
+        **INVALID,
     },
 )
 async def revoke_device(device_id: UUID, devices: DevicesDep) -> None:

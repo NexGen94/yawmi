@@ -8,16 +8,20 @@ import math
 import statistics
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import Literal
 
 WINDOW_DAYS = 28
-"""نافذة خط الأساس: آخر 28 قيمة."""
+"""نافذة خط الأساس: الأيام التقويمية الـ28 السابقة لليوم، [اليوم − 28، اليوم − 1] (D-065)."""
 
 MIN_NIGHTS = 7
-"""أقل من هذا العدد: لا خط أساس."""
+"""أقل من هذا العدد من الليالي الصالحة في النافذة: لا خط أساس."""
 
-FULL_NIGHTS = 28
-"""من هذا العدد فصاعداً: خط الأساس «كامل» (المواصفة § 3.3)، وما دونه (من 7) «أولي»."""
+WEEK_DAYS = 7
+"""طول كتلة الأسبوع داخل النافذة: أربع كتل متتالية من 7 أيام."""
+
+MIN_NIGHTS_PER_WEEK = 4
+"""خط الأساس «كامل» إن حوت كل كتلة أسبوع 4 ليالٍ صالحة على الأقل (المواصفة § 3.3، D-065)."""
 
 WEIGHT_HRV = 0.5
 WEIGHT_RHR = 0.3
@@ -58,31 +62,52 @@ class Baseline:
     quality: BaselineQuality
 
 
-def baseline(values: Sequence[float], log: bool = False) -> Baseline | None:
-    """خط الأساس على آخر 28 قيمة (مرتبة من الأقدم إلى الأحدث).
+def baseline_window(day: date) -> tuple[date, date]:
+    """نافذة خط الأساس ليوم `day`: [day − 28، day − 1] شاملة الطرفين."""
+    return day - timedelta(days=WINDOW_DAYS), day - timedelta(days=1)
 
-    النافذة هي آخر 28 *قيمة* لا آخر 28 يوماً تقويمياً: على المستدعي أن يمرّر الليالي الصالحة
-    داخل النافذة وحدها (بلا قيم فارغة ولا أصفار).
 
-    المعادلة: n = عدد القيم المستخدمة؛ `None` إن كان n < 7؛ `provisional` إن كان n < 28؛
-    وإلا `full`. المتوسط والانحراف المعياري للعيّنة (قسمة على n−1)، وعلى ln(x) إن كان `log`
+def baseline_quality(nights: Sequence[date], day: date) -> BaselineQuality | None:
+    """جودة خط الأساس من تواريخ الليالي الصالحة (D-065).
+
+    تُحسب الليالي داخل النافذة فقط. أقل من 7: `None`. `full` إن حوت كل كتلة من الكتل الأربع
+    [day−28..day−22] و[day−21..day−15] و[day−14..day−8] و[day−7..day−1] 4 ليالٍ على الأقل،
+    وإلا `provisional`. التاريخ المكرر يُعدّ ليلة واحدة.
+    """
+    first, last = baseline_window(day)
+    inside = {d for d in nights if first <= d <= last}
+    if len(inside) < MIN_NIGHTS:
+        return None
+    per_block = [0] * (WINDOW_DAYS // WEEK_DAYS)
+    for d in inside:
+        per_block[(d - first).days // WEEK_DAYS] += 1
+    return "full" if min(per_block) >= MIN_NIGHTS_PER_WEEK else "provisional"
+
+
+def baseline(nights: Sequence[tuple[date, float]], day: date, log: bool = False) -> Baseline | None:
+    """خط الأساس الشخصي ليوم `day` من ليالٍ صالحة مؤرخة `(تاريخ، قيمة)`.
+
+    على المستدعي أن يمرّر الليالي الصالحة وحدها (بلا قيم فارغة ولا أصفار)؛ والدالة تأخذ منها
+    ما وقع في النافذة [day − 28، day − 1] وتهمل ما سواه. الجودة من `baseline_quality`. المتوسط
+    والانحراف المعياري للعيّنة (قسمة على n−1) على كل القيم في النافذة، وعلى ln(x) إن كان `log`
     (لـHRV). تُرفض القيم غير المنتهية بـ`ValueError`، وكذلك غير الموجبة في وضع `log`.
     """
-    window = list(values[-WINDOW_DAYS:])
-    n = len(window)
-    if n < MIN_NIGHTS:
+    first, last = baseline_window(day)
+    inside = [(d, v) for d, v in nights if first <= d <= last]
+    quality = baseline_quality([d for d, _ in inside], day)
+    if quality is None:
         return None
-    for v in window:
+    values = [v for _, v in inside]
+    for v in values:
         _require_finite(value=v)
     if log:
-        if any(v <= 0 for v in window):
+        if any(v <= 0 for v in values):
             raise ValueError(_LOG_POSITIVE_MESSAGE)
-        window = [math.log(v) for v in window]
-    quality: BaselineQuality = "provisional" if n < FULL_NIGHTS else "full"
+        values = [math.log(v) for v in values]
     return Baseline(
-        mean=statistics.fmean(window),
-        sd=statistics.stdev(window),
-        n=n,
+        mean=statistics.fmean(values),
+        sd=statistics.stdev(values),
+        n=len(values),
         quality=quality,
     )
 

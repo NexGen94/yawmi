@@ -1,0 +1,2231 @@
+{
+  "components": {
+    "schemas": {
+      "AskRequest": {
+        "properties": {
+          "context": {
+            "additionalProperties": true,
+            "description": "ملخصات اليوم المجمّعة",
+            "title": "Context",
+            "type": "object"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "question": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ClientSource"
+            },
+            "maxItems": 50,
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "day",
+          "question"
+        ],
+        "title": "AskRequest",
+        "type": "object"
+      },
+      "BaselineOut": {
+        "properties": {
+          "nights": {
+            "description": "أقل عدد ليالٍ صالحة خلف خطوط الأساس الثلاثة",
+            "title": "Nights",
+            "type": "integer"
+          },
+          "quality": {
+            "enum": [
+              "provisional",
+              "full"
+            ],
+            "title": "Quality",
+            "type": "string"
+          }
+        },
+        "required": [
+          "quality",
+          "nights"
+        ],
+        "title": "BaselineOut",
+        "type": "object"
+      },
+      "BatchResult": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "duplicates": {
+            "title": "Duplicates",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "accepted",
+          "duplicates"
+        ],
+        "title": "BatchResult",
+        "type": "object"
+      },
+      "CardHabit": {
+        "properties": {
+          "adherence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adherence"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "title_ar": {
+            "title": "Title Ar",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "title_ar",
+          "adherence"
+        ],
+        "title": "CardHabit",
+        "type": "object"
+      },
+      "CardOut": {
+        "properties": {
+          "habits": {
+            "description": "العادات المرتبطة بالبطاقة (تملؤها المهمة 10)",
+            "items": {
+              "$ref": "#/components/schemas/CardHabit"
+            },
+            "title": "Habits",
+            "type": "array"
+          },
+          "outcome_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Outcome Codes",
+            "type": "array"
+          },
+          "page_id": {
+            "title": "Page Id",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "page_id",
+          "title",
+          "status",
+          "outcome_codes",
+          "habits"
+        ],
+        "title": "CardOut",
+        "type": "object"
+      },
+      "ClientSource": {
+        "description": "A citable fact from the client, with bounded field sizes.",
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "maxLength": 32,
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 500,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "text"
+        ],
+        "title": "ClientSource",
+        "type": "object"
+      },
+      "DailyMetricsIn": {
+        "additionalProperties": false,
+        "description": "One local day of raw metrics. Every metric is optional: a gap is missing, never zero.\n\nUnknown fields are a 422 (`extra_forbidden`), so a misnamed metric is never silently lost.",
+        "properties": {
+          "active_kcal": {
+            "anyOf": [
+              {
+                "maximum": 50000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Kcal"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "exercise_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exercise Minutes"
+          },
+          "exertion": {
+            "description": "مقاطع الجهد لحساب TRIMP؛ تُترك فارغة إن لم يوجد",
+            "items": {
+              "$ref": "#/components/schemas/ExertionSegment"
+            },
+            "maxItems": 500,
+            "title": "Exertion",
+            "type": "array"
+          },
+          "has_watch_night": {
+            "description": "هل لبست الساعة في النوم المنسوب إلى اليوم",
+            "title": "Has Watch Night",
+            "type": "boolean"
+          },
+          "hrv_ms": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HRV الليلي (SDNN)",
+            "title": "Hrv Ms"
+          },
+          "hrv_rmssd_ms": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hrv Rmssd Ms"
+          },
+          "hrv_samples": {
+            "description": "عدد عيّنات HRV في الليلة",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Hrv Samples",
+            "type": "integer"
+          },
+          "in_bed_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Bed Minutes"
+          },
+          "mindful_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mindful Minutes"
+          },
+          "resp_rate_bpm": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resp Rate Bpm"
+          },
+          "rhr_bpm": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 300.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rhr Bpm"
+          },
+          "sleep_awake_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Awake Minutes"
+          },
+          "sleep_core_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Core Minutes"
+          },
+          "sleep_deep_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Deep Minutes"
+          },
+          "sleep_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep End"
+          },
+          "sleep_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Minutes"
+          },
+          "sleep_rem_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Rem Minutes"
+          },
+          "sleep_start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Start"
+          },
+          "sleeping_hr_bpm": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 300.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleeping Hr Bpm"
+          },
+          "spo2_pct": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spo2 Pct"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "maximum": 1000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
+          "trimp_coefficients": {
+            "anyOf": [
+              {
+                "enum": [
+                  "male",
+                  "female"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "معاملات Banister (0.64/1.92 أو 0.86/1.67)؛ مطلوبة إن أُرسلت مقاطع جهد",
+            "title": "Trimp Coefficients"
+          },
+          "walking_hr_bpm": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 300.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Walking Hr Bpm"
+          },
+          "wrist_temp_delta_c": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": -10.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wrist Temp Delta C"
+          }
+        },
+        "required": [
+          "day",
+          "has_watch_night",
+          "hrv_samples"
+        ],
+        "title": "DailyMetricsIn",
+        "type": "object"
+      },
+      "DailyScoresOut": {
+        "properties": {
+          "baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BaselineOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "data_quality": {
+            "enum": [
+              "missing",
+              "low",
+              "ok"
+            ],
+            "title": "Data Quality",
+            "type": "string"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "recovery_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "0–100، أو null إن لم يكتمل خط الأساس",
+            "title": "Recovery Score"
+          },
+          "strain_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "0–21 بمنزلة عشرية واحدة",
+            "title": "Strain Score"
+          }
+        },
+        "required": [
+          "day",
+          "recovery_score",
+          "strain_score",
+          "data_quality",
+          "baseline"
+        ],
+        "title": "DailyScoresOut",
+        "type": "object"
+      },
+      "DayCloseRequest": {
+        "properties": {
+          "context": {
+            "additionalProperties": true,
+            "description": "ملخصات اليوم المجمّعة",
+            "title": "Context",
+            "type": "object"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ClientSource"
+            },
+            "maxItems": 50,
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "day"
+        ],
+        "title": "DayCloseRequest",
+        "type": "object"
+      },
+      "ErrorDetail": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      },
+      "EventBatch": {
+        "description": "`POST /v1/events` body: at most 500 events (more is a 422, like any other bad body).",
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/EventIn"
+            },
+            "maxItems": 500,
+            "title": "Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "EventBatch",
+        "type": "object"
+      },
+      "EventIn": {
+        "description": "One event as a client queues it.\n\n`device_id` is never read from the body (the token's `sub` is used) and unknown fields are\nignored.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "type": {
+            "enum": [
+              "habit_logged",
+              "habit_skipped",
+              "habit_vacation",
+              "day_closed",
+              "focus_started",
+              "focus_ended",
+              "breath_ended",
+              "mood_logged",
+              "confounder_tagged",
+              "app_opened"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "tz": {
+            "default": "Asia/Riyadh",
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "payload",
+          "occurred_at"
+        ],
+        "title": "EventIn",
+        "type": "object"
+      },
+      "ExertionSegment": {
+        "additionalProperties": false,
+        "properties": {
+          "hr_reserve": {
+            "description": "احتياطي النبض من 0 إلى 1",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Hr Reserve",
+            "type": "number"
+          },
+          "minutes": {
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Minutes",
+            "type": "number"
+          }
+        },
+        "required": [
+          "minutes",
+          "hr_reserve"
+        ],
+        "title": "ExertionSegment",
+        "type": "object"
+      },
+      "HabitDue": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "done_today": {
+            "description": "سُجّل لها إنجاز (`done`) اليوم من أي مصدر",
+            "title": "Done Today",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "boolean",
+              "count",
+              "duration"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "period": {
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "target_per_period": {
+            "title": "Target Per Period",
+            "type": "number"
+          },
+          "title_ar": {
+            "title": "Title Ar",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "enum": [
+                  "session",
+                  "min",
+                  "hour"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "code",
+          "title_ar",
+          "kind",
+          "unit",
+          "target_per_period",
+          "period",
+          "done_today"
+        ],
+        "title": "HabitDue",
+        "type": "object"
+      },
+      "InsightOut": {
+        "additionalProperties": false,
+        "description": "A stored insight: the validated reply plus its identity.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "lines": {
+            "description": "سطران كحد أقصى",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "title": "Lines",
+            "type": "array"
+          },
+          "priorities": {
+            "description": "ثلاث أولويات كحد أقصى",
+            "items": {
+              "$ref": "#/components/schemas/Priority"
+            },
+            "maxItems": 3,
+            "title": "Priorities",
+            "type": "array"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "سؤال واحد على الأكثر، أو null",
+            "title": "Question"
+          },
+          "source_ids": {
+            "description": "معرّفات المصادر المعطاة التي استند إليها الرد",
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines",
+          "question",
+          "source_ids",
+          "priorities",
+          "id",
+          "kind",
+          "day",
+          "created_at"
+        ],
+        "title": "InsightOut",
+        "type": "object"
+      },
+      "InsightResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "lines": {
+            "description": "سطران كحد أقصى",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "title": "Lines",
+            "type": "array"
+          },
+          "priorities": {
+            "description": "ثلاث أولويات كحد أقصى",
+            "items": {
+              "$ref": "#/components/schemas/Priority"
+            },
+            "maxItems": 3,
+            "title": "Priorities",
+            "type": "array"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "سؤال واحد على الأكثر، أو null",
+            "title": "Question"
+          },
+          "source_ids": {
+            "description": "معرّفات المصادر المعطاة التي استند إليها الرد",
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines",
+          "question",
+          "source_ids",
+          "priorities"
+        ],
+        "title": "InsightResponse",
+        "type": "object"
+      },
+      "Live": {
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "Live",
+        "type": "object"
+      },
+      "MilestoneOut": {
+        "properties": {
+          "cycle_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle No"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "page_id": {
+            "title": "Page Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "page_id",
+          "title",
+          "due_date",
+          "cycle_no"
+        ],
+        "title": "MilestoneOut",
+        "type": "object"
+      },
+      "OutcomeOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "completion": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "المحطات المنجزة ÷ كل المحطات، أو null بلا محطات",
+            "title": "Completion"
+          },
+          "milestones_done": {
+            "title": "Milestones Done",
+            "type": "integer"
+          },
+          "milestones_total": {
+            "title": "Milestones Total",
+            "type": "integer"
+          },
+          "next_milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MilestoneOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "أقرب محطة مفتوحة بموعدها (ثم بالدورة)، المتأخرة منها أولاً"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target_date": {
+            "format": "date",
+            "title": "Target Date",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "title",
+          "target_date",
+          "status",
+          "milestones_total",
+          "milestones_done",
+          "completion",
+          "next_milestone"
+        ],
+        "title": "OutcomeOut",
+        "type": "object"
+      },
+      "OverviewOut": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/CardOut"
+            },
+            "title": "Cards",
+            "type": "array"
+          },
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/OutcomeOut"
+            },
+            "title": "Outcomes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcomes",
+          "cards"
+        ],
+        "title": "OverviewOut",
+        "type": "object"
+      },
+      "PairRequest": {
+        "properties": {
+          "code": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "iphone",
+              "watch",
+              "web",
+              "service"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "kind"
+        ],
+        "title": "PairRequest",
+        "type": "object"
+      },
+      "Priority": {
+        "additionalProperties": false,
+        "properties": {
+          "source_id": {
+            "description": "معرّف مصدر من المصادر المعطاة فقط",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "title": {
+            "description": "عنوان الأولوية في جملة اسمية قصيرة",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "source_id"
+        ],
+        "title": "Priority",
+        "type": "object"
+      },
+      "PullResult": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/StoredEvent"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "next_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Since"
+          }
+        },
+        "required": [
+          "events",
+          "next_since"
+        ],
+        "title": "PullResult",
+        "type": "object"
+      },
+      "RefreshRequest": {
+        "description": "Native clients send both fields; web clients send no body and rely on the cookie.",
+        "properties": {
+          "device_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "refresh_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
+          }
+        },
+        "title": "RefreshRequest",
+        "type": "object"
+      },
+      "ReviewList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InsightOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ReviewList",
+        "type": "object"
+      },
+      "StoredEvent": {
+        "description": "An event as stored, with the server-side `received_at` that `GET /v1/events` pages by.",
+        "properties": {
+          "device_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "device_id",
+          "type",
+          "payload",
+          "occurred_at",
+          "tz",
+          "received_at"
+        ],
+        "title": "StoredEvent",
+        "type": "object"
+      },
+      "TodayHealth": {
+        "description": "The day's scores and a 7-day recovery trend; a day without data is `missing`, not zero.",
+        "properties": {
+          "data_quality": {
+            "enum": [
+              "missing",
+              "low",
+              "ok"
+            ],
+            "title": "Data Quality",
+            "type": "string"
+          },
+          "recovery_7d": {
+            "description": "سبعة أيام تنتهي باليوم، والأقدم أولاً",
+            "items": {
+              "$ref": "#/components/schemas/TrendPoint"
+            },
+            "title": "Recovery 7D",
+            "type": "array"
+          },
+          "recovery_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recovery Score"
+          },
+          "sleep_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Minutes"
+          },
+          "strain_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strain Score"
+          }
+        },
+        "required": [
+          "data_quality",
+          "recovery_score",
+          "strain_score",
+          "sleep_minutes",
+          "recovery_7d"
+        ],
+        "title": "TodayHealth",
+        "type": "object"
+      },
+      "TodayOut": {
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "habits_due": {
+            "items": {
+              "$ref": "#/components/schemas/HabitDue"
+            },
+            "title": "Habits Due",
+            "type": "array"
+          },
+          "health": {
+            "$ref": "#/components/schemas/TodayHealth"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/TodayPlan"
+          },
+          "priorities": {
+            "description": "تملؤها خدمة الذكاء الاصطناعي؛ فارغة حتى ذلك",
+            "items": {
+              "type": "string"
+            },
+            "title": "Priorities",
+            "type": "array"
+          }
+        },
+        "required": [
+          "day",
+          "habits_due",
+          "priorities",
+          "health",
+          "plan"
+        ],
+        "title": "TodayOut",
+        "type": "object"
+      },
+      "TodayPlan": {
+        "properties": {
+          "cycle": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "رقم الدورة الحالية، وأسبوع مراجعتها منها",
+            "title": "Cycle"
+          },
+          "day_in_cycle": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "1 في أول يوم من الدورة",
+            "title": "Day In Cycle"
+          },
+          "focus_outcomes": {
+            "description": "مخرجات لها محطات مفتوحة في هذه الدورة",
+            "items": {
+              "type": "string"
+            },
+            "title": "Focus Outcomes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cycle",
+          "day_in_cycle",
+          "focus_outcomes"
+        ],
+        "title": "TodayPlan",
+        "type": "object"
+      },
+      "TokenPair": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "device_id": {
+            "format": "uuid",
+            "title": "Device Id",
+            "type": "string"
+          },
+          "refresh_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
+          }
+        },
+        "required": [
+          "device_id",
+          "access_token",
+          "refresh_token"
+        ],
+        "title": "TokenPair",
+        "type": "object"
+      },
+      "TrendPoint": {
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "recovery_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recovery Score"
+          }
+        },
+        "required": [
+          "day",
+          "recovery_score"
+        ],
+        "title": "TrendPoint",
+        "type": "object"
+      },
+      "ValidationErrorBody": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationErrorItem"
+            },
+            "title": "Errors",
+            "type": "array"
+          }
+        },
+        "required": [
+          "detail",
+          "errors"
+        ],
+        "title": "ValidationErrorBody",
+        "type": "object"
+      },
+      "ValidationErrorItem": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Loc",
+            "type": "array"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "type"
+        ],
+        "title": "ValidationErrorItem",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "description": "رمز وصول الجهاز",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "yawmi-api",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/ask": {
+      "post": {
+        "description": "الجواب لا يستشهد إلا بمصادر الطلب. لا يُحفظ شيء.",
+        "operationId": "ask_v1_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح (رمز الخدمة)"
+          },
+          "422": {
+            "description": "طلب غير صالح، أو امتنع النموذج عن الرد"
+          },
+          "502": {
+            "description": "تعذّر الحصول على ردّ صالح من المزوّد"
+          },
+          "503": {
+            "description": "مفتاح المزوّد غير مضبوط"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "سؤال واحد بجواب من سطرين",
+        "tags": [
+          "insights"
+        ]
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "operationId": "refresh_tokens_v1_auth_refresh_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "yawmi_rt",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Yawmi Rt"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RefreshRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPair"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "رمز التجديد غير صالح أو الجهاز مُبطَل"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "summary": "تدوير رمز التجديد وإصدار رمز وصول جديد",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/v1/day/close": {
+      "post": {
+        "description": "يستلم ملخصات اليوم ومصادره، ويعيد ملخصاً من سطرين كحد أقصى لا يستشهد إلا بمصادر الطلب. أول إغلاق لليوم يُحفظ، وكل تكرار لليوم نفسه يعيده دون استدعاء المزوّد. الملخصات والمصادر يرسلها العميل حالياً إلى أن يبنيها الخادم (المهمتان 8b و10b).",
+        "operationId": "close_day_v1_day_close_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayCloseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح (رمز الخدمة)"
+          },
+          "422": {
+            "description": "طلب غير صالح، أو امتنع النموذج عن الرد"
+          },
+          "502": {
+            "description": "تعذّر الحصول على ردّ صالح من المزوّد"
+          },
+          "503": {
+            "description": "مفتاح المزوّد غير مضبوط"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "إغلاق اليوم بملخص من سطرين (متكرر الأثر)",
+        "tags": [
+          "insights"
+        ]
+      }
+    },
+    "/v1/devices/pair": {
+      "post": {
+        "operationId": "pair_device_v1_devices_pair_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPair"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "الكود غير صالح أو منتهٍ"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "نوع الجهاز لا يُقرن"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "summary": "إقران جهاز جديد بكود لمرة واحدة",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/v1/devices/{device_id}/revoke": {
+      "post": {
+        "operationId": "revoke_device_v1_devices__device_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Device Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "الجهاز غير موجود"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "إبطال جهاز (لرمز الخدمة فقط)",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/v1/events": {
+      "get": {
+        "description": "مرتبة بوقت الاستلام في الخادم. `next_since` هو وقت استلام آخر حدث مُعاد (أو قيمة `since` نفسها إن لم يوجد جديد)، فيُمرَّر في الطلب التالي. لا تنقسم الصفحة داخل مجموعة أحداث تشترك في وقت الاستلام نفسه، فقد تزيد على `limit`. يجب ترميز `+` في `since` بـ`%2B` أو استعمال `Z`.",
+        "operationId": "pull_events_v1_events_get",
+        "parameters": [
+          {
+            "description": "أحداث استُلمت بعد هذا الوقت (ISO 8601 بمنطقة زمنية)",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "أحداث استُلمت بعد هذا الوقت (ISO 8601 بمنطقة زمنية)",
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PullResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "سحب الأحداث بمؤشر زمني",
+        "tags": [
+          "events"
+        ]
+      },
+      "post": {
+        "description": "حتى 500 حدثاً في الدفعة. معرّف الحدث هو مفتاح التكرار: إعادة إرسال الدفعة نفسها لا تضاعف شيئاً ولا تُرفض. `habit_logged` و`habit_skipped` و`habit_vacation` و`focus_ended` و`breath_ended` تُسقَط أيضاً إلى جداولها؛ بقية الأنواع تُحفظ في الأحداث فقط.",
+        "operationId": "post_events_v1_events_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح (رمز الخدمة لا يسجّل أحداثاً)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح: الدفعة تُرفض كاملة"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "استقبال دفعة أحداث (متكررة الأثر)",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/v1/health/daily": {
+      "post": {
+        "description": "يحسب الخادم التعافي والإجهاد وجودة البيانات بخط أساس شخصي من الليالي الصالحة في الأيام الـ28 السابقة: لا خط أساس إن قلّت الليالي الصالحة في النافذة عن 7، و«كامل» إن حوى كل أسبوع من أسابيعها الأربعة 4 ليالٍ صالحة على الأقل، وإلا «أولي». إعادة إرسال اليوم نفسه تستبدله. عند رفع عدة أيام يُرسل الأقدم أولاً، فاليوم يُقاس بما سبقه مخزناً، ولا يُعاد حساب الأيام التالية عند وصول يوم أقدم. حقل غير معروف يُرفض. تقدير، ليس تشخيصاً.",
+        "operationId": "post_daily_v1_health_daily_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyMetricsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyScoresOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "رفع مقاييس يوم واحد وحساب درجاته",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/health/live": {
+      "get": {
+        "operationId": "health_live_v1_health_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Live"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "فحص الحياة (بلا مصادقة)",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/overview": {
+      "get": {
+        "description": "المخرجات O1–O12 بنسبة إنجاز محطاتها (كما في Notion، والعادات لا تغيّرها) وأقرب محطة مفتوحة، والبطاقات بمخرجاتها.",
+        "operationId": "get_overview_v1_overview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "الصورة الكاملة: المخرجات والبطاقات",
+        "tags": [
+          "today"
+        ]
+      }
+    },
+    "/v1/reviews": {
+      "get": {
+        "description": "`kind` إما `weekly` (الافتراضي) أو `evening`؛ و`before` يعيد ما قبل يوم معيّن.",
+        "operationId": "list_reviews_v1_reviews_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "weekly",
+              "pattern": "^(evening|weekly)$",
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "أيام قبل هذا اليوم فقط",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "أيام قبل هذا اليوم فقط",
+              "title": "Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح (رمز الخدمة)"
+          },
+          "422": {
+            "description": "طلب غير صالح، أو امتنع النموذج عن الرد"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "المراجعات المحفوظة، الأحدث أولاً",
+        "tags": [
+          "insights"
+        ]
+      }
+    },
+    "/v1/today": {
+      "get": {
+        "description": "اليوم المحلي بتوقيت الرياض. `habits_due` العادات المجدولة اليوم؛ و`health` درجات اليوم واتجاه سبعة أيام (يوم بلا ساعة «ناقص» لا صفر)؛ و`plan` الدورة الحالية من مرآة Notion.",
+        "operationId": "get_today_v1_today_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodayOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "اليوم: العادات المستحقة والصحة والخطة",
+        "tags": [
+          "today"
+        ]
+      }
+    }
+  }
+}
