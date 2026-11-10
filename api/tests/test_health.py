@@ -3,6 +3,9 @@
 The scoring tests are pure. The API tests run twice through the `backend` fixture: against the
 in-memory store (always) and against Postgres (when `TEST_DATABASE_URL` is set; under CI they
 fail rather than skip without it), with identical assertions.
+
+`TEST_DATABASE_URL` must point at a throwaway database, never the real `raqib`: the fixture
+deletes every `daily_metrics` row in a 61-day range around the pinned day.
 """
 
 import json
@@ -86,9 +89,16 @@ def test_below_seven_valid_nights_there_is_no_baseline_and_no_recovery(count: in
 
 @pytest.mark.parametrize(
     ("count", "quality"),
-    [(7, "provisional"), (14, "provisional"), (27, "provisional"), (28, "full")],
+    [
+        (7, "provisional"),
+        (14, "provisional"),
+        (24, "provisional"),  # the oldest block [day-28..day-22] holds day-22..day-24 only
+        (25, "full"),  # every block now holds at least 4 (D-065)
+        (27, "full"),
+        (28, "full"),
+    ],
 )
-def test_baseline_is_provisional_from_7_and_full_at_28(count: int, quality: str) -> None:
+def test_consecutive_nights_are_full_once_every_week_holds_four(count: int, quality: str) -> None:
     result = score(history(count))
     assert result.baseline is not None
     assert result.baseline.quality == quality
@@ -111,9 +121,22 @@ def test_nights_outside_the_28_day_window_do_not_count() -> None:
     assert score(history(6) + future).baseline is None
 
 
-def test_more_than_28_nights_keeps_the_newest_28() -> None:
-    assert valid_values(history(40), DAY, "rhr_bpm") == [
-        n.rhr_bpm for n in sorted(history(28), key=lambda n: n.day)
+def test_nights_older_than_28_days_do_not_enter_the_baseline() -> None:
+    result = score(history(40))
+    assert result.baseline is not None
+    assert (result.baseline.quality, result.baseline.nights) == ("full", 28)
+
+
+def test_valid_values_keep_ok_nights_with_a_value_dated_oldest_first() -> None:
+    nights = [
+        night(DAY - timedelta(days=1), 1),
+        night(DAY - timedelta(days=3), 3, sleep_minutes=None),
+        night(DAY - timedelta(days=2), 2, "low"),
+        night(DAY - timedelta(days=4), 4),
+    ]
+    assert valid_values(nights, "sleep_minutes") == [
+        (DAY - timedelta(days=4), 440.0),
+        (DAY - timedelta(days=1), 400.0),
     ]
 
 
@@ -122,9 +145,17 @@ def test_an_empty_value_is_skipped_not_read_as_zero() -> None:
     gaps = [night(n.day, i, sleep_minutes=None) if i < 22 else n for i, n in enumerate(nights)]
     result = score(gaps)
     assert result.baseline is None  # sleep has only 6 values left
-    assert valid_values(gaps, DAY, "sleep_minutes") == [
-        float(n.sleep_minutes) for n in sorted(gaps, key=lambda n: n.day) if n.sleep_minutes
-    ]
+
+
+def test_four_valid_nights_in_every_week_make_a_full_baseline() -> None:
+    """D-065: 16 nights, 4 in each 7-day block of the window, are enough for `full`."""
+    offsets = [28, 26, 24, 22, 21, 19, 17, 15, 14, 12, 10, 8, 7, 5, 3, 1]
+    spread = [night(DAY - timedelta(days=o), o) for o in offsets]
+    result = score(spread)
+    assert result.baseline is not None
+    assert (result.baseline.quality, result.baseline.nights) == ("full", 16)
+    thin = [n for n in spread if n.day != DAY - timedelta(days=1)]  # last week at 3
+    assert score(thin).baseline.quality == "provisional"
 
 
 def test_lower_resting_heart_rate_raises_recovery() -> None:
@@ -366,6 +397,37 @@ async def test_bad_bodies_are_a_422_in_the_app_shape(
     assert response.json()["detail"] == "طلب غير صالح"
     assert response.json()["errors"][0]["type"] == error_type
     assert await store.nights(FIRST_DAY, DAY + timedelta(days=1)) == []
+
+
+async def test_hrv_samples_is_required(client: httpx.AsyncClient) -> None:
+    """Without it a worn night would read as `low` and never reach a baseline, silently."""
+    payload = body()
+    del payload["hrv_samples"]
+    response = await client.post("/v1/health/daily", json=payload, headers=auth())
+    assert response.status_code == 422
+    assert response.json()["errors"][0] == {"loc": ["body", "hrv_samples"], "type": "missing"}
+
+
+@pytest.mark.parametrize(
+    ("extra", "loc"),
+    [
+        ({"hrv_sdnn_ms": 50}, ["body", "hrv_sdnn_ms"]),
+        (
+            {
+                "exertion": [{"minutes": 10, "hr_reserve": 0.5, "avg_hr": 140}],
+                "trimp_coefficients": "male",
+            },
+            ["body", "exertion", 0, "avg_hr"],
+        ),
+    ],
+    ids=["top-level", "segment"],
+)
+async def test_unknown_fields_are_a_422_not_lost(
+    client: httpx.AsyncClient, extra: dict[str, Any], loc: list[Any]
+) -> None:
+    response = await client.post("/v1/health/daily", json=body() | extra, headers=auth())
+    assert response.status_code == 422
+    assert response.json()["errors"][0] == {"loc": loc, "type": "extra_forbidden"}
 
 
 @pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity", "1e999"])

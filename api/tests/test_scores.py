@@ -1,6 +1,7 @@
 """Tests for the pure health-score functions (baseline, recovery, TRIMP, strain, data quality)."""
 
 import math
+from datetime import date, timedelta
 
 import pytest
 
@@ -15,25 +16,90 @@ from yawmi.domain.scores import (
 )
 
 # --- baseline -------------------------------------------------------------------------------
+#
+# D-065: the window is the 28 calendar days [day - 28, day - 1]; no baseline below 7 valid nights;
+# "full" only when each 7-day block of the window holds at least 4 valid nights; otherwise
+# "provisional". Mean and SD are over every valid value in the window.
+
+DAY = date(2026, 11, 10)
+
+
+def dated(values, *, day=DAY):
+    """`values` on consecutive nights ending the day before `day` (the last value is day - 1)."""
+    n = len(values)
+    return [(day - timedelta(days=n - i), v) for i, v in enumerate(values)]
+
+
+def on(offsets, value=60.0):
+    """One night `value` at each `day - offset`."""
+    return [(DAY - timedelta(days=o), value) for o in offsets]
+
+
+# 4 nights in each block: [28..22], [21..15], [14..8], [7..1] (offsets before DAY)
+SIXTEEN = [28, 26, 24, 22, 21, 19, 17, 15, 14, 12, 10, 8, 7, 5, 3, 1]
 
 
 def test_baseline_none_below_seven_nights():
-    assert baseline([1] * 6) is None
-    assert baseline([]) is None
+    assert baseline(dated([1] * 6), DAY) is None
+    assert baseline([], DAY) is None
 
 
-@pytest.mark.parametrize("n", [7, 10, 13, 14, 27])
-def test_baseline_provisional_from_seven_until_twenty_eight(n):
-    assert baseline([60] * n).quality == "provisional"
+def test_seven_nights_in_one_week_are_provisional():
+    b = baseline(dated([60] * 7), DAY)
+    assert b is not None
+    assert (b.quality, b.n) == ("provisional", 7)
 
 
-def test_baseline_full_at_twenty_eight_nights():
-    assert baseline([60] * 28).quality == "full"
-    assert baseline([60] * 40).quality == "full"  # window capped at 28, still full
+def test_sixteen_nights_four_per_week_are_full():
+    b = baseline(on(SIXTEEN), DAY)
+    assert b is not None
+    assert (b.quality, b.n) == ("full", 16)
+
+
+def test_one_week_at_three_nights_is_provisional():
+    """The most a window can hold with one block at 3 is 24 nights (27 cannot leave a week at 3)."""
+    three = [o for o in range(1, 29) if o not in (8, 9, 10, 11)]  # block [14..8] keeps 14, 13, 12
+    assert len(three) == 24
+    assert baseline(on(three), DAY).quality == "provisional"
+    four = [o for o in range(1, 29) if o not in (9, 10, 11)]  # block [14..8] keeps 14, 13, 12, 8
+    assert baseline(on(four), DAY).quality == "full"
+
+
+def test_twenty_seven_of_twenty_eight_nights_are_full():
+    assert baseline(on([o for o in range(1, 29) if o != 4]), DAY).quality == "full"
+
+
+def test_twenty_eight_consecutive_nights_are_full():
+    assert baseline(dated([60] * 28), DAY).quality == "full"
+
+
+BOUNDARY_22 = [28, 27, 26, 22, 20, 18, 17, 16, 14, 12, 10, 9, 6, 5, 3, 2]
+BOUNDARY_8 = [28, 27, 26, 25, 20, 19, 18, 17, 13, 12, 11, 8, 6, 5, 3, 2]
+
+
+@pytest.mark.parametrize(
+    ("nights", "edge", "next_day"),
+    [(BOUNDARY_22, 22, 21), (BOUNDARY_8, 8, 7)],
+    ids=["day-22|day-21", "day-8|day-7"],
+)
+def test_block_boundaries(nights, edge, next_day):
+    """day - 22 is the last night of the first block, day - 21 the first of the second; the same
+    for day - 8 / day - 7. Moving the edge night one day later leaves its block at 3 nights."""
+    assert baseline(on(nights), DAY).quality == "full"
+    moved = [next_day if o == edge else o for o in nights]
+    assert baseline(on(moved), DAY).quality == "provisional"
+
+
+def test_nights_outside_the_window_are_ignored():
+    outside = on([29, 30, 31, 40], 1000.0) + on([0, -1], 1000.0)
+    b = baseline(on(SIXTEEN) + outside, DAY)
+    assert b is not None
+    assert (b.n, b.mean, b.quality) == (16, pytest.approx(60.0), "full")
+    assert baseline(on(range(29, 60)), DAY) is None
 
 
 def test_baseline_mean_sd_n():
-    b = baseline([50, 60, 70, 50, 60, 70, 60])
+    b = baseline(dated([50, 60, 70, 50, 60, 70, 60]), DAY)
     assert isinstance(b, Baseline)
     assert b.n == 7
     assert b.mean == pytest.approx(60.0)
@@ -41,39 +107,31 @@ def test_baseline_mean_sd_n():
     assert b.sd == pytest.approx(math.sqrt(400 / 6))
 
 
-def test_baseline_uses_only_the_last_28_values():
-    values = [1000.0] * 10 + [60.0] * 28
-    b = baseline(values)
-    assert b is not None
-    assert b.n == 28
-    assert b.mean == pytest.approx(60.0)
-    assert b.sd == pytest.approx(0.0)
-
-
 def test_baseline_log_computes_on_ln_scale():
-    b = baseline([40.0, 50.0, 60.0, 45.0, 55.0, 65.0, 50.0], log=True)
-    logs = [math.log(x) for x in (40.0, 50.0, 60.0, 45.0, 55.0, 65.0, 50.0)]
+    values = [40.0, 50.0, 60.0, 45.0, 55.0, 65.0, 50.0]
+    b = baseline(dated(values), DAY, log=True)
+    logs = [math.log(x) for x in values]
     assert b is not None
     assert b.mean == pytest.approx(sum(logs) / 7)
 
 
 def test_baseline_log_rejects_non_positive_values():
     with pytest.raises(ValueError, match="strictly positive"):
-        baseline([50.0] * 6 + [0.0], log=True)
+        baseline(dated([50.0] * 6 + [0.0]), DAY, log=True)
     with pytest.raises(ValueError, match="strictly positive"):
-        baseline([50.0] * 6 + [-3.0], log=True)
+        baseline(dated([50.0] * 6 + [-3.0]), DAY, log=True)
 
 
 @pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
 def test_baseline_rejects_non_finite_values(bad):
     with pytest.raises(ValueError, match="finite"):
-        baseline([50.0] * 6 + [bad])
+        baseline(dated([50.0] * 6 + [bad]), DAY)
     with pytest.raises(ValueError, match="finite"):
-        baseline([50.0] * 6 + [bad], log=True)
+        baseline(dated([50.0] * 6 + [bad]), DAY, log=True)
 
 
 def test_baseline_is_frozen():
-    b = baseline([60] * 10)
+    b = baseline(dated([60] * 10), DAY)
     with pytest.raises(AttributeError):
         b.mean = 1.0  # type: ignore[misc]
 

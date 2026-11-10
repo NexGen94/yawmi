@@ -6,7 +6,9 @@ go in:
 * **Valid nights.** Only nights whose stored `data_quality` is `ok` feed a baseline, and only
   inside the 28 days before the scored day (`[day − 28, day − 1]`). A night without the watch
   (`missing`) or with too few HRV samples (`low`) is never counted, and an empty value is
-  skipped, never read as zero. Each metric gets its own baseline over its own valid values.
+  skipped, never read as zero. Each metric gets its own baseline over its own valid values:
+  none below 7 nights, `full` when each 7-day block of the window holds 4 of them, else
+  `provisional` (D-065, in `yawmi.domain.scores.baseline_quality`).
 * **Resting heart rate.** A lower RHR is better, so its z-score is negated before it reaches
   `recovery` (which weighs every z with a plus sign).
 * **Recovery** needs today's HRV, RHR and sleep, a night that is not `missing`, and all three
@@ -17,16 +19,16 @@ go in:
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
 from yawmi.domain.scores import (
-    WINDOW_DAYS,
     Baseline,
     BaselineQuality,
     DataQuality,
     baseline,
+    baseline_window,
     data_quality,
     recovery,
     strain,
@@ -72,18 +74,16 @@ class DayScores:
 
 def window(day: date) -> tuple[date, date]:
     """The baseline window of `day`: the 28 days before it, both ends included."""
-    return day - timedelta(days=WINDOW_DAYS), day - timedelta(days=1)
+    return baseline_window(day)
 
 
-def valid_values(nights: Iterable[Night], day: date, field: str) -> list[float]:
-    """`field` of the valid nights in the window of `day`, oldest first."""
-    first, last = window(day)
-    picked = sorted(
-        (n for n in nights if first <= n.day <= last and n.data_quality == "ok"),
-        key=lambda n: n.day,
-    )
-    values = [getattr(n, field) for n in picked]
-    return [float(v) for v in values if v is not None]
+def valid_values(nights: Iterable[Night], field: str) -> list[tuple[date, float]]:
+    """`(day, field)` of the valid nights (`ok`, value present), oldest first.
+
+    The window and the per-week quality are applied by `yawmi.domain.scores.baseline`.
+    """
+    picked = sorted((n for n in nights if n.data_quality == "ok"), key=lambda n: n.day)
+    return [(n.day, float(v)) for n in picked if (v := getattr(n, field)) is not None]
 
 
 def round_strain(value: float) -> Decimal:
@@ -118,9 +118,9 @@ def score_day(
     nights = list(history)
     quality = data_quality(has_watch_night, hrv_samples)
     # HRV is averaged on ln(x), so a zero reading cannot enter its baseline
-    hrv_base = baseline([v for v in valid_values(nights, day, "hrv_ms") if v > 0], log=True)
-    rhr_base = baseline(valid_values(nights, day, "rhr_bpm"))
-    sleep_base = baseline(valid_values(nights, day, "sleep_minutes"))
+    hrv_base = baseline([(d, v) for d, v in valid_values(nights, "hrv_ms") if v > 0], day, log=True)
+    rhr_base = baseline(valid_values(nights, "rhr_bpm"), day)
+    sleep_base = baseline(valid_values(nights, "sleep_minutes"), day)
     summary = summarise([hrv_base, rhr_base, sleep_base])
 
     score: int | None = None

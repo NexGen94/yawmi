@@ -57,20 +57,24 @@ Minutes = Annotated[StrictInt, Field(ge=0, le=DAY_MINUTES)]
 
 
 class ExertionSegment(BaseModel):
-    model_config = ConfigDict(allow_inf_nan=False)
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
 
     minutes: Annotated[float, Field(ge=0, le=DAY_MINUTES)]
     hr_reserve: Annotated[float, Field(ge=0, le=1, description="احتياطي النبض من 0 إلى 1")]
 
 
 class DailyMetricsIn(BaseModel):
-    """One local day of raw metrics. Every value is optional: a gap is missing, never zero."""
+    """One local day of raw metrics. Every metric is optional: a gap is missing, never zero.
 
-    model_config = ConfigDict(allow_inf_nan=False)
+    Unknown fields are a 422 (`extra_forbidden`), so a misnamed metric is never silently lost.
+    """
+
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
 
     day: date
     has_watch_night: StrictBool = Field(description="هل لبست الساعة في النوم المنسوب إلى اليوم")
-    hrv_samples: Annotated[StrictInt, Field(ge=0, le=10_000)] = 0
+    # required: a default of 0 would turn every worn night into `low`, outside every baseline
+    hrv_samples: Annotated[StrictInt, Field(ge=0, le=10_000, description="عدد عيّنات HRV في الليلة")]
 
     hrv_ms: Ms | None = Field(default=None, description="HRV الليلي (SDNN)")
     hrv_rmssd_ms: Ms | None = None
@@ -160,7 +164,9 @@ def _dec(value: float | None) -> Decimal | None:
     description=(
         "يحسب الخادم التعافي والإجهاد وجودة البيانات بخط أساس شخصي من الليالي الصالحة في الأيام "
         "الـ28 السابقة: لا خط أساس قبل 7 ليالٍ، و«أولي» حتى 27، و«كامل» من 28. إعادة إرسال "
-        "اليوم نفسه تستبدله. تقدير، ليس تشخيصاً."
+        "اليوم نفسه تستبدله. عند رفع عدة أيام يُرسل الأقدم أولاً، فاليوم يُقاس بما سبقه مخزناً، "
+        "ولا يُعاد حساب الأيام التالية عند وصول يوم أقدم. حقل غير معروف يُرفض. "
+        "تقدير، ليس تشخيصاً."
     ),
     dependencies=[Depends(require_kind(*HEALTH_KINDS))],
     responses={**UNAUTHORIZED, **FORBIDDEN, **INVALID},

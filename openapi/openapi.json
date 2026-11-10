@@ -120,7 +120,8 @@
         "type": "object"
       },
       "DailyMetricsIn": {
-        "description": "One local day of raw metrics. Every value is optional: a gap is missing, never zero.",
+        "additionalProperties": false,
+        "description": "One local day of raw metrics. Every metric is optional: a gap is missing, never zero.\n\nUnknown fields are a 422 (`extra_forbidden`), so a misnamed metric is never silently lost.",
         "properties": {
           "active_kcal": {
             "anyOf": [
@@ -195,7 +196,7 @@
             "title": "Hrv Rmssd Ms"
           },
           "hrv_samples": {
-            "default": 0,
+            "description": "عدد عيّنات HRV في الليلة",
             "maximum": 10000.0,
             "minimum": 0.0,
             "title": "Hrv Samples",
@@ -426,7 +427,8 @@
         },
         "required": [
           "day",
-          "has_watch_night"
+          "has_watch_night",
+          "hrv_samples"
         ],
         "title": "DailyMetricsIn",
         "type": "object"
@@ -573,6 +575,7 @@
         "type": "object"
       },
       "ExertionSegment": {
+        "additionalProperties": false,
         "properties": {
           "hr_reserve": {
             "description": "احتياطي النبض من 0 إلى 1",
@@ -1550,7 +1553,7 @@
     },
     "/v1/health/daily": {
       "post": {
-        "description": "يحسب الخادم التعافي والإجهاد وجودة البيانات بخط أساس شخصي من الليالي الصالحة في الأيام الـ28 السابقة: لا خط أساس قبل 7 ليالٍ، و«أولي» حتى 27، و«كامل» من 28. إعادة إرسال اليوم نفسه تستبدله. تقدير، ليس تشخيصاً.",
+        "description": "يحسب الخادم التعافي والإجهاد وجودة البيانات بخط أساس شخصي من الليالي الصالحة في الأيام الـ28 السابقة: لا خط أساس قبل 7 ليالٍ، و«أولي» حتى 27، و«كامل» من 28. إعادة إرسال اليوم نفسه تستبدله. عند رفع عدة أيام يُرسل الأقدم أولاً، فاليوم يُقاس بما سبقه مخزناً، ولا يُعاد حساب الأيام التالية عند وصول يوم أقدم. حقل غير معروف يُرفض. تقدير، ليس تشخيصاً.",
         "operationId": "post_daily_v1_health_daily_post",
         "requestBody": {
           "content": {
