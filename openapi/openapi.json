@@ -110,12 +110,24 @@
       "CardOut": {
         "properties": {
           "habits": {
-            "description": "العادات المرتبطة بالبطاقة (تملؤها المهمة 10)",
+            "description": "العادات النشطة التي `goal_ref` فيها هذه البطاقة، بالرمز، مع التزام كل منها",
             "items": {
               "$ref": "#/components/schemas/CardHabit"
             },
             "title": "Habits",
             "type": "array"
+          },
+          "habits_adherence_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "متوسط الالتزام غير الفارغ لعادات البطاقة، أو null إن لم يوجد",
+            "title": "Habits Adherence Avg"
           },
           "outcome_codes": {
             "items": {
@@ -149,9 +161,38 @@
           "title",
           "status",
           "outcome_codes",
-          "habits"
+          "habits",
+          "habits_adherence_avg"
         ],
         "title": "CardOut",
+        "type": "object"
+      },
+      "ChallengeOut": {
+        "properties": {
+          "achieved": {
+            "title": "Achieved",
+            "type": "integer"
+          },
+          "completion": {
+            "title": "Completion",
+            "type": "number"
+          },
+          "remaining_days": {
+            "title": "Remaining Days",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "achieved",
+          "total",
+          "completion",
+          "remaining_days"
+        ],
+        "title": "ChallengeOut",
         "type": "object"
       },
       "ClientSource": {
@@ -688,6 +729,169 @@
         "title": "ExertionSegment",
         "type": "object"
       },
+      "HabitDraft": {
+        "description": "An unsaved habit suggested from a goal; the editor opens it and `POST /v1/habits` saves it.",
+        "properties": {
+          "ac_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ac Ref"
+          },
+          "anchor": {
+            "enum": [
+              "after_wake",
+              "before_sleep",
+              "free"
+            ],
+            "title": "Anchor",
+            "type": "string"
+          },
+          "anchor_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Day"
+          },
+          "end_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Day"
+          },
+          "every_n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Every N"
+          },
+          "goal_ref": {
+            "title": "Goal Ref",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "boolean",
+              "count",
+              "duration"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "period": {
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "reminders": {
+            "items": {
+              "$ref": "#/components/schemas/ReminderIO"
+            },
+            "title": "Reminders",
+            "type": "array"
+          },
+          "schedule_kind": {
+            "enum": [
+              "every_day",
+              "weekdays",
+              "every_n_days"
+            ],
+            "title": "Schedule Kind",
+            "type": "string"
+          },
+          "start_day": {
+            "format": "date",
+            "title": "Start Day",
+            "type": "string"
+          },
+          "target_per_period": {
+            "title": "Target Per Period",
+            "type": "number"
+          },
+          "title_ar": {
+            "title": "Title Ar",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "",
+              "session",
+              "min",
+              "hour"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "weekday_mask": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday Mask"
+          }
+        },
+        "required": [
+          "title_ar",
+          "goal_ref",
+          "outcome",
+          "ac_ref",
+          "kind",
+          "unit",
+          "target_per_period",
+          "period",
+          "schedule_kind",
+          "weekday_mask",
+          "every_n",
+          "anchor_day",
+          "anchor",
+          "start_day",
+          "end_day",
+          "reminders"
+        ],
+        "title": "HabitDraft",
+        "type": "object"
+      },
       "HabitDue": {
         "properties": {
           "code": {
@@ -716,6 +920,10 @@
             ],
             "title": "Period",
             "type": "string"
+          },
+          "period_progress": {
+            "$ref": "#/components/schemas/PeriodProgressOut",
+            "description": "تقدّم الفترة الحالية (يوم أو أسبوع أو شهر)"
           },
           "target_per_period": {
             "title": "Target Per Period",
@@ -749,9 +957,630 @@
           "unit",
           "target_per_period",
           "period",
-          "done_today"
+          "done_today",
+          "period_progress"
         ],
         "title": "HabitDue",
+        "type": "object"
+      },
+      "HabitIn": {
+        "additionalProperties": false,
+        "description": "A new user habit. The server picks `code` (`u_` + 12 hex), `system` and `created_by`.\n\nRules across fields (a 422 names the field): a yes/no (`boolean`) target is an integer, 1 for\n`day`, at most 7 for `week` and 28 for `month`; `unit` is `''` for `boolean`, `''` or\n`session` for `count`, `min` or `hour` for `duration`; a `schedule_kind` other than\n`every_day` is for the `day` period only, `weekdays` needs `weekday_mask` and `every_n_days`\nneeds `every_n` and `anchor_day`; `end_day` is not before `start_day`.",
+        "properties": {
+          "ac_ref": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ac Ref"
+          },
+          "anchor": {
+            "default": "free",
+            "enum": [
+              "after_wake",
+              "before_sleep",
+              "free"
+            ],
+            "title": "Anchor",
+            "type": "string"
+          },
+          "anchor_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Day"
+          },
+          "end_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Day"
+          },
+          "every_n": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Every N"
+          },
+          "goal_ref": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "معرّف محطة أو بطاقة في Notion",
+            "title": "Goal Ref"
+          },
+          "kind": {
+            "enum": [
+              "boolean",
+              "count",
+              "duration"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "pattern": "^O([1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "period": {
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "reminders": {
+            "items": {
+              "$ref": "#/components/schemas/ReminderIO"
+            },
+            "maxItems": 3,
+            "title": "Reminders",
+            "type": "array"
+          },
+          "schedule_kind": {
+            "default": "every_day",
+            "enum": [
+              "every_day",
+              "weekdays",
+              "every_n_days"
+            ],
+            "title": "Schedule Kind",
+            "type": "string"
+          },
+          "start_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "الافتراضي اليوم بتوقيت الرياض",
+            "title": "Start Day"
+          },
+          "target_per_period": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000.0,
+            "title": "Target Per Period",
+            "type": "number"
+          },
+          "title_ar": {
+            "maxLength": 200,
+            "title": "Title Ar",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "enum": [
+              "",
+              "session",
+              "min",
+              "hour"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "weekday_mask": {
+            "anyOf": [
+              {
+                "description": "بتّ 0 = الأحد … 6 = السبت",
+                "maximum": 127.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday Mask"
+          }
+        },
+        "required": [
+          "title_ar",
+          "kind",
+          "target_per_period",
+          "period"
+        ],
+        "title": "HabitIn",
+        "type": "object"
+      },
+      "HabitOut": {
+        "properties": {
+          "ac_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ac Ref"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "anchor": {
+            "enum": [
+              "after_wake",
+              "before_sleep",
+              "free"
+            ],
+            "title": "Anchor",
+            "type": "string"
+          },
+          "anchor_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Day"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_by": {
+            "enum": [
+              "seed",
+              "user"
+            ],
+            "title": "Created By",
+            "type": "string"
+          },
+          "end_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Day"
+          },
+          "every_n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Every N"
+          },
+          "goal_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Ref"
+          },
+          "kind": {
+            "enum": [
+              "boolean",
+              "count",
+              "duration"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "period": {
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "reminders": {
+            "items": {
+              "$ref": "#/components/schemas/ReminderIO"
+            },
+            "title": "Reminders",
+            "type": "array"
+          },
+          "schedule_kind": {
+            "enum": [
+              "every_day",
+              "weekdays",
+              "every_n_days"
+            ],
+            "title": "Schedule Kind",
+            "type": "string"
+          },
+          "start_day": {
+            "format": "date",
+            "title": "Start Day",
+            "type": "string"
+          },
+          "system": {
+            "title": "System",
+            "type": "boolean"
+          },
+          "target_per_period": {
+            "title": "Target Per Period",
+            "type": "number"
+          },
+          "title_ar": {
+            "title": "Title Ar",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "",
+              "session",
+              "min",
+              "hour"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "weekday_mask": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday Mask"
+          }
+        },
+        "required": [
+          "code",
+          "title_ar",
+          "goal_ref",
+          "outcome",
+          "ac_ref",
+          "kind",
+          "unit",
+          "target_per_period",
+          "period",
+          "schedule_kind",
+          "weekday_mask",
+          "every_n",
+          "anchor_day",
+          "anchor",
+          "start_day",
+          "end_day",
+          "system",
+          "created_by",
+          "active",
+          "reminders"
+        ],
+        "title": "HabitOut",
+        "type": "object"
+      },
+      "HabitPatch": {
+        "additionalProperties": false,
+        "description": "A partial edit: only the fields sent change; `null` clears a nullable field.",
+        "properties": {
+          "ac_ref": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ac Ref"
+          },
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "false للأرشفة (لا حذف)",
+            "title": "Active"
+          },
+          "anchor": {
+            "anyOf": [
+              {
+                "enum": [
+                  "after_wake",
+                  "before_sleep",
+                  "free"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "anchor_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Day"
+          },
+          "end_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Day"
+          },
+          "every_n": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Every N"
+          },
+          "goal_ref": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Ref"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "boolean",
+                  "count",
+                  "duration"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "pattern": "^O([1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "enum": [
+                  "day",
+                  "week",
+                  "month"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "reminders": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReminderIO"
+                },
+                "maxItems": 3,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminders"
+          },
+          "schedule_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "every_day",
+                  "weekdays",
+                  "every_n_days"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Kind"
+          },
+          "start_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Day"
+          },
+          "target_per_period": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Per Period"
+          },
+          "title_ar": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Ar"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "enum": [
+                  "",
+                  "session",
+                  "min",
+                  "hour"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "weekday_mask": {
+            "anyOf": [
+              {
+                "description": "بتّ 0 = الأحد … 6 = السبت",
+                "maximum": 127.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday Mask"
+          }
+        },
+        "title": "HabitPatch",
         "type": "object"
       },
       "InsightOut": {
@@ -1057,6 +1886,50 @@
         "title": "PairRequest",
         "type": "object"
       },
+      "PeriodProgressOut": {
+        "properties": {
+          "completion": {
+            "title": "Completion",
+            "type": "number"
+          },
+          "done": {
+            "title": "Done",
+            "type": "number"
+          },
+          "expected": {
+            "title": "Expected",
+            "type": "number"
+          },
+          "need_per_day": {
+            "title": "Need Per Day",
+            "type": "number"
+          },
+          "on_track": {
+            "title": "On Track",
+            "type": "boolean"
+          },
+          "reached": {
+            "title": "Reached",
+            "type": "boolean"
+          },
+          "target": {
+            "description": "هدف الفترة؛ متناسب في أسبوع أو شهر مقصوص بالبداية أو النهاية",
+            "title": "Target",
+            "type": "number"
+          }
+        },
+        "required": [
+          "done",
+          "target",
+          "completion",
+          "reached",
+          "expected",
+          "on_track",
+          "need_per_day"
+        ],
+        "title": "PeriodProgressOut",
+        "type": "object"
+      },
       "Priority": {
         "additionalProperties": false,
         "properties": {
@@ -1076,6 +1949,63 @@
           "source_id"
         ],
         "title": "Priority",
+        "type": "object"
+      },
+      "ProgressOut": {
+        "properties": {
+          "adherence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null قبل أول فترة منتهية",
+            "title": "Adherence"
+          },
+          "challenge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChallengeOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "لعادة لها `end_day` فقط"
+          },
+          "last_8_periods": {
+            "description": "نسبة إنجاز آخر 8 فترات، الأقدم أولاً وآخرها الفترة الحالية؛ تُسقط الفترات المنتهية قبل `start_day` فقد تقل عن 8",
+            "items": {
+              "type": "number"
+            },
+            "title": "Last 8 Periods",
+            "type": "array"
+          },
+          "period_progress": {
+            "$ref": "#/components/schemas/PeriodProgressOut"
+          },
+          "streak": {
+            "title": "Streak",
+            "type": "integer"
+          },
+          "strength": {
+            "description": "0–1، وتُعرض ×100",
+            "title": "Strength",
+            "type": "number"
+          }
+        },
+        "required": [
+          "period_progress",
+          "strength",
+          "streak",
+          "challenge",
+          "adherence",
+          "last_8_periods"
+        ],
+        "title": "ProgressOut",
         "type": "object"
       },
       "PullResult": {
@@ -1135,6 +2065,30 @@
           }
         },
         "title": "RefreshRequest",
+        "type": "object"
+      },
+      "ReminderIO": {
+        "additionalProperties": false,
+        "properties": {
+          "days_mask": {
+            "description": "بتّ 0 = الأحد … 6 = السبت",
+            "maximum": 127.0,
+            "minimum": 1.0,
+            "title": "Days Mask",
+            "type": "integer"
+          },
+          "time": {
+            "description": "HH:mm محلياً",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "time",
+          "days_mask"
+        ],
+        "title": "ReminderIO",
         "type": "object"
       },
       "ReviewList": {
@@ -1207,6 +2161,38 @@
           "received_at"
         ],
         "title": "StoredEvent",
+        "type": "object"
+      },
+      "ToHabitIn": {
+        "additionalProperties": false,
+        "properties": {
+          "kpi_code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "رمز مؤشر في `raqib.kpis`",
+            "title": "Kpi Code"
+          },
+          "period": {
+            "default": "week",
+            "description": "فترة العادة المقترحة مع المؤشر؛ بلا مؤشر صالح تكون العادة يومية",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ],
+            "title": "Period",
+            "type": "string"
+          }
+        },
+        "title": "ToHabitIn",
         "type": "object"
       },
       "TodayHealth": {
@@ -1948,6 +2934,421 @@
         "summary": "استقبال دفعة أحداث (متكررة الأثر)",
         "tags": [
           "events"
+        ]
+      }
+    },
+    "/v1/goals/{ref}/to-habit": {
+      "post": {
+        "description": "`ref` معرّف صفحة محطة أو بطاقة في المرآة. مع مؤشر له هدف واحد وموعد: عادة عدّ هدفها في الفترة = ⌈(الهدف − آخر قراءة) ÷ عدد الفترات حتى الموعد⌉، وإلا عادة يومية بنعم أو لا هدفها 1. لا تغيّر نسبة إنجاز Notion.",
+        "operationId": "to_habit_v1_goals__ref__to_habit_post",
+        "parameters": [
+          {
+            "description": "معرّف صفحة Notion",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "description": "معرّف صفحة Notion",
+              "maxLength": 128,
+              "title": "Ref",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ToHabitIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HabitDraft"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "لا محطة ولا بطاقة بهذا المعرّف"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "اقتراح عادة لهدف (لا تُحفظ)",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/v1/habits": {
+      "get": {
+        "description": "مرتبة بالرمز، ومع كل عادة تذكيراتها النشطة. المؤرشفة `active = false`.",
+        "operationId": "list_habits_v1_habits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HabitOut"
+                  },
+                  "title": "Response List Habits V1 Habits Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "كل العادات، والمؤرشفة معها",
+        "tags": [
+          "habits"
+        ]
+      },
+      "post": {
+        "description": "يولّد الخادم الرمز `u_` ثم 12 محرفاً ستّعشرياً، و`created_by = user`. `start_day` الافتراضي اليوم بتوقيت الرياض. القواعد بين الحقول في وصف `HabitIn`.",
+        "operationId": "create_habit_v1_habits_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HabitIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HabitOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "إنشاء عادة",
+        "tags": [
+          "habits"
+        ]
+      }
+    },
+    "/v1/habits/{code}": {
+      "patch": {
+        "description": "تعديل جزئي: تتغير الحقول المرسلة وحدها، و`null` يفرغ الحقل الذي يقبل الفراغ. `reminders` يستبدل التذكيرات كلها. الأرشفة `active = false`، ولا حذف. العادة النظامية يُعدَّل فيها `anchor` و`reminders` فقط (409 لغيرهما إن اختلفت قيمته).",
+        "operationId": "patch_habit_v1_habits__code__patch",
+        "parameters": [
+          {
+            "description": "رمز العادة",
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "description": "رمز العادة",
+              "maxLength": 64,
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HabitPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HabitOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "العادة غير موجودة"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "عادة نظامية: يُعدَّل المرسى والتذكيرات فقط"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "تعديل عادة أو أرشفتها",
+        "tags": [
+          "habits"
+        ]
+      }
+    },
+    "/v1/habits/{code}/progress": {
+      "get": {
+        "description": "تقدّم الفترة الحالية، والقوة، والسلسلة، والتحدّي (لعادة لها نهاية)، والالتزام، ونسب آخر 8 فترات. القواعد في `yawmi.domain.habits`، والهدف المتناسب للفترة المقصوصة منها.",
+        "operationId": "habit_progress_v1_habits__code__progress_get",
+        "parameters": [
+          {
+            "description": "رمز العادة",
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "description": "رمز العادة",
+              "maxLength": 64,
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "description": "اليوم المرجعي (الافتراضي اليوم بتوقيت الرياض)، ولا يتجاوز الغد",
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "اليوم المرجعي (الافتراضي اليوم بتوقيت الرياض)، ولا يتجاوز الغد",
+              "title": "Today"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProgressOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "العادة غير موجودة"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "مؤشرات العادة",
+        "tags": [
+          "habits"
         ]
       }
     },

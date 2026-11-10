@@ -35,6 +35,7 @@ class HabitRow:
     anchor_day: date | None
     start_day: date
     end_day: date | None
+    goal_ref: str | None = None
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,10 @@ class TodayReader(Protocol):
         """Habit logs of every source with `day` in `[first, last]`."""
         ...
 
+    async def linked_habits(self) -> list[HabitRow]:
+        """Active habits that serve a goal (`goal_ref` set), whatever their window, by code."""
+        ...
+
     async def daily_metrics(self, first: date, last: date) -> list[MetricsRow]:
         """Stored health days in `[first, last]`, oldest first."""
         ...
@@ -112,9 +117,17 @@ class TodayReader(Protocol):
 
 ACTIVE_HABITS = """
 SELECT code, title_ar, kind, unit, target_per_period, period, schedule_kind,
-       weekday_mask, every_n, anchor_day, start_day, end_day
+       weekday_mask, every_n, anchor_day, start_day, end_day, goal_ref
 FROM yawmi.habits
 WHERE active AND start_day <= $1 AND (end_day IS NULL OR end_day >= $1)
+ORDER BY code
+"""
+
+LINKED_HABITS = """
+SELECT code, title_ar, kind, unit, target_per_period, period, schedule_kind,
+       weekday_mask, every_n, anchor_day, start_day, end_day, goal_ref
+FROM yawmi.habits
+WHERE active AND goal_ref IS NOT NULL
 ORDER BY code
 """
 
@@ -153,7 +166,16 @@ SELECT page_id, title, status, outcome_codes
 FROM raqib.notion_cards
 """
 
-ALL_SQL = (ACTIVE_HABITS, HABIT_LOGS, DAILY_METRICS, CYCLES, MILESTONES, GOALS, CARDS)
+ALL_SQL = (
+    ACTIVE_HABITS,
+    LINKED_HABITS,
+    HABIT_LOGS,
+    DAILY_METRICS,
+    CYCLES,
+    MILESTONES,
+    GOALS,
+    CARDS,
+)
 
 
 def _codes(raw: object) -> tuple[str, ...]:
@@ -173,6 +195,9 @@ class AsyncpgTodayReader:
 
     async def habit_logs(self, first: date, last: date) -> list[LogRow]:
         return [LogRow(**dict(r)) for r in await self._pool.fetch(HABIT_LOGS, first, last)]
+
+    async def linked_habits(self) -> list[HabitRow]:
+        return [HabitRow(**dict(r)) for r in await self._pool.fetch(LINKED_HABITS)]
 
     async def daily_metrics(self, first: date, last: date) -> list[MetricsRow]:
         return [MetricsRow(**dict(r)) for r in await self._pool.fetch(DAILY_METRICS, first, last)]
