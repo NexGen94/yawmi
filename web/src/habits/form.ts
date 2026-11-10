@@ -2,6 +2,8 @@
 // the server HabitIn rules (task 10), and the system-habit field locks (spec 2.6).
 // Dates are ISO strings handled with UTC arithmetic only; no device timezone is involved.
 
+import { toOrdinal } from '../domain/days';
+import { endDay } from '../domain/periods';
 import type {
   HabitAnchor,
   HabitCreator,
@@ -44,29 +46,19 @@ export interface HabitForm {
 
 export type FormErrors = Partial<Record<keyof HabitForm, string>>;
 
-const DAY_MS = 86_400_000;
-const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+/** The day ordinal of an ISO day (see `domain/days`), or null when it is not a calendar day. */
 function parseDay(day: string): number | null {
-  const m = ISO_DAY.exec(day);
-  if (!m) return null;
-  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  const d = new Date(t);
-  return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3])
-    ? t
-    : null;
+  try {
+    return toOrdinal(day);
+  } catch {
+    return null;
+  }
 }
 
-const formatDay = (t: number): string => new Date(t).toISOString().slice(0, 10);
-
-/** `end = start + N - 1` (the first and last day both count). */
-export function endDay(start: string, days: number): string {
-  if (!Number.isInteger(days) || days < 1) throw new RangeError(`invalid duration: ${days}`);
-  const t = parseDay(start);
-  if (t === null) throw new RangeError(`invalid ISO day: ${start}`);
-  return formatDay(t + (days - 1) * DAY_MS);
-}
+/** `end = start + N - 1` (the first and last day both count): the domain rule, re-exported. */
+export { endDay };
 
 /** The most days a boolean habit can ask for inside one period (month: 28, always reachable). */
 function periodDays(period: HabitPeriod): number {
@@ -80,7 +72,7 @@ function chipFor(start: string | null, end: string | null): DurationChoice {
   const s = parseDay(start);
   const e = parseDay(end);
   if (s === null || e === null) return 'custom';
-  const n = Math.round((e - s) / DAY_MS) + 1;
+  const n = e - s + 1;
   return (durationChips as readonly number[]).includes(n) ? (n as DurationChoice) : 'custom';
 }
 

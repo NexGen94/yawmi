@@ -1,0 +1,227 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "value": 50
+      },
+      "id": "recovery-001",
+      "input": {
+        "penalty": 0.0,
+        "z_hrv": 0,
+        "z_rhr": 0,
+        "z_sleep": 0
+      },
+      "source": "الحياد: 50"
+    },
+    {
+      "expect": {
+        "value": 69
+      },
+      "id": "recovery-002",
+      "input": {
+        "penalty": 0.0,
+        "z_hrv": 1,
+        "z_rhr": 0,
+        "z_sleep": 0
+      },
+      "source": "انحراف معياري واحد في HRV: 69"
+    },
+    {
+      "expect": {
+        "value": 0
+      },
+      "id": "recovery-003",
+      "input": {
+        "penalty": 0.0,
+        "z_hrv": -5,
+        "z_rhr": -5,
+        "z_sleep": -5
+      },
+      "source": "قصّ عند 0"
+    },
+    {
+      "expect": {
+        "value": 100
+      },
+      "id": "recovery-004",
+      "input": {
+        "penalty": 0.0,
+        "z_hrv": 5,
+        "z_rhr": 5,
+        "z_sleep": 5
+      },
+      "source": "قصّ عند 100"
+    },
+    {
+      "expect": {
+        "value": 40
+      },
+      "id": "recovery-005",
+      "input": {
+        "penalty": 10.0,
+        "z_hrv": 0,
+        "z_rhr": 0,
+        "z_sleep": 0
+      },
+      "source": "العقوبة تُطرح قبل القصّ: 40"
+    },
+    {
+      "expect": {
+        "value": 90
+      },
+      "id": "recovery-006",
+      "input": {
+        "penalty": 10.0,
+        "z_hrv": 5,
+        "z_rhr": 5,
+        "z_sleep": 5
+      },
+      "source": "العقوبة من 100: 90"
+    },
+    {
+      "expect": {
+        "value": 0
+      },
+      "id": "recovery-007",
+      "input": {
+        "penalty": 10.0,
+        "z_hrv": -5,
+        "z_rhr": -5,
+        "z_sleep": -5
+      },
+      "source": "العقوبة لا تنزل تحت 0"
+    },
+    {
+      "expect": {
+        "value": 50
+      },
+      "id": "recovery-008",
+      "input": {
+        "penalty": 0.5,
+        "z_hrv": 0,
+        "z_rhr": 0,
+        "z_sleep": 0
+      },
+      "source": "تقريب نصفي لأعلى: 49.5 → 50"
+    },
+    {
+      "expect": {
+        "value": 49
+      },
+      "id": "recovery-009",
+      "input": {
+        "penalty": 1.5,
+        "z_hrv": 0,
+        "z_rhr": 0,
+        "z_sleep": 0
+      },
+      "source": "تقريب نصفي لأعلى: 48.5 → 49"
+    },
+    {
+      "expect": {
+        "value": 48
+      },
+      "id": "recovery-010",
+      "input": {
+        "penalty": 2.5,
+        "z_hrv": 0,
+        "z_rhr": 0,
+        "z_sleep": 0
+      },
+      "source": "تقريب نصفي لأعلى: 47.5 → 48"
+    },
+    {
+      "expect": {
+        "value": 84
+      },
+      "id": "recovery-011",
+      "input": {
+        "penalty": 0.0,
+        "z_hrv": 2,
+        "z_rhr": 0,
+        "z_sleep": 0
+      },
+      "source": "وزن HRV 0.5: Φ(1.0) → 84"
+    },
+    {
+      "expect": {
+        "value": 73
+      },
+      "id": "recovery-012",
+      "input": {
+        "penalty": 0.0,
+        "z_hrv": 0,
+        "z_rhr": 2,
+        "z_sleep": 0
+      },
+      "source": "وزن RHR 0.3: Φ(0.6) → 73"
+    },
+    {
+      "expect": {
+        "value": 66
+      },
+      "id": "recovery-013",
+      "input": {
+        "penalty": 0.0,
+        "z_hrv": 0,
+        "z_rhr": 0,
+        "z_sleep": 2
+      },
+      "source": "وزن النوم 0.2: Φ(0.4) → 66"
+    },
+    {
+      "expect": {
+        "value": 38
+      },
+      "id": "recovery-014",
+      "input": {
+        "penalty": 0.0,
+        "z_hrv": 0,
+        "z_rhr": -1,
+        "z_sleep": 0
+      },
+      "source": "نبض راحة أعلى من الأساس: المستدعي يقلب الإشارة فيمرّر −1"
+    },
+    {
+      "expect": {
+        "value": 54
+      },
+      "id": "recovery-015",
+      "input": {
+        "penalty": 0.0,
+        "z_hrv": 0.3,
+        "z_rhr": -0.2,
+        "z_sleep": 0.1
+      },
+      "source": "قيم كسرية مختلطة"
+    },
+    {
+      "expect": {
+        "value": 24
+      },
+      "id": "recovery-016",
+      "input": {
+        "penalty": 3.0,
+        "z_hrv": -1.2,
+        "z_rhr": 0.4,
+        "z_sleep": -0.6
+      },
+      "source": "تراجع مع عقوبة تنفس"
+    },
+    {
+      "expect": {
+        "value": 85
+      },
+      "id": "recovery-017",
+      "input": {
+        "penalty": 2.5,
+        "z_hrv": 1.5,
+        "z_rhr": 1.0,
+        "z_sleep": 0.5
+      },
+      "source": "تعافٍ عالٍ مع عقوبة بنصف"
+    }
+  ],
+  "function": "recovery",
+  "rulesVersion": 1
+}

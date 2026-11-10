@@ -1,0 +1,1777 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 0.0,
+          "need_per_day": 1.0,
+          "on_track": true,
+          "reached": false,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-001",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "يومية منطقية بلا سجل: اليوم غير منقضٍ قبل التسجيل"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 1.0,
+          "done": 1.0,
+          "expected": 1.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": true,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-002",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "يومية منطقية محققة: اليوم منقضٍ بسجله"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 1.0,
+          "done": 1.0,
+          "expected": 1.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": true,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-003",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "سجلان في اليوم للمنطقية يُحسبان مرة"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 0.0,
+          "need_per_day": 1.0,
+          "on_track": true,
+          "reached": false,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-004",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "skip",
+            "value": null
+          }
+        ],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "تخطٍّ اليوم: لا يُتوقع شيء"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 0.0,
+          "need_per_day": 1.0,
+          "on_track": true,
+          "reached": false,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-005",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "vacation",
+            "value": null
+          }
+        ],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "إجازة اليوم: لا يُتوقع شيء"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 0.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": false,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-006",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "weekdays",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": 1
+        },
+        "logs": [],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "يوم غير مجدول: لا هدف منقضٍ ولا مطلوب"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.5,
+          "done": 15.0,
+          "expected": 30.0,
+          "need_per_day": 15.0,
+          "on_track": false,
+          "reached": false,
+          "target": 30.0
+        }
+      },
+      "id": "period_progress-007",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "duration",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 30.0,
+          "unit": "min",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 15.0
+          }
+        ],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "مدة جزئية: نصف الهدف وتوقّع الإكمال"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 1.0,
+          "done": 5.0,
+          "expected": 3.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": true,
+          "target": 3.0
+        }
+      },
+      "id": "period_progress-008",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 5.0
+          }
+        ],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "تجاوز الهدف: completion بسقف 1"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.6,
+          "done": 3.0,
+          "expected": 2.142857142857143,
+          "need_per_day": 0.5,
+          "on_track": true,
+          "reached": false,
+          "target": 5.0
+        }
+      },
+      "id": "period_progress-009",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 5.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "أسبوعية منتصف الأسبوع، واليوم بلا سجل"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.8,
+          "done": 4.0,
+          "expected": 2.857142857142857,
+          "need_per_day": 0.25,
+          "on_track": true,
+          "reached": false,
+          "target": 5.0
+        }
+      },
+      "id": "period_progress-010",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 5.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "اليوم بسجل: يدخل في المنقضي"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.6,
+          "done": 3.0,
+          "expected": 2.857142857142857,
+          "need_per_day": 0.5,
+          "on_track": true,
+          "reached": false,
+          "target": 5.0
+        }
+      },
+      "id": "period_progress-011",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 5.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "missed",
+            "value": null
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "سجل missed اليوم يكفي ليدخل في المنقضي"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.6,
+          "done": 3.0,
+          "expected": 2.142857142857143,
+          "need_per_day": 0.5,
+          "on_track": true,
+          "reached": false,
+          "target": 5.0
+        }
+      },
+      "id": "period_progress-012",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 5.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "skip",
+            "value": null
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "تخطّي اليوم لا يدخله في المنقضي"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.4,
+          "done": 2.0,
+          "expected": 1.4285714285714286,
+          "need_per_day": 0.75,
+          "on_track": true,
+          "reached": false,
+          "target": 5.0
+        }
+      },
+      "id": "period_progress-013",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 5.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "إجازة في الأسبوع تخفض المتوقع ولا ترفع المطلوب اليومي"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.7142857142857143,
+          "done": 5.0,
+          "expected": 5.0,
+          "need_per_day": 1.0,
+          "on_track": true,
+          "reached": false,
+          "target": 7.0
+        }
+      },
+      "id": "period_progress-014",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 7.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-13",
+        "week_start": "sun"
+      },
+      "source": "متأخر عن الوتيرة: 5 من 7 حتى الجمعة"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 2.142857142857143,
+          "need_per_day": 1.25,
+          "on_track": false,
+          "reached": false,
+          "target": 5.0
+        }
+      },
+      "id": "period_progress-015",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 5.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-07",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "سجلات خارج الفترة (الأسبوع السابق واللاحق) تُهمل"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.2,
+          "done": 1.0,
+          "expected": 0.8333333333333334,
+          "need_per_day": 0.8,
+          "on_track": true,
+          "reached": false,
+          "target": 5.0
+        }
+      },
+      "id": "period_progress-016",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 5.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "سجل قبل start_day يُهمل، والأسبوع الأول مقصوص (6 أيام مجدولة)"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.25,
+          "done": 1.0,
+          "expected": 0.8,
+          "need_per_day": 0.75,
+          "on_track": true,
+          "reached": false,
+          "target": 4.0
+        }
+      },
+      "id": "period_progress-017",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 5.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "sat"
+      },
+      "source": "بداية السبت تغيّر الفترة"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.2,
+          "done": 1.0,
+          "expected": 0.7142857142857143,
+          "need_per_day": 0.6666666666666666,
+          "on_track": true,
+          "reached": false,
+          "target": 5.0
+        }
+      },
+      "id": "period_progress-018",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 5.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "mon"
+      },
+      "source": "بداية الاثنين: الأسبوع كامل من البداية"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.3448275862068966,
+          "done": 10.0,
+          "expected": 28.0,
+          "need_per_day": 19.0,
+          "on_track": false,
+          "reached": false,
+          "target": 29.0
+        }
+      },
+      "id": "period_progress-019",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "month",
+          "schedule_kind": "every_day",
+          "start_day": "2028-01-01",
+          "target_per_period": 29.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2028-02-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-04",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-05",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-06",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-07",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2028-02-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2028-02-29",
+        "week_start": "sun"
+      },
+      "source": "فبراير الكبيسة: 29 يوماً، واليوم الأخير بلا سجل"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 14.0,
+          "need_per_day": 1.875,
+          "on_track": false,
+          "reached": false,
+          "target": 30.0
+        }
+      },
+      "id": "period_progress-020",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "month",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 30.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-15",
+        "week_start": "sun"
+      },
+      "source": "شهرية: المتوقع يتناسب مع الأيام المنقضية"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 0.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": false,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-021",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-06",
+        "week_start": "sun"
+      },
+      "source": "قبل start_day: لا فترة مجدولة"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 0.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": false,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-022",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-18",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-13",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-14",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-18",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-21",
+        "week_start": "sun"
+      },
+      "source": "بعد نهاية التحدي"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 1.0,
+          "done": 1.0,
+          "expected": 1.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": true,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-023",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "duration",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": "hour",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 0.7
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 0.1
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 0.1
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 0.1
+          }
+        ],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "مجموع كسور يبلغ الهدف بالضبط رغم ضجيج الفاصلة العائمة"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 3.0,
+          "need_per_day": 3.0,
+          "on_track": false,
+          "reached": false,
+          "target": 3.0
+        }
+      },
+      "id": "period_progress-024",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": null
+          }
+        ],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "done بلا قيمة لغير المنطقية = 0"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 1.0,
+          "done": 3.0,
+          "expected": 3.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": true,
+          "target": 3.0
+        }
+      },
+      "id": "period_progress-025",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 5.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-13",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-14",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-14",
+        "week_start": "sun"
+      },
+      "source": "أسبوع أول مقصوص: الهدف ceil(5·3/7) = 3 محقق"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.6666666666666666,
+          "done": 2.0,
+          "expected": 2.0,
+          "need_per_day": 1.0,
+          "on_track": true,
+          "reached": false,
+          "target": 3.0
+        }
+      },
+      "id": "period_progress-026",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 5.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-13",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-14",
+        "week_start": "sun"
+      },
+      "source": "أسبوع أول مقصوص: 2 من 3"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 0.0,
+          "need_per_day": 41.0,
+          "on_track": true,
+          "reached": false,
+          "target": 123.0
+        }
+      },
+      "id": "period_progress-027",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "duration",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 285.0,
+          "unit": "min",
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-12",
+        "week_start": "sun"
+      },
+      "source": "التناسب يقرّب لأعلى: ceil(285·3/7) = 123"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 0.0,
+          "need_per_day": 2.0,
+          "on_track": true,
+          "reached": false,
+          "target": 6.0
+        }
+      },
+      "id": "period_progress-028",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 14.000000001,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-12",
+        "week_start": "sun"
+      },
+      "source": "هامش 1e-9 في التناسب: 6.0000000004 تعطي 6"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 0.0,
+          "need_per_day": 1.0,
+          "on_track": true,
+          "reached": false,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-029",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-14",
+          "target_per_period": 2.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-14",
+        "week_start": "sun"
+      },
+      "source": "يوم واحد من 7: الهدف المتناسب لا يقل عن 1"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 1.0,
+          "done": 0.5,
+          "expected": 0.3333333333333333,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": true,
+          "target": 0.5
+        }
+      },
+      "id": "period_progress-030",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "duration",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 0.5,
+          "unit": "hour",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 0.5
+          }
+        ],
+        "today": "2026-11-14",
+        "week_start": "sun"
+      },
+      "source": "السقف T: هدف 0.5 يبقى 0.5 في الأسبوع الجزئي"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 0.0,
+          "need_per_day": 0.3333333333333333,
+          "on_track": true,
+          "reached": false,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-031",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 1.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-12",
+        "week_start": "sun"
+      },
+      "source": "هدف 1 في أسبوع جزئي يبقى 1"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 1.0714285714285714,
+          "need_per_day": 0.625,
+          "on_track": false,
+          "reached": false,
+          "target": 2.5
+        }
+      },
+      "id": "period_progress-032",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 2.5,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "أسبوع كامل: الهدف 2.5 بلا تقريب"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 0.0,
+          "need_per_day": 3.0,
+          "on_track": true,
+          "reached": false,
+          "target": 3.0
+        }
+      },
+      "id": "period_progress-033",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-12",
+        "week_start": "sun"
+      },
+      "source": "اليومية لا تتناسب"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 0.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": false,
+          "target": 5.0
+        }
+      },
+      "id": "period_progress-034",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-22",
+          "target_per_period": 5.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "الفترة قبل البداية كلياً: الهدف كما هو ولا توقّع"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 1.0,
+          "done": 4.0,
+          "expected": 3.6,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": true,
+          "target": 4.0
+        }
+      },
+      "id": "period_progress-035",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "month",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-21",
+          "target_per_period": 10.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-21",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-22",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-23",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-24",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-30",
+        "week_start": "sun"
+      },
+      "source": "شهر أول مقصوص: ceil(10·10/30) = 4"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 1.2903225806451613,
+          "need_per_day": 0.37037037037037035,
+          "on_track": false,
+          "reached": false,
+          "target": 10.0
+        }
+      },
+      "id": "period_progress-036",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "month",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-21",
+          "target_per_period": 10.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-12-05",
+        "week_start": "sun"
+      },
+      "source": "الشهر الكامل التالي بهدفه"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.6,
+          "done": 3.0,
+          "expected": 2.142857142857143,
+          "need_per_day": 0.5,
+          "on_track": true,
+          "reached": false,
+          "target": 5.0
+        }
+      },
+      "id": "period_progress-037",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 5.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "ترتيب السجلات معكوس: الناتج نفسه كالحالة 009"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.6000000000000001,
+          "done": 0.6000000000000001,
+          "expected": 1.0,
+          "need_per_day": 0.3999999999999999,
+          "on_track": false,
+          "reached": false,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-038",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "duration",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": "hour",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 0.3
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 0.2
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 0.1
+          }
+        ],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "ترتيب الجمع محدِّد: 0.3+0.2+0.1 كـ0.1+0.2+0.3"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.6000000000000001,
+          "done": 0.6000000000000001,
+          "expected": 1.0,
+          "need_per_day": 0.3999999999999999,
+          "on_track": false,
+          "reached": false,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-039",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "duration",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": "hour",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 0.1
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 0.2
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 0.3
+          }
+        ],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "الترتيب الآخر للحالة 038 يعطي القيمة نفسها حتى آخر خانة"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.4,
+          "done": 2.0,
+          "expected": 2.857142857142857,
+          "need_per_day": 0.75,
+          "on_track": false,
+          "reached": false,
+          "target": 5.0
+        }
+      },
+      "id": "period_progress-040",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 5.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "تعديل بأثر رجعي: سجل ليوم سابق يصل بعد سجل اليوم"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 1.0,
+          "done": 35.0,
+          "expected": 30.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": true,
+          "target": 30.0
+        }
+      },
+      "id": "period_progress-041",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "duration",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 30.0,
+          "unit": "min",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 15.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 20.0
+          }
+        ],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "سجلان للمدة في اليوم يُجمعان"
+    }
+  ],
+  "function": "period_progress",
+  "rulesVersion": 1
+}

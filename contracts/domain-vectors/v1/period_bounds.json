@@ -1,0 +1,351 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-09",
+          "start": "2026-11-09"
+        }
+      },
+      "id": "period_bounds-001",
+      "input": {
+        "day": "2026-11-09",
+        "period": "day",
+        "week_start": "sun"
+      },
+      "source": "فترة اليوم: اليوم نفسه"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2028-02-29",
+          "start": "2028-02-29"
+        }
+      },
+      "id": "period_bounds-002",
+      "input": {
+        "day": "2028-02-29",
+        "period": "day",
+        "week_start": "sat"
+      },
+      "source": "فترة اليوم في يوم الكبيسة وبداية أسبوع لا تؤثر"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-14",
+          "start": "2026-11-08"
+        }
+      },
+      "id": "period_bounds-003",
+      "input": {
+        "day": "2026-11-09",
+        "period": "week",
+        "week_start": "sun"
+      },
+      "source": "الاثنين في أسبوع الأحد"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-13",
+          "start": "2026-11-07"
+        }
+      },
+      "id": "period_bounds-004",
+      "input": {
+        "day": "2026-11-09",
+        "period": "week",
+        "week_start": "sat"
+      },
+      "source": "الاثنين في أسبوع السبت"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-15",
+          "start": "2026-11-09"
+        }
+      },
+      "id": "period_bounds-005",
+      "input": {
+        "day": "2026-11-09",
+        "period": "week",
+        "week_start": "mon"
+      },
+      "source": "الاثنين هو بداية أسبوع الاثنين"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-14",
+          "start": "2026-11-08"
+        }
+      },
+      "id": "period_bounds-006",
+      "input": {
+        "day": "2026-11-08",
+        "period": "week",
+        "week_start": "sun"
+      },
+      "source": "يوم بداية الأسبوع نفسه"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-14",
+          "start": "2026-11-08"
+        }
+      },
+      "id": "period_bounds-007",
+      "input": {
+        "day": "2026-11-14",
+        "period": "week",
+        "week_start": "sun"
+      },
+      "source": "آخر يوم في الأسبوع"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-21",
+          "start": "2026-11-15"
+        }
+      },
+      "id": "period_bounds-008",
+      "input": {
+        "day": "2026-11-15",
+        "period": "week",
+        "week_start": "sun"
+      },
+      "source": "أول يوم في الأسبوع التالي"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2027-01-02",
+          "start": "2026-12-27"
+        }
+      },
+      "id": "period_bounds-009",
+      "input": {
+        "day": "2027-01-01",
+        "period": "week",
+        "week_start": "sun"
+      },
+      "source": "أسبوع يعبر حد السنة"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2028-03-04",
+          "start": "2028-02-27"
+        }
+      },
+      "id": "period_bounds-010",
+      "input": {
+        "day": "2028-02-29",
+        "period": "week",
+        "week_start": "sun"
+      },
+      "source": "أسبوع يحوي يوم الكبيسة (أحد)"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2028-03-03",
+          "start": "2028-02-26"
+        }
+      },
+      "id": "period_bounds-011",
+      "input": {
+        "day": "2028-02-29",
+        "period": "week",
+        "week_start": "sat"
+      },
+      "source": "أسبوع يحوي يوم الكبيسة (سبت)"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2028-03-05",
+          "start": "2028-02-28"
+        }
+      },
+      "id": "period_bounds-012",
+      "input": {
+        "day": "2028-02-29",
+        "period": "week",
+        "week_start": "mon"
+      },
+      "source": "أسبوع يحوي يوم الكبيسة (اثنين)"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-13",
+          "start": "2026-11-07"
+        }
+      },
+      "id": "period_bounds-013",
+      "input": {
+        "day": "2026-11-07",
+        "period": "week",
+        "week_start": "sat"
+      },
+      "source": "السبت هو بداية أسبوع السبت"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-07",
+          "start": "2026-11-01"
+        }
+      },
+      "id": "period_bounds-014",
+      "input": {
+        "day": "2026-11-07",
+        "period": "week",
+        "week_start": "sun"
+      },
+      "source": "السبت هو آخر يوم في أسبوع الأحد"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-08",
+          "start": "2026-11-02"
+        }
+      },
+      "id": "period_bounds-015",
+      "input": {
+        "day": "2026-11-07",
+        "period": "week",
+        "week_start": "mon"
+      },
+      "source": "السبت في أسبوع الاثنين 11-02 .. 11-08"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-30",
+          "start": "2026-11-01"
+        }
+      },
+      "id": "period_bounds-016",
+      "input": {
+        "day": "2026-11-09",
+        "period": "month",
+        "week_start": "sun"
+      },
+      "source": "شهر من 30 يوماً"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-30",
+          "start": "2026-11-01"
+        }
+      },
+      "id": "period_bounds-017",
+      "input": {
+        "day": "2026-11-01",
+        "period": "month",
+        "week_start": "sun"
+      },
+      "source": "أول يوم في الشهر"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-12-31",
+          "start": "2026-12-01"
+        }
+      },
+      "id": "period_bounds-018",
+      "input": {
+        "day": "2026-12-31",
+        "period": "month",
+        "week_start": "sun"
+      },
+      "source": "آخر يوم في شهر من 31 يوماً"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2028-02-29",
+          "start": "2028-02-01"
+        }
+      },
+      "id": "period_bounds-019",
+      "input": {
+        "day": "2028-02-29",
+        "period": "month",
+        "week_start": "sun"
+      },
+      "source": "فبراير الكبيسة 29 يوماً"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2027-02-28",
+          "start": "2027-02-01"
+        }
+      },
+      "id": "period_bounds-020",
+      "input": {
+        "day": "2027-02-15",
+        "period": "month",
+        "week_start": "sun"
+      },
+      "source": "فبراير العادية 28 يوماً"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2100-02-28",
+          "start": "2100-02-01"
+        }
+      },
+      "id": "period_bounds-021",
+      "input": {
+        "day": "2100-02-10",
+        "period": "month",
+        "week_start": "mon"
+      },
+      "source": "2100 ليست كبيسة (قابلة للقسمة على 100 لا 400)"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2000-02-29",
+          "start": "2000-02-01"
+        }
+      },
+      "id": "period_bounds-022",
+      "input": {
+        "day": "2000-02-10",
+        "period": "month",
+        "week_start": "sat"
+      },
+      "source": "2000 كبيسة (قابلة للقسمة على 400)"
+    },
+    {
+      "expect": {
+        "value": {
+          "end": "2026-11-30",
+          "start": "2026-11-01"
+        }
+      },
+      "id": "period_bounds-023",
+      "input": {
+        "day": "2026-11-30",
+        "period": "month",
+        "week_start": "sun"
+      },
+      "source": "آخر يوم في شهر من 30 يوماً"
+    }
+  ],
+  "function": "period_bounds",
+  "rulesVersion": 1
+}

@@ -1,0 +1,622 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-001",
+      "input": {
+        "day": "2026-11-08",
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-12-08",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "قبل البداية بيوم: غير مجدول"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-002",
+      "input": {
+        "day": "2026-11-09",
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-12-08",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "يوم البداية"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-003",
+      "input": {
+        "day": "2026-12-08",
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-12-08",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "آخر يوم في النافذة"
+    },
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-004",
+      "input": {
+        "day": "2026-12-09",
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-12-08",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "اليوم التالي للنهاية"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-005",
+      "input": {
+        "day": "2026-11-08",
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "weekdays",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": 65
+        }
+      },
+      "source": "قناع الأحد والسبت: الأحد (بتّ 0)"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-006",
+      "input": {
+        "day": "2026-11-14",
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "weekdays",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": 65
+        }
+      },
+      "source": "قناع الأحد والسبت: السبت (بتّ 6)"
+    },
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-007",
+      "input": {
+        "day": "2026-11-09",
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "weekdays",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": 65
+        }
+      },
+      "source": "قناع الأحد والسبت: الاثنين غير مجدول"
+    },
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-008",
+      "input": {
+        "day": "2026-11-13",
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "weekdays",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": 65
+        }
+      },
+      "source": "قناع الأحد والسبت: الجمعة غير مجدولة"
+    },
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-009",
+      "input": {
+        "day": "2026-11-08",
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-11",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "weekdays",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": 127
+        }
+      },
+      "source": "قناع كامل لكن قبل البداية"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-010",
+      "input": {
+        "day": "2026-11-11",
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-11",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "weekdays",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": 127
+        }
+      },
+      "source": "قناع كامل في آخر يوم"
+    },
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-011",
+      "input": {
+        "day": "2026-11-12",
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-11",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "weekdays",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": 127
+        }
+      },
+      "source": "قناع كامل بعد النهاية"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-012",
+      "input": {
+        "day": "2028-02-27",
+        "habit": {
+          "anchor_day": "2028-02-27",
+          "end_day": null,
+          "every_n": 3,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2028-02-20",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "كل 3 أيام: يوم المرساة"
+    },
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-013",
+      "input": {
+        "day": "2028-02-28",
+        "habit": {
+          "anchor_day": "2028-02-27",
+          "end_day": null,
+          "every_n": 3,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2028-02-20",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "كل 3 أيام: اليوم التالي للمرساة"
+    },
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-014",
+      "input": {
+        "day": "2028-02-29",
+        "habit": {
+          "anchor_day": "2028-02-27",
+          "end_day": null,
+          "every_n": 3,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2028-02-20",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "كل 3 أيام: يوم الكبيسة ليس من الدورة"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-015",
+      "input": {
+        "day": "2028-03-01",
+        "habit": {
+          "anchor_day": "2028-02-27",
+          "end_day": null,
+          "every_n": 3,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2028-02-20",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "كل 3 أيام: بعد الكبيسة مجدول"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-016",
+      "input": {
+        "day": "2028-03-04",
+        "habit": {
+          "anchor_day": "2028-02-27",
+          "end_day": null,
+          "every_n": 3,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2028-02-20",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "كل 3 أيام: الدورة تستمر"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-017",
+      "input": {
+        "day": "2026-11-10",
+        "habit": {
+          "anchor_day": "2026-11-19",
+          "end_day": null,
+          "every_n": 3,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "المرساة بعد البداية: مرساة − 9"
+    },
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-018",
+      "input": {
+        "day": "2026-11-09",
+        "habit": {
+          "anchor_day": "2026-11-19",
+          "end_day": null,
+          "every_n": 3,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "المرساة بعد البداية: البداية نفسها ليست من الدورة"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-019",
+      "input": {
+        "day": "2026-11-19",
+        "habit": {
+          "anchor_day": "2026-11-19",
+          "end_day": null,
+          "every_n": 3,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "المرساة بعد البداية: يوم المرساة"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-020",
+      "input": {
+        "day": "2026-11-11",
+        "habit": {
+          "anchor_day": "2026-10-30",
+          "end_day": null,
+          "every_n": 4,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "المرساة قبل البداية: مرساة + 12"
+    },
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-021",
+      "input": {
+        "day": "2026-11-09",
+        "habit": {
+          "anchor_day": "2026-10-30",
+          "end_day": null,
+          "every_n": 4,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "المرساة قبل البداية: البداية ليست من الدورة"
+    },
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-022",
+      "input": {
+        "day": "2026-11-07",
+        "habit": {
+          "anchor_day": "2026-10-30",
+          "end_day": null,
+          "every_n": 4,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "المرساة قبل البداية: من الدورة لكن قبل البداية"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-023",
+      "input": {
+        "day": "2026-11-15",
+        "habit": {
+          "anchor_day": "2026-10-30",
+          "end_day": null,
+          "every_n": 4,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "المرساة قبل البداية: مرساة + 16"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-024",
+      "input": {
+        "day": "2026-11-09",
+        "habit": {
+          "anchor_day": "2026-11-09",
+          "end_day": null,
+          "every_n": 2,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "المرساة = البداية، كل يومين: اليوم 0"
+    },
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-025",
+      "input": {
+        "day": "2026-11-10",
+        "habit": {
+          "anchor_day": "2026-11-09",
+          "end_day": null,
+          "every_n": 2,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "المرساة = البداية، كل يومين: اليوم 1"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-026",
+      "input": {
+        "day": "2026-11-11",
+        "habit": {
+          "anchor_day": "2026-11-09",
+          "end_day": null,
+          "every_n": 2,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_n_days",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        }
+      },
+      "source": "المرساة = البداية، كل يومين: اليوم 2"
+    },
+    {
+      "expect": {
+        "value": true
+      },
+      "id": "is_scheduled-027",
+      "input": {
+        "day": "2026-11-13",
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "weekdays",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": 32
+        }
+      },
+      "source": "قناع الجمعة (بتّ 5): الجمعة"
+    },
+    {
+      "expect": {
+        "value": false
+      },
+      "id": "is_scheduled-028",
+      "input": {
+        "day": "2026-11-12",
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "weekdays",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": 32
+        }
+      },
+      "source": "قناع الجمعة: الخميس"
+    }
+  ],
+  "function": "is_scheduled",
+  "rulesVersion": 1
+}

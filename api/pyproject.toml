@@ -40,6 +40,8 @@ packages = ["yawmi"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+# tools/ holds the vector generator; the tests import it as a plain module.
+pythonpath = ["tools"]
 
 [tool.ruff]
 line-length = 100

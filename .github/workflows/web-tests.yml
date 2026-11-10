@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - "web/**"
+      - "contracts/domain-vectors/**"
       - ".github/workflows/web-tests.yml"
   push:
     branches: [main]
     paths:
       - "web/**"
+      - "contracts/domain-vectors/**"
       - ".github/workflows/web-tests.yml"
 
 permissions:
