@@ -25,6 +25,10 @@ services:
       YAWMI_ANTHROPIC_API_KEY: ${YAWMI_ANTHROPIC_API_KEY:?YAWMI_ANTHROPIC_API_KEY is required}
       YAWMI_LOG_BODIES: "false"
       YAWMI_SEND_RAW_HEALTH: "false"
+      # Web Push (RUNBOOK 11e): off until the key exists and both variables are set by hand.
+      YAWMI_PUSH_ENABLED: ${YAWMI_PUSH_ENABLED:-false}
+      YAWMI_VAPID_SUBJECT: ${YAWMI_VAPID_SUBJECT:-}
+      YAWMI_VAPID_PRIVATE_KEY_FILE: /run/yawmi/vapid_private.pem
     networks:
       - n8n
       - raqib
