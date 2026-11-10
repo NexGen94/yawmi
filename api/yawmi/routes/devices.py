@@ -117,7 +117,10 @@ async def pair_device(
 @router.post(
     "/auth/refresh",
     summary="تدوير رمز التجديد وإصدار رمز وصول جديد",
-    responses={401: {"model": ErrorDetail, "description": "رمز التجديد غير صالح أو الجهاز مُبطَل"}},
+    responses={
+        401: {"model": ErrorDetail, "description": "رمز التجديد غير صالح أو الجهاز مُبطَل"},
+        **INVALID,
+    },
 )
 async def refresh_tokens(
     response: Response,
@@ -145,6 +148,7 @@ async def refresh_tokens(
     responses={
         403: {"model": ErrorDetail, "description": "غير مسموح"},
         404: {"model": ErrorDetail, "description": DEVICE_NOT_FOUND},
+        **INVALID,
     },
 )
 async def revoke_device(device_id: UUID, devices: DevicesDep) -> None:
