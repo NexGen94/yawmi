@@ -6,9 +6,15 @@ import {
   pair,
   PairError,
   RefreshError,
+  refreshTimeouts,
   setAccessToken,
   Unauthorized,
 } from '../src/api/auth';
+
+// Node 24 ships navigator.locks in recent minors; where it is missing the fallback runs and the
+// tests that need two real tabs sharing one lock are skipped (the engines floor stays >=24).
+const hasWebLocks =
+  typeof (globalThis.navigator as { locks?: { request?: unknown } } | undefined)?.locks?.request === 'function';
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -297,9 +303,9 @@ describe('refresh across tabs', () => {
     const requested: string[] = [];
     vi.stubGlobal('navigator', {
       locks: {
-        request: (name: string, task: () => Promise<unknown>) => {
+        request: (name: string, ...rest: unknown[]) => {
           requested.push(name);
-          return task();
+          return (rest.at(-1) as () => Promise<unknown>)();
         },
       },
     });
@@ -313,7 +319,7 @@ describe('refresh across tabs', () => {
     expect(requested).toEqual(['yawmi-auth-refresh']);
   });
 
-  it('never sends two refreshes at once from two tabs: the second starts after the first has answered', async () => {
+  it.skipIf(!hasWebLocks)('never sends two refreshes at once from two tabs: the second starts after the first has answered', async () => {
     // Two tabs: two module instances (each with its own in-memory token), one cookie jar (the
     // fetch mock) and Node's real navigator.locks shared between them.
     vi.resetModules();
@@ -367,6 +373,68 @@ describe('refresh across tabs', () => {
     expect([ra.status, rb.status]).toEqual([200, 200]);
     expect(refreshCalls()).toHaveLength(1);
   });
+});
+
+describe('refresh timeouts', () => {
+  const saved = { ...refreshTimeouts };
+  afterEach(() => {
+    Object.assign(refreshTimeouts, saved);
+  });
+
+  it('states the bounds: 15 s for the refresh request, 20 s waiting for another tab', () => {
+    expect(saved).toEqual({ requestMs: 15_000, lockWaitMs: 20_000 });
+  });
+
+  it('gives up on a refresh that never answers with a retryable RefreshError, and keeps the token', async () => {
+    refreshTimeouts.requestMs = 30;
+    setAccessToken('old');
+    fetchMock.mockImplementation((input: unknown, init?: RequestInit) => {
+      if (String(input) !== '/v1/auth/refresh') return Promise.resolve(json(UNAUTHORIZED, 401));
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason as Error), { once: true });
+      });
+    });
+
+    const error = await authedFetch('/v1/things').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RefreshError);
+
+    // The token was kept: the next request still carries it.
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValueOnce(json({ ok: true }));
+    await authedFetch('/v1/things');
+    expect(authOf(fetchMock.mock.calls[0])).toBe('Bearer old');
+  });
+
+  it.skipIf(!hasWebLocks)(
+    'a second tab stops waiting for a refresh holder that never answers, with RefreshError',
+    async () => {
+      vi.resetModules();
+      const tabA = await import('../src/api/auth');
+      vi.resetModules();
+      const tabB = await import('../src/api/auth');
+      tabA.setAccessToken('a-old');
+      tabB.setAccessToken('b-old');
+      tabB.refreshTimeouts.lockWaitMs = 40;
+      let releaseA!: (res: Response) => void;
+      fetchMock.mockImplementation((input: unknown) => {
+        if (String(input) !== '/v1/auth/refresh') return Promise.resolve(json(UNAUTHORIZED, 401));
+        // A frozen holder: ignores its abort signal and never answers until the test lets it.
+        return new Promise<Response>((resolve) => {
+          releaseA = resolve;
+        });
+      });
+
+      const a = tabA.authedFetch('/v1/a').catch((e: unknown) => e);
+      await vi.waitFor(() => expect(refreshCalls()).toHaveLength(1));
+
+      const error = await tabB.authedFetch('/v1/b').catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(tabB.RefreshError);
+      expect(refreshCalls()).toHaveLength(1);
+
+      releaseA(json(TOKEN_PAIR));
+      await a;
+    },
+  );
 });
 
 describe('pair', () => {
