@@ -102,9 +102,17 @@ def test_repr_does_not_leak_database_password(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_vapid_subject_must_be_mailto(required_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("YAWMI_PUSH_ENABLED", "true")
     monkeypatch.setenv("YAWMI_VAPID_SUBJECT", "https://x")
     with pytest.raises(ValidationError, match="mailto:"):
         Settings()
+
+
+def test_a_mistyped_vapid_subject_does_not_stop_an_api_with_push_off(
+    required_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("YAWMI_VAPID_SUBJECT", "https://x")
+    assert Settings().push_enabled is False
 
 
 def test_vapid_subject_mailto_is_accepted(

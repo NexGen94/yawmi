@@ -53,6 +53,9 @@ SET revoked_at = COALESCE(revoked_at, now()), refresh_hash = NULL
 WHERE id = $1
 """
 
+# Same transaction as _REVOKE: a revoked device keeps no Web Push subscription.
+_DROP_PUSH = "DELETE FROM yawmi.push_subscriptions WHERE device_id = $1"
+
 
 def affected_rows(command_tag: str) -> int:
     """Row count from an asyncpg command tag: `UPDATE 1` -> 1, `INSERT 0 1` -> 1."""
@@ -98,5 +101,7 @@ class AsyncpgDeviceStore:
         return affected_rows(tag) == 1
 
     async def revoke(self, device_id: UUID) -> bool:
-        tag = await self._pool.execute(_REVOKE, device_id)
+        async with self._pool.acquire() as conn, conn.transaction():
+            tag = await conn.execute(_REVOKE, device_id)
+            await conn.execute(_DROP_PUSH, device_id)
         return affected_rows(tag) == 1

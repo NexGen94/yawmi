@@ -95,15 +95,28 @@ async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResp
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     pool = None
+    reminders = None
     if app.state.use_db:
         config: Settings = app.state.settings or load_settings()
         if config.database_url:
             pool = await create_pool(config.database_url)
             set_pool(pool)
             app.state.devices = AsyncpgDeviceStore(pool)
+            if config.push_enabled:
+                # imported here so that with push off pywebpush and aiohttp are never loaded
+                from yawmi.push.scheduler import start_reminders
+
+                try:
+                    reminders = app.state.reminder_loop = start_reminders(pool, config)
+                except Exception:
+                    set_pool(None)
+                    await pool.close()
+                    raise
     try:
         yield
     finally:
+        if reminders is not None:
+            await reminders.stop()
         if pool is not None:
             set_pool(None)
             await pool.close()
