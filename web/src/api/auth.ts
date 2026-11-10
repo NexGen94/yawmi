@@ -4,11 +4,18 @@
 // IndexedDB. The long-lived refresh token is an HttpOnly cookie (`yawmi_rt`, Path=/v1/auth) that
 // script cannot read; the browser attaches it to POST /v1/auth/refresh. The server rotates it on
 // every refresh (a replayed token is refused), so two refreshes must never run at once with the
-// same cookie. That is why a single in-flight refresh is shared by every request that sees a 401.
+// same cookie. That is why a single in-flight refresh is shared by every request that sees a 401,
+// and why the refresh also holds a Web Lock: other tabs share the cookie jar (each keeps its own
+// in-memory token), so a refresh in one tab waits until another tab's rotation has landed.
+
+import { withLock } from '../lib/locks';
+import type { components } from './schema';
 
 const REFRESH_URL = '/v1/auth/refresh';
 const PAIR_URL = '/v1/devices/pair';
 const PAIR_FAILED = 'تعذّر الإقران';
+/** Cross-tab lock name for the cookie rotation. */
+const REFRESH_LOCK = 'yawmi-auth-refresh';
 
 let accessToken: string | null = null;
 let refreshing: Promise<void> | null = null;
@@ -87,7 +94,7 @@ async function requestRefresh(): Promise<void> {
 }
 
 function refresh(): Promise<void> {
-  refreshing ??= requestRefresh().finally(() => {
+  refreshing ??= withLock(REFRESH_LOCK, requestRefresh).finally(() => {
     refreshing = null;
   });
   return refreshing;
@@ -138,6 +145,9 @@ function pairErrorMessage(body: unknown): string {
   return typeof detail === 'string' && detail !== '' ? detail : PAIR_FAILED;
 }
 
+/** How this device is listed among the paired devices: a device name, addressed to no one. */
+const DEVICE_NAME = 'Safari iPhone';
+
 /** Exchange a one-time pairing code for a session on this device (cookie plus in-memory token). */
 export async function pair(code: string): Promise<void> {
   let res: Response;
@@ -146,7 +156,7 @@ export async function pair(code: string): Promise<void> {
       method: 'POST',
       credentials: 'include',
       headers: jsonHeaders(),
-      body: JSON.stringify({ code, name: 'Safari iPhone', kind: 'web' }),
+      body: JSON.stringify({ code, name: DEVICE_NAME, kind: 'web' } satisfies components['schemas']['PairRequest']),
     });
   } catch (cause) {
     throw new PairError(PAIR_FAILED, { cause });
