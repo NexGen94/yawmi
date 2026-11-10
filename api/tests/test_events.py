@@ -389,6 +389,27 @@ async def test_skip_status_makes_a_skip_row(
     assert row.value is None
 
 
+@pytest.mark.parametrize("status", ["skip", "vacation"])
+async def test_a_value_sent_with_skip_or_vacation_is_not_stored(
+    client: httpx.AsyncClient, backend: Backend, iphone: Device, habit: str, status: str
+) -> None:
+    await post(client, iphone, [event("habit_logged", logged(habit, status, value=3))])
+    row = await backend.habit_log(habit, date(2026, 11, 10), "iphone")
+    assert row is not None
+    assert (row.status, row.value) == (status, None)
+
+
+async def test_skipping_a_day_that_was_done_clears_its_value(
+    client: httpx.AsyncClient, backend: Backend, iphone: Device, habit: str
+) -> None:
+    await post(client, iphone, [event("habit_logged", logged(habit, value=5), at=NOON)])
+    later = event("habit_logged", logged(habit, "skip", value=3), at="2026-11-10T10:00:00Z")
+    await post(client, iphone, [later])
+    row = await backend.habit_log(habit, date(2026, 11, 10), "iphone")
+    assert row is not None
+    assert (row.status, row.value) == ("skip", None)  # not the 5 from before, not the 3 sent
+
+
 async def test_an_unknown_type_is_a_422_and_nothing_is_stored(
     client: httpx.AsyncClient, backend: Backend, iphone: Device
 ) -> None:

@@ -299,6 +299,23 @@ def test_habit_logged_carries_its_status(status: str) -> None:
     assert intent.status == status
 
 
+@pytest.mark.parametrize("status", ["skip", "vacation"])
+def test_habit_logged_with_a_status_other_than_done_stores_no_value(status: str) -> None:
+    """A skipped or vacation day carries no amount: a stray value must not reach the row."""
+    intent = project_event(ev("habit_logged", logged(status=status, value=3)), "iphone")
+    assert isinstance(intent, HabitLog)
+    assert intent.status == status
+    assert intent.value is None
+
+
+def test_habit_logged_done_keeps_its_value_including_zero() -> None:
+    for sent, kept in ((2.5, Decimal("2.5")), (0, Decimal(0)), (None, None)):
+        payload = logged(value=sent) if sent is not None else logged()
+        intent = project_event(ev("habit_logged", payload), "iphone")
+        assert isinstance(intent, HabitLog)
+        assert intent.value == kept
+
+
 @pytest.mark.parametrize(
     ("type_", "status"), [("habit_skipped", "skip"), ("habit_vacation", "vacation")]
 )

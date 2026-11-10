@@ -8,7 +8,8 @@ projection is testable here without a database.
 Payload shapes (unknown extra fields are ignored so that newer clients keep working; the
 original payload is stored in `events` untouched):
 
-* `habit_logged`  `{habit_code, status: done|skip|vacation, day?, value?}`
+* `habit_logged`  `{habit_code, status: done|skip|vacation, day?, value?}` (`value` is kept
+  only for `done`)
 * `habit_skipped` / `habit_vacation`  `{habit_code, day?}`  (the type decides the status)
 * `focus_ended`   `{habit_code?, goal_ref?, started_at?, ended_at?, planned_minutes?,
   actual_minutes?, focus_rating?, next_step?}`
@@ -250,7 +251,8 @@ def project_event(event: "EventIn", source: str) -> Intent | None:
                 habit_code=logged.habit_code,
                 day=_habit_day(logged.day, event),
                 status=logged.status,
-                value=logged.value,
+                # a skipped or vacation day has no amount, however the client filled the field
+                value=logged.value if logged.status == "done" else None,
                 source=source,
                 logged_at=event.occurred_at,
             )
