@@ -28,7 +28,18 @@ jobs:
       IMAGE: ghcr.io/nexgen94/yawmi-web
 
     steps:
+      # Full history, so the next step can tell whether the tag is on main.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      # A tag on an unreviewed branch must never publish an image.
+      - name: Tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::${GITHUB_REF_NAME} does not point at a commit that is on main"
+            exit 1
+          fi
 
       - name: Version from the tag
         run: |
@@ -51,26 +62,44 @@ jobs:
             web
 
       # The image cannot be built on the developer machine (no Docker), so this is the first
-      # real proof of the headers, the caching rules and the non-root user.
+      # real proof of the headers, the caching rules, gzip, the healthcheck and the non-root
+      # user. The container runs with the same restrictions as the compose service.
       - name: Smoke test
         run: |
           test "$(docker run --rm --entrypoint id "$IMAGE:$VERSION" -u)" = "101"
-          docker run -d --name yawmi-web-smoke --read-only --tmpfs /tmp -p 8080:8080 "$IMAGE:$VERSION"
-          for _ in $(seq 1 20); do
-            curl -fsS -o /dev/null http://localhost:8080/healthz && break
-            sleep 1
+          docker run -d --name yawmi-web-smoke --read-only --tmpfs /tmp \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            -p 8080:8080 "$IMAGE:$VERSION"
+          fail() { echo "::error::$1"; docker logs yawmi-web-smoke || true; exit 1; }
+          healthy=""
+          for _ in $(seq 1 40); do
+            healthy="$(docker inspect -f '{{.State.Health.Status}}' yawmi-web-smoke)"
+            [ "$healthy" = "healthy" ] && break
+            sleep 2
           done
-          header() { curl -sS -D - -o /dev/null "http://localhost:8080$1" | tr -d '\r'; }
+          [ "$healthy" = "healthy" ] || fail "container health is '$healthy', not healthy"
+          header() {
+            local path="$1"
+            curl -sS -D - -o /dev/null -H 'Accept-Encoding: gzip' "http://127.0.0.1:8080${path}" | tr -d '\r'
+          }
           for path in /sw.js /index.html /manifest.webmanifest /some/app/route; do
-            header "$path" | grep -iq '^cache-control: no-cache$' || { echo "::error::$path is not no-cache"; exit 1; }
+            response="$(header "$path")"
+            printf '%s\n' "$response" | grep -iq '^cache-control: no-cache$' || fail "$path is not no-cache"
           done
-          asset="$(docker exec yawmi-web-smoke sh -c 'ls /usr/share/nginx/html/assets | head -n 1')"
-          header "/assets/$asset" | grep -iq '^cache-control: public, max-age=31536000, immutable$' \
-            || { echo "::error::hashed asset is not immutable"; exit 1; }
-          header /index.html | grep -iq "^content-security-policy: default-src 'self'" \
-            || { echo "::error::CSP is missing"; exit 1; }
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/v1/health/live)" = "404"
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/assets/missing.js)" = "404"
+          for path in /sw.js /index.html /assets/missing.js; do
+            response="$(header "$path")"
+            printf '%s\n' "$response" | grep -iq "^content-security-policy: default-src 'self'" || fail "$path has no CSP"
+            printf '%s\n' "$response" | grep -iq '^x-content-type-options: nosniff$' || fail "$path has no nosniff"
+            printf '%s\n' "$response" | grep -iq '^referrer-policy: no-referrer$' || fail "$path has no no-referrer"
+          done
+          js="$(docker exec yawmi-web-smoke sh -c 'cd /usr/share/nginx/html/assets && ls *.js | head -n 1')"
+          response="$(header "/assets/$js")"
+          printf '%s\n' "$response" | grep -iq '^cache-control: public, max-age=31536000, immutable$' || fail "hashed asset is not immutable"
+          printf '%s\n' "$response" | grep -iq '^content-encoding: gzip$' || fail "javascript is not gzipped"
+          response="$(header /assets/missing.js)"
+          printf '%s\n' "$response" | grep -q '^HTTP/1.1 404' || fail "a missing asset is not a 404"
+          if printf '%s\n' "$response" | grep -iq 'immutable'; then fail "the 404 of a missing asset is cacheable"; fi
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/health/live)" = "404"
           docker rm -f yawmi-web-smoke > /dev/null
 
       - name: Log in to GHCR
