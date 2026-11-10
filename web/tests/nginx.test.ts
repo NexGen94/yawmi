@@ -54,14 +54,22 @@ const location = (args: string): Block => {
   if (!found) throw new Error(`location ${args} is missing`);
   return found;
 };
+// Every add_header of a location, grouped by lower-cased name. A header sent twice is a bug
+// (the first value could be a wrong one), so callers assert exactly one value.
+const headerValues = (block: Block): Map<string, string[]> => {
+  const all = new Map<string, string[]>();
+  for (const d of block.directives.filter((x) => x.name === 'add_header')) {
+    const [key = '', ...rest] = d.args.split(' ');
+    const value = rest.join(' ').replace(/ always$/, '').replace(/^"|"$/g, '');
+    all.set(key.toLowerCase(), [...(all.get(key.toLowerCase()) ?? []), value]);
+  }
+  return all;
+};
 const headers = (block: Block): Map<string, string> =>
-  new Map(
-    block.directives
-      .filter((d) => d.name === 'add_header')
-      .map((d) => {
-        const [key = '', ...rest] = d.args.split(' ');
-        return [key.toLowerCase(), rest.join(' ').replace(/ always$/, '').replace(/^"|"$/g, '')];
-      }),
+  new Map([...headerValues(block)].map(([key, values]) => [key, values.at(-1) as string]));
+const alwaysFlag = (block: Block, header: string): boolean =>
+  block.directives.some(
+    (d) => d.name === 'add_header' && d.args.toLowerCase().startsWith(header) && / always$/.test(d.args),
   );
 
 const securityHeaders = {
@@ -77,6 +85,26 @@ describe('nginx.conf', () => {
     expect(server?.directives).toContainEqual({ name: 'listen', args: '8080' });
     expect(server?.directives).toContainEqual({ name: 'root', args: '/usr/share/nginx/html' });
     expect(server?.directives).toContainEqual({ name: 'server_tokens', args: 'off' });
+  });
+
+  it('compresses text, including javascript served as text/javascript', () => {
+    expect(server?.directives).toContainEqual({ name: 'gzip', args: 'on' });
+    const types = server?.directives.find((d) => d.name === 'gzip_types')?.args.split(' ') ?? [];
+    expect(types).toEqual(
+      expect.arrayContaining(['text/css', 'text/javascript', 'application/javascript', 'application/json']),
+    );
+  });
+
+  it('serves the manifest as application/manifest+json and answers /healthz with 200', () => {
+    expect(location('= /manifest.webmanifest').directives).toContainEqual({
+      name: 'default_type',
+      args: 'application/manifest+json',
+    });
+    expect(location('= /healthz').directives).toContainEqual({ name: 'return', args: '200 "ok\\n"' });
+  });
+
+  it('listens on IPv4 only, so a host without IPv6 cannot stop nginx from starting', () => {
+    expect(server?.directives.filter((d) => d.name === 'listen')).toEqual([{ name: 'listen', args: '8080' }]);
   });
 
   it('falls back to index.html for app routes', () => {
@@ -98,6 +126,8 @@ describe('nginx.conf', () => {
   it('serves hashed /assets/ as immutable for a year, and a missing asset is a 404', () => {
     const assets = location('^~ /assets/');
     expect(headers(assets).get('cache-control')).toBe('public, max-age=31536000, immutable');
+    // without `always` the header is not added to the 404 of a missing file
+    expect(alwaysFlag(assets, 'cache-control')).toBe(false);
     expect(assets.directives.find((d) => d.name === 'try_files')?.args).toBe('$uri =404');
   });
 
@@ -111,10 +141,11 @@ describe('nginx.conf', () => {
   it('sends the security headers on every location (add_header does not inherit)', () => {
     expect(locations.length).toBeGreaterThanOrEqual(6);
     for (const block of locations) {
-      const sent = headers(block);
+      const sent = headerValues(block);
       for (const [key, value] of Object.entries(securityHeaders)) {
-        expect(sent.get(key), `${block.args}: ${key}`).toBe(value);
+        expect(sent.get(key), `${block.args}: ${key}`).toEqual([value]);
       }
+      expect(sent.get('cache-control'), `${block.args}: cache-control`).toHaveLength(1);
     }
   });
 
@@ -129,7 +160,8 @@ describe('nginx.conf', () => {
     for (const file of ['nginx.conf', 'security-headers.conf', 'Dockerfile', '.dockerignore']) {
       const text = readFileSync(join(webRoot, file), 'utf8');
       expect(text, file).not.toContain('\r');
-      expect(text, file).not.toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/);
+      // loopback in the healthcheck is the only address allowed
+      expect(text.replaceAll('127.0.0.1', ''), file).not.toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/);
     }
   });
 });
@@ -146,11 +178,21 @@ describe('Dockerfile', () => {
   });
 
   it('runs npm ci and the build, then copies dist and the config into nginx', () => {
-    expect(dockerfile).toMatch(/npm ci/);
+    // install scripts of dependencies never run inside the image build
+    expect(dockerfile).toMatch(/npm ci --ignore-scripts/);
     expect(dockerfile).toMatch(/npm run build/);
     expect(dockerfile).toMatch(/COPY --from=build \/app\/dist \/usr\/share\/nginx\/html/);
     expect(dockerfile).toMatch(/COPY nginx\.conf \/etc\/nginx\/conf\.d\/default\.conf/);
     expect(dockerfile).toMatch(/COPY security-headers\.conf \/etc\/nginx\/security-headers\.conf/);
+  });
+
+  it('probes the loopback IPv4 address, not localhost', () => {
+    expect(dockerfile).toMatch(/HEALTHCHECK[\s\S]*http:\/\/127\.0\.0\.1:8080\/healthz/);
+  });
+
+  it('keeps env files, coverage and local overrides out of the build context', () => {
+    const ignored = readFileSync(join(webRoot, '.dockerignore'), 'utf8').split(/\r?\n/);
+    expect(ignored).toEqual(expect.arrayContaining(['node_modules', 'dist', '.env*', 'coverage', '*.local']));
   });
 
   it('stays non-root, exposes 8080 and has a healthcheck', () => {
@@ -182,5 +224,8 @@ describe('deploy wiring', () => {
     expect(workflow).toContain('"web-v*"');
     expect(workflow).toContain('ghcr.io/nexgen94/yawmi-web');
     expect(workflow).toMatch(/docker build[\s\S]*\sweb\s*$/m);
+    expect(workflow).toContain('gzip');
+    expect(workflow).toContain('nosniff');
+    expect(workflow).toContain('no-referrer');
   });
 });

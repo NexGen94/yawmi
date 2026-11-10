@@ -3,7 +3,8 @@
 FROM node:24.19.0-alpine3.24 AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# --ignore-scripts: no dependency install script runs in the build (supply-chain hardening).
+RUN npm ci --ignore-scripts
 COPY . .
 RUN npm run build && node scripts/check-budget.mjs
 
@@ -14,4 +15,4 @@ COPY --from=build /app/dist /usr/share/nginx/html
 USER 101
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget -q -O /dev/null http://localhost:8080/healthz || exit 1
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1

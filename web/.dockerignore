@@ -3,3 +3,6 @@ dist
 tests
 .git
 *.log
+.env*
+coverage
+*.local
