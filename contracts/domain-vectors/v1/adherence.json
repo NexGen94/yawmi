@@ -1,0 +1,1144 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "value": null
+      },
+      "id": "adherence-001",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "لم تنتهِ فترة: null"
+    },
+    {
+      "expect": {
+        "value": 1.0
+      },
+      "id": "adherence-002",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "بعد أول يوم محقق: 1"
+    },
+    {
+      "expect": {
+        "value": 0.0
+      },
+      "id": "adherence-003",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "بعد أول يوم فائت: 0"
+    },
+    {
+      "expect": {
+        "value": 0.75
+      },
+      "id": "adherence-004",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-13",
+        "week_start": "sun"
+      },
+      "source": "3 من 4 أيام منتهية"
+    },
+    {
+      "expect": {
+        "value": 0.5
+      },
+      "id": "adherence-005",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "skip",
+            "value": null
+          }
+        ],
+        "today": "2026-11-12",
+        "week_start": "sun"
+      },
+      "source": "التخطّي مستبعد: 1 من 2"
+    },
+    {
+      "expect": {
+        "value": 0.5
+      },
+      "id": "adherence-006",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "weekdays",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": 6
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-13",
+        "week_start": "sun"
+      },
+      "source": "غير المجدول مستبعد: الاثنين والثلاثاء"
+    },
+    {
+      "expect": {
+        "value": null
+      },
+      "id": "adherence-007",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-10",
+            "status": "skip",
+            "value": null
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "كلها محايدة: null"
+    },
+    {
+      "expect": {
+        "value": 0.5
+      },
+      "id": "adherence-008",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-16",
+        "week_start": "sun"
+      },
+      "source": "أسبوعية: 1 من 2"
+    },
+    {
+      "expect": {
+        "value": null
+      },
+      "id": "adherence-009",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-07",
+        "week_start": "sun"
+      },
+      "source": "الأسبوع الأول لم ينتهِ: null"
+    },
+    {
+      "expect": {
+        "value": 1.0
+      },
+      "id": "adherence-010",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-08",
+        "week_start": "sun"
+      },
+      "source": "أول أسبوع انتهى محققاً"
+    },
+    {
+      "expect": {
+        "value": 1.0
+      },
+      "id": "adherence-011",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-09",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-10",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-11",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-12",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-13",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-14",
+            "status": "vacation",
+            "value": null
+          }
+        ],
+        "today": "2026-11-16",
+        "week_start": "sun"
+      },
+      "source": "أسبوع إجازة مستبعد"
+    },
+    {
+      "expect": {
+        "value": 1.0
+      },
+      "id": "adherence-012",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-11",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-11",
+        "week_start": "sun"
+      },
+      "source": "يوم النهاية لم ينتهِ"
+    },
+    {
+      "expect": {
+        "value": 0.6666666666666666
+      },
+      "id": "adherence-013",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-11",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-12",
+        "week_start": "sun"
+      },
+      "source": "بعد النهاية: 2 من 3"
+    },
+    {
+      "expect": {
+        "value": 0.6666666666666666
+      },
+      "id": "adherence-014",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-11",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-09",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-12-29",
+        "week_start": "sun"
+      },
+      "source": "بعد النهاية بكثير: الناتج ثابت"
+    },
+    {
+      "expect": {
+        "value": 1.0
+      },
+      "id": "adherence-015",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 5.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-13",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-14",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-15",
+        "week_start": "sun"
+      },
+      "source": "أسبوع أول مقصوص محقق بهدفه المتناسب"
+    },
+    {
+      "expect": {
+        "value": 0.5
+      },
+      "id": "adherence-016",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 5.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-13",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-14",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-18",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-22",
+        "week_start": "sun"
+      },
+      "source": "أسبوع ثانٍ ناقص: 0.5"
+    },
+    {
+      "expect": {
+        "value": 1.0
+      },
+      "id": "adherence-017",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "duration",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 0.5,
+          "unit": "hour",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 0.5
+          }
+        ],
+        "today": "2026-11-15",
+        "week_start": "sun"
+      },
+      "source": "هدف 0.5 في أسبوع جزئي محقق"
+    },
+    {
+      "expect": {
+        "value": null
+      },
+      "id": "adherence-018",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-12",
+          "target_per_period": 5.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-12",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-13",
+            "status": "vacation",
+            "value": null
+          },
+          {
+            "day": "2026-11-14",
+            "status": "vacation",
+            "value": null
+          }
+        ],
+        "today": "2026-11-15",
+        "week_start": "sun"
+      },
+      "source": "أسبوع جزئي كله إجازة: null"
+    },
+    {
+      "expect": {
+        "value": 1.0
+      },
+      "id": "adherence-019",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-12-07",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-08",
+          "target_per_period": 5.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-13",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-14",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-18",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-19",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-20",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-21",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-22",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-23",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-24",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-25",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-26",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-27",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-28",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-29",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-30",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-04",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-05",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-06",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-07",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-12-08",
+        "week_start": "sun"
+      },
+      "source": "تحدي 30 يوماً أسبوعي: 1"
+    },
+    {
+      "expect": {
+        "value": 0.8
+      },
+      "id": "adherence-020",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-12-07",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-08",
+          "target_per_period": 5.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-09",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-11",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-12",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-13",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-14",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-15",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-16",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-17",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-18",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-19",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-20",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-21",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-22",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-23",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-24",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-25",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-26",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-27",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-28",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-29",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-30",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-04",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-05",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-12-06",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-12-08",
+        "week_start": "sun"
+      },
+      "source": "ينقص يوم النهاية: 4 من 5"
+    },
+    {
+      "expect": {
+        "value": 0.5
+      },
+      "id": "adherence-021",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-16",
+        "week_start": "sat"
+      },
+      "source": "الحالة 008 ببداية السبت"
+    },
+    {
+      "expect": {
+        "value": 0.6666666666666666
+      },
+      "id": "adherence-022",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "count",
+          "period": "week",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 3.0,
+          "unit": "session",
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-01",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-02",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-03",
+            "status": "done",
+            "value": 1.0
+          },
+          {
+            "day": "2026-11-08",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-16",
+        "week_start": "mon"
+      },
+      "source": "الحالة 008 ببداية الاثنين"
+    }
+  ],
+  "function": "adherence",
+  "rulesVersion": 1
+}
