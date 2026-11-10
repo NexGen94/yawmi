@@ -19,14 +19,13 @@ from yawmi.events.project import (
     ProjectionError,
     project_event,
 )
-from yawmi.text import check_text
+from yawmi.text import PAYLOAD_TEXT_INVALID, check_text
 
 MAX_BATCH = 500
 MAX_PAYLOAD_BYTES = 16 * 1024
 # an event may be dated at most this far ahead of the server clock (device clocks drift)
 MAX_FUTURE = timedelta(hours=24)
 
-_BAD_TEXT = "نص الحمولة غير صالح"
 _NOT_FINITE = "الحمولة تحوي رقماً غير منتهٍ"
 _FUTURE = "وقت الحدث يسبق الوقت الحالي بأكثر من 24 ساعة"
 _SESSION_FUTURE = "وقت الجلسة يسبق الوقت الحالي بأكثر من 24 ساعة"
@@ -54,7 +53,7 @@ def _check_storable(payload: dict[str, Any]) -> None:
 
     All of them would otherwise surface as a driver error (a 500) at insert time.
     """
-    check_text(payload, "payload_text_invalid", _BAD_TEXT)
+    check_text(payload, "payload_text_invalid", PAYLOAD_TEXT_INVALID)
     try:
         text = dump_payload(payload)
     except PayloadNotJson:
