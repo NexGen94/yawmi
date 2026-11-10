@@ -775,3 +775,23 @@ def test_runbook_carries_no_ip_no_key_prefix_and_no_carriage_return() -> None:
     assert "\r" not in RUNBOOK
     assert not check_compose._IPV4.search(RUNBOOK)
     assert not check_compose._API_KEY_PREFIX.search(RUNBOOK)
+
+
+def test_runbook_puts_loader_2_after_the_w9_tables_and_after_loader_1() -> None:
+    steps = _runbook_steps()
+    assert "الخطوة 2" in steps[4] and "W9" in steps[4]
+    assert "الخطوة 3" in steps[4]
+    assert "raqib.notion_milestones" in RUNBOOK and "raqib.notion_cards" in RUNBOOK
+    assert "لا يُشغَّل قبل جدولَي W9" in RUNBOOK
+    table = RUNBOOK.split("## 1. الترتيب", 1)[1].split("## الخطوة 0", 1)[0]
+    rows = {int(m[1]): m[0] for m in re.finditer(r"^\| (\d+) \|.*$", table, re.MULTILINE)}
+    assert "W9-loader-1-tables" in rows[2]
+    assert "yawmi-db-1-schema.yml" in rows[3]
+    assert "yawmi-db-2-role.yml" in rows[4]
+    assert "بعد الخطوتين 2 و3" in rows[4]
+
+
+def test_runbook_says_a_service_token_is_revoked_only_by_rotating_the_jwt_secret() -> None:
+    assert "فلا يُبطَل إلا بتدوير `YAWMI_JWT_SECRET`" in RUNBOOK
+    assert "السبيل الوحيد لإبطاله هو تدوير `YAWMI_JWT_SECRET`" in _runbook_steps()[10]
+    assert "عديم الحالة" in _runbook_steps()[10]
