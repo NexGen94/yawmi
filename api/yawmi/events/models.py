@@ -19,7 +19,7 @@ from yawmi.events.project import (
     ProjectionError,
     project_event,
 )
-from yawmi.text import is_storable
+from yawmi.text import check_text
 
 MAX_BATCH = 500
 MAX_PAYLOAD_BYTES = 16 * 1024
@@ -52,20 +52,9 @@ def dump_payload(payload: dict[str, Any]) -> str:
 def _check_storable(payload: dict[str, Any]) -> None:
     """Refuse what Postgres cannot store: NUL characters, lone surrogates, NaN/Infinity, size.
 
-    All of them would otherwise surface as a driver error (a 500) at insert time. The walk is
-    iterative so a deeply nested payload cannot exhaust the interpreter stack.
+    All of them would otherwise surface as a driver error (a 500) at insert time.
     """
-    stack: list[object] = [payload]
-    while stack:
-        item = stack.pop()
-        if isinstance(item, dict):
-            for key, value in item.items():
-                stack.append(key)
-                stack.append(value)
-        elif isinstance(item, list):
-            stack.extend(item)
-        elif isinstance(item, str) and not is_storable(item):
-            raise PydanticCustomError("payload_text_invalid", _BAD_TEXT)
+    check_text(payload, "payload_text_invalid", _BAD_TEXT)
     try:
         text = dump_payload(payload)
     except PayloadNotJson:

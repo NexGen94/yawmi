@@ -12,6 +12,7 @@ from pydantic import AfterValidator
 from pydantic_core import PydanticCustomError
 
 TEXT_INVALID = "النص يحوي محرفاً لا يمكن حفظه"
+PAYLOAD_TEXT_INVALID = "نص الحمولة غير صالح"
 
 
 def is_storable(text: str) -> bool:
@@ -23,6 +24,28 @@ def is_storable(text: str) -> bool:
     except UnicodeEncodeError:
         return False
     return True
+
+
+def check_text(
+    value: object, code: str = "payload_text_invalid", message: str = PAYLOAD_TEXT_INVALID
+) -> None:
+    """Refuse NUL and lone surrogates anywhere in `value`, raising `PydanticCustomError(code)`.
+
+    Walks dicts (keys and values) and lists of any depth; other values are ignored. The walk
+    is iterative so a deeply nested value cannot exhaust the interpreter stack. Events pass
+    `payload_text_invalid` (the default); the pair and AI routes use `text_invalid`.
+    """
+    stack: list[object] = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            for key, inner in item.items():
+                stack.append(key)
+                stack.append(inner)
+        elif isinstance(item, list):
+            stack.extend(item)
+        elif isinstance(item, str) and not is_storable(item):
+            raise PydanticCustomError(code, message)
 
 
 def _storable(text: str) -> str:

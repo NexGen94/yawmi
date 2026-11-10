@@ -1,6 +1,41 @@
 {
   "components": {
     "schemas": {
+      "AskRequest": {
+        "properties": {
+          "context": {
+            "additionalProperties": true,
+            "description": "ملخصات اليوم المجمّعة",
+            "title": "Context",
+            "type": "object"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "question": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ClientSource"
+            },
+            "maxItems": 50,
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "day",
+          "question"
+        ],
+        "title": "AskRequest",
+        "type": "object"
+      },
       "BaselineOut": {
         "properties": {
           "nights": {
@@ -117,6 +152,33 @@
           "habits"
         ],
         "title": "CardOut",
+        "type": "object"
+      },
+      "ClientSource": {
+        "description": "A citable fact from the client, with bounded field sizes.",
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "maxLength": 32,
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 500,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "text"
+        ],
+        "title": "ClientSource",
         "type": "object"
       },
       "DailyMetricsIn": {
@@ -494,6 +556,34 @@
         "title": "DailyScoresOut",
         "type": "object"
       },
+      "DayCloseRequest": {
+        "properties": {
+          "context": {
+            "additionalProperties": true,
+            "description": "ملخصات اليوم المجمّعة",
+            "title": "Context",
+            "type": "object"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ClientSource"
+            },
+            "maxItems": 50,
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "day"
+        ],
+        "title": "DayCloseRequest",
+        "type": "object"
+      },
       "ErrorDetail": {
         "properties": {
           "detail": {
@@ -662,6 +752,132 @@
           "done_today"
         ],
         "title": "HabitDue",
+        "type": "object"
+      },
+      "InsightOut": {
+        "additionalProperties": false,
+        "description": "A stored insight: the validated reply plus its identity.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "lines": {
+            "description": "سطران كحد أقصى",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "title": "Lines",
+            "type": "array"
+          },
+          "priorities": {
+            "description": "ثلاث أولويات كحد أقصى",
+            "items": {
+              "$ref": "#/components/schemas/Priority"
+            },
+            "maxItems": 3,
+            "title": "Priorities",
+            "type": "array"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "سؤال واحد على الأكثر، أو null",
+            "title": "Question"
+          },
+          "source_ids": {
+            "description": "معرّفات المصادر المعطاة التي استند إليها الرد",
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines",
+          "question",
+          "source_ids",
+          "priorities",
+          "id",
+          "kind",
+          "day",
+          "created_at"
+        ],
+        "title": "InsightOut",
+        "type": "object"
+      },
+      "InsightResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "lines": {
+            "description": "سطران كحد أقصى",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "title": "Lines",
+            "type": "array"
+          },
+          "priorities": {
+            "description": "ثلاث أولويات كحد أقصى",
+            "items": {
+              "$ref": "#/components/schemas/Priority"
+            },
+            "maxItems": 3,
+            "title": "Priorities",
+            "type": "array"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "سؤال واحد على الأكثر، أو null",
+            "title": "Question"
+          },
+          "source_ids": {
+            "description": "معرّفات المصادر المعطاة التي استند إليها الرد",
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines",
+          "question",
+          "source_ids",
+          "priorities"
+        ],
+        "title": "InsightResponse",
         "type": "object"
       },
       "Live": {
@@ -841,6 +1057,27 @@
         "title": "PairRequest",
         "type": "object"
       },
+      "Priority": {
+        "additionalProperties": false,
+        "properties": {
+          "source_id": {
+            "description": "معرّف مصدر من المصادر المعطاة فقط",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "title": {
+            "description": "عنوان الأولوية في جملة اسمية قصيرة",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "source_id"
+        ],
+        "title": "Priority",
+        "type": "object"
+      },
       "PullResult": {
         "properties": {
           "events": {
@@ -898,6 +1135,22 @@
           }
         },
         "title": "RefreshRequest",
+        "type": "object"
+      },
+      "ReviewList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InsightOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ReviewList",
         "type": "object"
       },
       "StoredEvent": {
@@ -1223,6 +1476,72 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/ask": {
+      "post": {
+        "description": "الجواب لا يستشهد إلا بمصادر الطلب. لا يُحفظ شيء.",
+        "operationId": "ask_v1_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح (رمز الخدمة)"
+          },
+          "422": {
+            "description": "طلب غير صالح، أو امتنع النموذج عن الرد"
+          },
+          "502": {
+            "description": "تعذّر الحصول على ردّ صالح من المزوّد"
+          },
+          "503": {
+            "description": "مفتاح المزوّد غير مضبوط"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "سؤال واحد بجواب من سطرين",
+        "tags": [
+          "insights"
+        ]
+      }
+    },
     "/v1/auth/refresh": {
       "post": {
         "operationId": "refresh_tokens_v1_auth_refresh_post",
@@ -1296,6 +1615,72 @@
         "summary": "تدوير رمز التجديد وإصدار رمز وصول جديد",
         "tags": [
           "devices"
+        ]
+      }
+    },
+    "/v1/day/close": {
+      "post": {
+        "description": "يستلم ملخصات اليوم ومصادره، ويعيد ملخصاً من سطرين كحد أقصى لا يستشهد إلا بمصادر الطلب. أول إغلاق لليوم يُحفظ، وكل تكرار لليوم نفسه يعيده دون استدعاء المزوّد. الملخصات والمصادر يرسلها العميل حالياً إلى أن يبنيها الخادم (المهمتان 8b و10b).",
+        "operationId": "close_day_v1_day_close_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayCloseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح (رمز الخدمة)"
+          },
+          "422": {
+            "description": "طلب غير صالح، أو امتنع النموذج عن الرد"
+          },
+          "502": {
+            "description": "تعذّر الحصول على ردّ صالح من المزوّد"
+          },
+          "503": {
+            "description": "مفتاح المزوّد غير مضبوط"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "إغلاق اليوم بملخص من سطرين (متكرر الأثر)",
+        "tags": [
+          "insights"
         ]
       }
     },
@@ -1698,6 +2083,100 @@
         "summary": "الصورة الكاملة: المخرجات والبطاقات",
         "tags": [
           "today"
+        ]
+      }
+    },
+    "/v1/reviews": {
+      "get": {
+        "description": "`kind` إما `weekly` (الافتراضي) أو `evening`؛ و`before` يعيد ما قبل يوم معيّن.",
+        "operationId": "list_reviews_v1_reviews_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "weekly",
+              "pattern": "^(evening|weekly)$",
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "أيام قبل هذا اليوم فقط",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "أيام قبل هذا اليوم فقط",
+              "title": "Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح (رمز الخدمة)"
+          },
+          "422": {
+            "description": "طلب غير صالح، أو امتنع النموذج عن الرد"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "المراجعات المحفوظة، الأحدث أولاً",
+        "tags": [
+          "insights"
         ]
       }
     },
