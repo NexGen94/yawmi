@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { uuidv7 as domainUuidv7 } from '../src/domain/uuidv7';
 import { uuidv7 } from '../src/sync/uuidv7';
 
 const fixedRand = (bytes: number[]) => (n: number) => {
@@ -45,6 +46,10 @@ describe('uuidv7', () => {
   it('does not repeat when called twice in the same millisecond', () => {
     const now = Date.now();
     expect(uuidv7(now)).not.toBe(uuidv7(now));
+  });
+
+  it('is the same function from the domain path (one implementation)', () => {
+    expect(domainUuidv7).toBe(uuidv7);
   });
 
   it('rejects a timestamp outside 48 bits', () => {
