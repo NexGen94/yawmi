@@ -33,7 +33,7 @@ def exporter() -> ModuleType:
 
 def test_export_writes_every_required_path(exporter: ModuleType, tmp_path: Path) -> None:
     out = tmp_path / "openapi.json"
-    assert exporter.main(["--output", str(out)]) == 0
+    assert exporter.main([], output=out) == 0
     spec = json.loads(out.read_text(encoding="utf-8"))
     assert spec["openapi"].startswith("3.1")
     for path in exporter.REQUIRED_PATHS:
@@ -73,8 +73,8 @@ def test_output_is_deterministic_sorted_lf_with_a_trailing_newline(
     exporter: ModuleType, tmp_path: Path
 ) -> None:
     first, second = tmp_path / "a.json", tmp_path / "b.json"
-    exporter.main(["--output", str(first)])
-    exporter.main(["--output", str(second)])
+    exporter.main([], output=first)
+    exporter.main([], output=second)
     raw = first.read_bytes()
     assert raw == second.read_bytes()
     assert b"\r" not in raw
@@ -88,12 +88,18 @@ def test_check_passes_on_the_committed_file(exporter: ModuleType) -> None:
     assert exporter.main(["--check"]) == 0
 
 
+def test_the_command_line_takes_no_path(exporter: ModuleType) -> None:
+    """The output path is fixed: a path from argv would let the tool read or write anywhere."""
+    with pytest.raises(SystemExit):
+        exporter.main(["--output", "elsewhere.json"])
+
+
 def test_check_fails_on_a_stale_or_missing_file(exporter: ModuleType, tmp_path: Path) -> None:
     stale = tmp_path / "openapi.json"
     stale.write_text("{}\n", encoding="utf-8", newline="\n")
-    assert exporter.main(["--check", "--output", str(stale)]) == 1
+    assert exporter.main(["--check"], output=stale) == 1
     assert stale.read_text(encoding="utf-8") == "{}\n"  # --check never writes
-    assert exporter.main(["--check", "--output", str(tmp_path / "missing.json")]) == 1
+    assert exporter.main(["--check"], output=tmp_path / "missing.json") == 1
 
 
 def test_a_missing_required_path_fails_the_export(
@@ -102,7 +108,7 @@ def test_a_missing_required_path_fails_the_export(
     monkeypatch.setattr(exporter, "REQUIRED_PATHS", (*exporter.REQUIRED_PATHS, "/v1/nowhere"))
     out = tmp_path / "openapi.json"
     with pytest.raises(SystemExit, match="/v1/nowhere"):
-        exporter.main(["--output", str(out)])
+        exporter.main([], output=out)
     assert not out.exists()
 
 
@@ -151,3 +157,27 @@ def test_insight_response_has_no_ref_and_requires_every_property(exporter: Modul
     components = exporter.build_spec().get("components", {}).get("schemas", {})
     if "InsightResponse" in components:  # TODO(9b): becomes unconditional with /v1/day/close
         _assert_closed(components["InsightResponse"])
+
+
+def _enum(schema: dict[str, Any]) -> list[str]:
+    """The string values of an enum property, nullable or not."""
+    options = schema.get("anyOf", [schema])
+    return sorted(v for o in options for v in o.get("enum", []))
+
+
+def test_closed_value_sets_are_enums_in_the_contract(exporter: ModuleType) -> None:
+    schemas = exporter.build_spec()["components"]["schemas"]
+    due = schemas["HabitDue"]["properties"]
+    assert _enum(due["kind"]) == ["boolean", "count", "duration"]
+    assert _enum(due["period"]) == ["day", "month", "week"]
+    assert _enum(due["unit"]) == ["hour", "min", "session"]
+    quality = ["low", "missing", "ok"]
+    assert _enum(schemas["TodayHealth"]["properties"]["data_quality"]) == quality
+    assert _enum(schemas["DailyScoresOut"]["properties"]["data_quality"]) == quality
+
+
+def test_health_bodies_refuse_unknown_fields(exporter: ModuleType) -> None:
+    schemas = exporter.build_spec()["components"]["schemas"]
+    assert schemas["DailyMetricsIn"]["additionalProperties"] is False
+    assert schemas["ExertionSegment"]["additionalProperties"] is False
+    assert "hrv_samples" in schemas["DailyMetricsIn"]["required"]
