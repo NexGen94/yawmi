@@ -1,0 +1,111 @@
+name: web-image
+
+# Builds the yawmi-web image and pushes it to GHCR when a tag web-vX.Y.Z is pushed, e.g.
+#   git tag web-v0.1.0 && git push origin web-v0.1.0     (needs Abdullah's approval to push)
+# The image is ghcr.io/nexgen94/yawmi-web:X.Y.Z, private like the repository. The server pulls
+# it with a read-only token typed on its own terminal (deploy/RUNBOOK.md), never one stored here.
+
+on:
+  push:
+    tags:
+      - "web-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/nexgen94/yawmi-web
+
+    steps:
+      # Full history, so the next step can tell whether the tag is on main.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      # A tag on an unreviewed branch must never publish an image.
+      - name: Tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::${GITHUB_REF_NAME} does not point at a commit that is on main"
+            exit 1
+          fi
+
+      - name: Version from the tag
+        run: |
+          version="${GITHUB_REF_NAME#web-v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::the tag must look like web-v1.2.3, got ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      # The build stage runs the first-load JS budget (80 KB gzip), so an over-budget bundle
+      # fails here before anything is pushed.
+      - name: Build
+        run: |
+          docker build --pull \
+            --tag "$IMAGE:$VERSION" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label "org.opencontainers.image.version=${VERSION}" \
+            web
+
+      # The image cannot be built on the developer machine (no Docker), so this is the first
+      # real proof of the headers, the caching rules, gzip, the healthcheck and the non-root
+      # user. The container runs with the same restrictions as the compose service.
+      - name: Smoke test
+        run: |
+          test "$(docker run --rm --entrypoint id "$IMAGE:$VERSION" -u)" = "101"
+          docker run -d --name yawmi-web-smoke --read-only --tmpfs /tmp \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            -p 8080:8080 "$IMAGE:$VERSION"
+          fail() { echo "::error::$1"; docker logs yawmi-web-smoke || true; exit 1; }
+          healthy=""
+          for _ in $(seq 1 40); do
+            healthy="$(docker inspect -f '{{.State.Health.Status}}' yawmi-web-smoke)"
+            [ "$healthy" = "healthy" ] && break
+            sleep 2
+          done
+          [ "$healthy" = "healthy" ] || fail "container health is '$healthy', not healthy"
+          header() {
+            local path="$1"
+            curl -sS -D - -o /dev/null -H 'Accept-Encoding: gzip' "http://127.0.0.1:8080${path}" | tr -d '\r'
+          }
+          for path in /sw.js /index.html /manifest.webmanifest /some/app/route; do
+            response="$(header "$path")"
+            printf '%s\n' "$response" | grep -iq '^cache-control: no-cache$' || fail "$path is not no-cache"
+          done
+          for path in /sw.js /index.html /assets/missing.js; do
+            response="$(header "$path")"
+            printf '%s\n' "$response" | grep -iq "^content-security-policy: default-src 'self'" || fail "$path has no CSP"
+            printf '%s\n' "$response" | grep -iq '^x-content-type-options: nosniff$' || fail "$path has no nosniff"
+            printf '%s\n' "$response" | grep -iq '^referrer-policy: no-referrer$' || fail "$path has no no-referrer"
+          done
+          js="$(docker exec yawmi-web-smoke sh -c 'cd /usr/share/nginx/html/assets && ls *.js | head -n 1')"
+          response="$(header "/assets/$js")"
+          printf '%s\n' "$response" | grep -iq '^cache-control: public, max-age=31536000, immutable$' || fail "hashed asset is not immutable"
+          printf '%s\n' "$response" | grep -iq '^content-encoding: gzip$' || fail "javascript is not gzipped"
+          response="$(header /assets/missing.js)"
+          printf '%s\n' "$response" | grep -q '^HTTP/1.1 404' || fail "a missing asset is not a 404"
+          if printf '%s\n' "$response" | grep -iq 'immutable'; then fail "the 404 of a missing asset is cacheable"; fi
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/health/live)" = "404"
+          docker rm -f yawmi-web-smoke > /dev/null
+
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      - name: Push
+        run: docker push "$IMAGE:$VERSION"
