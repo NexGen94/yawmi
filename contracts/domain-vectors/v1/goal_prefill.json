@@ -1,0 +1,366 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "value": 8
+      },
+      "id": "goal_prefill-001",
+      "input": {
+        "current": 40,
+        "deadline": "2026-12-31",
+        "goal_target": 100,
+        "period": "week",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "القيمة الملزمة: 60 على 8 أسابيع"
+    },
+    {
+      "expect": {
+        "value": 5
+      },
+      "id": "goal_prefill-002",
+      "input": {
+        "current": 0,
+        "deadline": "2026-11-15",
+        "goal_target": 10,
+        "period": "week",
+        "today": "2026-11-14",
+        "week_start": "sun"
+      },
+      "source": "السبت والأحد في أسبوعين (أحد)"
+    },
+    {
+      "expect": {
+        "value": 10
+      },
+      "id": "goal_prefill-003",
+      "input": {
+        "current": 0,
+        "deadline": "2026-11-15",
+        "goal_target": 10,
+        "period": "week",
+        "today": "2026-11-14",
+        "week_start": "sat"
+      },
+      "source": "السبت والأحد في أسبوع واحد (سبت)"
+    },
+    {
+      "expect": {
+        "value": 10
+      },
+      "id": "goal_prefill-004",
+      "input": {
+        "current": 0,
+        "deadline": "2026-11-15",
+        "goal_target": 10,
+        "period": "week",
+        "today": "2026-11-14",
+        "week_start": "mon"
+      },
+      "source": "السبت والأحد في أسبوع واحد (اثنين)"
+    },
+    {
+      "expect": {
+        "value": 6
+      },
+      "id": "goal_prefill-005",
+      "input": {
+        "current": 40,
+        "deadline": "2026-11-18",
+        "goal_target": 100,
+        "period": "day",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "10 أيام"
+    },
+    {
+      "expect": {
+        "value": 20
+      },
+      "id": "goal_prefill-006",
+      "input": {
+        "current": 40,
+        "deadline": "2027-01-31",
+        "goal_target": 100,
+        "period": "month",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "3 أشهر"
+    },
+    {
+      "expect": {
+        "value": 30
+      },
+      "id": "goal_prefill-007",
+      "input": {
+        "current": 40,
+        "deadline": "2026-12-01",
+        "goal_target": 100,
+        "period": "month",
+        "today": "2026-11-30",
+        "week_start": "sun"
+      },
+      "source": "يومان في شهرين"
+    },
+    {
+      "expect": {
+        "value": 4
+      },
+      "id": "goal_prefill-008",
+      "input": {
+        "current": 0,
+        "deadline": "2026-11-11",
+        "goal_target": 10,
+        "period": "day",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "10/3 يُقرَّب لأعلى"
+    },
+    {
+      "expect": {
+        "value": 1
+      },
+      "id": "goal_prefill-009",
+      "input": {
+        "current": 100,
+        "deadline": "2026-12-31",
+        "goal_target": 100,
+        "period": "week",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "الهدف محقق: الحد الأدنى 1"
+    },
+    {
+      "expect": {
+        "value": 1
+      },
+      "id": "goal_prefill-010",
+      "input": {
+        "current": 150,
+        "deadline": "2026-12-31",
+        "goal_target": 100,
+        "period": "week",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "الهدف متجاوز: الحد الأدنى 1"
+    },
+    {
+      "expect": {
+        "value": 60
+      },
+      "id": "goal_prefill-011",
+      "input": {
+        "current": 40,
+        "deadline": "2026-11-09",
+        "goal_target": 100,
+        "period": "day",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "الموعد اليوم: فترة واحدة"
+    },
+    {
+      "expect": {
+        "value": 60
+      },
+      "id": "goal_prefill-012",
+      "input": {
+        "current": 40,
+        "deadline": "2026-11-01",
+        "goal_target": 100,
+        "period": "week",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "الموعد فات: فترة واحدة"
+    },
+    {
+      "expect": {
+        "value": 60
+      },
+      "id": "goal_prefill-013",
+      "input": {
+        "current": 40,
+        "deadline": "2026-10-01",
+        "goal_target": 100,
+        "period": "month",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "الموعد فات بشهر: فترة واحدة"
+    },
+    {
+      "expect": {
+        "value": 1
+      },
+      "id": "goal_prefill-014",
+      "input": {
+        "current": 1.2,
+        "deadline": "2026-11-09",
+        "goal_target": 2.2,
+        "period": "day",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "ضجيج 2.2 − 1.2 لا يرفع إلى 2"
+    },
+    {
+      "expect": {
+        "value": 8
+      },
+      "id": "goal_prefill-015",
+      "input": {
+        "current": 0,
+        "deadline": "2026-11-15",
+        "goal_target": 56,
+        "period": "day",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "56 على 7 أيام = 8"
+    },
+    {
+      "expect": {
+        "value": 8
+      },
+      "id": "goal_prefill-016",
+      "input": {
+        "current": 0,
+        "deadline": "2026-11-15",
+        "goal_target": 56.000000004,
+        "period": "day",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "8.00000000057 ضمن الهامش → 8"
+    },
+    {
+      "expect": {
+        "value": 8
+      },
+      "id": "goal_prefill-017",
+      "input": {
+        "current": 0,
+        "deadline": "2026-11-15",
+        "goal_target": 56.0000000035,
+        "period": "day",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "8.0000000005 → 8"
+    },
+    {
+      "expect": {
+        "value": 9
+      },
+      "id": "goal_prefill-018",
+      "input": {
+        "current": 0,
+        "deadline": "2026-11-15",
+        "goal_target": 56.00000002,
+        "period": "day",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "8.0000000029 فوق الهامش → 9"
+    },
+    {
+      "expect": {
+        "value": 3
+      },
+      "id": "goal_prefill-019",
+      "input": {
+        "current": 0,
+        "deadline": "2026-11-12",
+        "goal_target": 10,
+        "period": "day",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "كسر: 10/4 = 2.5 → 3"
+    },
+    {
+      "expect": {
+        "value": 8
+      },
+      "id": "goal_prefill-020",
+      "input": {
+        "current": 0,
+        "deadline": "2026-11-21",
+        "goal_target": 15,
+        "period": "week",
+        "today": "2026-11-08",
+        "week_start": "sun"
+      },
+      "source": "كسر: 15/2 = 7.5 → 8"
+    },
+    {
+      "expect": {
+        "value": 7
+      },
+      "id": "goal_prefill-021",
+      "input": {
+        "current": 0,
+        "deadline": "2026-11-30",
+        "goal_target": 7,
+        "period": "month",
+        "today": "2026-11-01",
+        "week_start": "sun"
+      },
+      "source": "7 على شهر واحد"
+    },
+    {
+      "expect": {
+        "value": 30
+      },
+      "id": "goal_prefill-022",
+      "input": {
+        "current": 10,
+        "deadline": "2028-03-01",
+        "goal_target": 100,
+        "period": "month",
+        "today": "2028-01-15",
+        "week_start": "sun"
+      },
+      "source": "3 أشهر تشمل فبراير الكبيسة"
+    },
+    {
+      "expect": {
+        "value": 3
+      },
+      "id": "goal_prefill-023",
+      "input": {
+        "current": 0,
+        "deadline": "2028-02-29",
+        "goal_target": 9,
+        "period": "day",
+        "today": "2028-02-27",
+        "week_start": "sun"
+      },
+      "source": "الموعد يوم الكبيسة: 3 أيام"
+    },
+    {
+      "expect": {
+        "value": 3
+      },
+      "id": "goal_prefill-024",
+      "input": {
+        "current": 2.5,
+        "deadline": "2026-11-19",
+        "goal_target": 30,
+        "period": "day",
+        "today": "2026-11-09",
+        "week_start": "sun"
+      },
+      "source": "كسر في الحالي: 27.5/11 = 2.5 → 3"
+    }
+  ],
+  "function": "goal_prefill",
+  "rulesVersion": 1
+}

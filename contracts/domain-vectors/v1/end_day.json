@@ -1,0 +1,116 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "value": "2026-12-08"
+      },
+      "id": "end_day-001",
+      "input": {
+        "duration_days": 30,
+        "start": "2026-11-09"
+      },
+      "source": "تحدي 30 يوماً"
+    },
+    {
+      "expect": {
+        "value": "2026-11-09"
+      },
+      "id": "end_day-002",
+      "input": {
+        "duration_days": 1,
+        "start": "2026-11-09"
+      },
+      "source": "تحدي يوم واحد ينتهي يوم بدايته"
+    },
+    {
+      "expect": {
+        "value": "2028-03-01"
+      },
+      "id": "end_day-003",
+      "input": {
+        "duration_days": 3,
+        "start": "2028-02-28"
+      },
+      "source": "يعبر يوم الكبيسة"
+    },
+    {
+      "expect": {
+        "value": "2027-01-01"
+      },
+      "id": "end_day-004",
+      "input": {
+        "duration_days": 3,
+        "start": "2026-12-30"
+      },
+      "source": "يعبر حد السنة"
+    },
+    {
+      "expect": {
+        "value": "2026-11-15"
+      },
+      "id": "end_day-005",
+      "input": {
+        "duration_days": 7,
+        "start": "2026-11-09"
+      },
+      "source": "شريحة 7"
+    },
+    {
+      "expect": {
+        "value": "2027-01-13"
+      },
+      "id": "end_day-006",
+      "input": {
+        "duration_days": 66,
+        "start": "2026-11-09"
+      },
+      "source": "شريحة 66"
+    },
+    {
+      "expect": {
+        "value": "2027-02-16"
+      },
+      "id": "end_day-007",
+      "input": {
+        "duration_days": 100,
+        "start": "2026-11-09"
+      },
+      "source": "شريحة 100"
+    },
+    {
+      "expect": {
+        "value": "2028-02-29"
+      },
+      "id": "end_day-008",
+      "input": {
+        "duration_days": 1,
+        "start": "2028-02-29"
+      },
+      "source": "يبدأ يوم الكبيسة"
+    },
+    {
+      "expect": {
+        "value": "2028-02-29"
+      },
+      "id": "end_day-009",
+      "input": {
+        "duration_days": 29,
+        "start": "2028-02-01"
+      },
+      "source": "ينتهي يوم الكبيسة"
+    },
+    {
+      "expect": {
+        "value": "2026-10-31"
+      },
+      "id": "end_day-010",
+      "input": {
+        "duration_days": 30,
+        "start": "2026-10-02"
+      },
+      "source": "ينتهي في 10-31"
+    }
+  ],
+  "function": "end_day",
+  "rulesVersion": 1
+}

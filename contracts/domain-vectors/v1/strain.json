@@ -1,0 +1,86 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "value": 0.0
+      },
+      "id": "strain-001",
+      "input": {
+        "trimp_total": 0
+      },
+      "source": "لا حمل: 0"
+    },
+    {
+      "expect": {
+        "value": 21.0
+      },
+      "id": "strain-002",
+      "input": {
+        "trimp_total": 1000000.0
+      },
+      "source": "تشبّع عند 21"
+    },
+    {
+      "expect": {
+        "value": 13.27453173539971
+      },
+      "id": "strain-003",
+      "input": {
+        "trimp_total": 120
+      },
+      "source": "القيمة المرجعية: 21·(1 − e⁻¹)"
+    },
+    {
+      "expect": {
+        "value": 18.157959052031135
+      },
+      "id": "strain-004",
+      "input": {
+        "trimp_total": 240
+      },
+      "source": "ضعف المقياس"
+    },
+    {
+      "expect": {
+        "value": 0.0
+      },
+      "id": "strain-005",
+      "input": {
+        "trimp_total": -50
+      },
+      "source": "الحمل السالب صفر"
+    },
+    {
+      "expect": {
+        "value": 4.645183555500497
+      },
+      "id": "strain-006",
+      "input": {
+        "trimp_total": 30
+      },
+      "source": "حمل خفيف"
+    },
+    {
+      "expect": {
+        "value": 1.4127122612495877
+      },
+      "id": "strain-007",
+      "input": {
+        "trimp_total": 8.357
+      },
+      "source": "حمل مقطع واحد"
+    },
+    {
+      "expect": {
+        "value": 8.315817166678054
+      },
+      "id": "strain-008",
+      "input": {
+        "trimp_total": 60.5
+      },
+      "source": "كسور"
+    }
+  ],
+  "function": "strain",
+  "rulesVersion": 1
+}
