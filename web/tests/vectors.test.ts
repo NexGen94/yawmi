@@ -89,6 +89,45 @@ const RUNNERS = {
 type FunctionName = keyof typeof RUNNERS;
 const FUNCTIONS = Object.keys(RUNNERS) as FunctionName[];
 
+// The exact input keys of each file, as written (snake_case). A field the runner does not know
+// would otherwise be ignored silently, so an unknown or missing key fails the case.
+const HABIT_INPUT = ['habit', 'logs', 'today', 'week_start'];
+const INPUT_KEYS: Record<FunctionName, readonly string[]> = {
+  day_key: ['instant', 'tz'],
+  period_bounds: ['day', 'period', 'week_start'],
+  is_scheduled: ['day', 'habit'],
+  end_day: ['start', 'duration_days'],
+  period_progress: HABIT_INPUT,
+  strength: HABIT_INPUT,
+  streak: HABIT_INPUT,
+  challenge_progress: HABIT_INPUT,
+  adherence: HABIT_INPUT,
+  goal_prefill: ['goal_target', 'current', 'today', 'deadline', 'period', 'week_start'],
+};
+const HABIT_KEYS = [
+  'kind',
+  'unit',
+  'target_per_period',
+  'period',
+  'schedule_kind',
+  'weekday_mask',
+  'every_n',
+  'anchor_day',
+  'start_day',
+  'end_day',
+];
+const LOG_KEYS = ['day', 'value', 'status'];
+
+const sortedKeys = (value: unknown): string[] => Object.keys(value as object).sort();
+
+function expectInputKeys(name: FunctionName, input: Record<string, unknown>): void {
+  expect(sortedKeys(input), 'input keys').toEqual([...INPUT_KEYS[name]].sort());
+  if ('habit' in input) expect(sortedKeys(input.habit), 'habit keys').toEqual([...HABIT_KEYS].sort());
+  if ('logs' in input) {
+    for (const log of input.logs as unknown[]) expect(sortedKeys(log), 'log keys').toEqual([...LOG_KEYS].sort());
+  }
+}
+
 const vectorPath = (name: string): string => fileURLToPath(new URL(`${name}.json`, VECTOR_DIR));
 
 /** The file, or `undefined` when it is missing; the "files" test below then fails by name. */
@@ -141,7 +180,12 @@ describe('vector files', () => {
     const file = FILES.get(name);
     expect(file, `${vectorPath(name)} is missing`).toBeDefined();
     expect(file?.function).toBe(name);
-    expect(file?.rulesVersion).toBe(RULES_VERSION);
+    expect(
+      file?.rulesVersion,
+      `${name}.json is at rulesVersion ${String(file?.rulesVersion)} but the web port implements ` +
+        `${RULES_VERSION}: re-port the changed rules from api/yawmi/domain into web/src/domain, ` +
+        'then raise RULES_VERSION in web/src/domain/types.ts',
+    ).toBe(RULES_VERSION);
     expect(file?.cases.length ?? 0).toBeGreaterThan(0);
     for (const c of file?.cases ?? []) expect(c.id.startsWith(`${name}-`), c.id).toBe(true);
   });
@@ -151,6 +195,7 @@ for (const name of FUNCTIONS) {
   const runner = RUNNERS[name];
   describe(name, () => {
     test.for(FILES.get(name)?.cases ?? [])('$id', (c) => {
+      expectInputKeys(name, c.input);
       const input = toCamel(c.input) as never;
       const expected = toCamel(c.expect.value);
       expectMatch(runner.run(input), expected, runner.floats, c.tol ?? DEFAULT_TOL);
