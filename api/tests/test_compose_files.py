@@ -139,7 +139,8 @@ def test_checker_reports_every_problem_not_just_the_first(
 API_COMPOSE = COMPOSE_DIR / "yawmi-api.api.yml"
 LOADER_1 = COMPOSE_DIR / "yawmi-db-1-schema.yml"
 LOADER_2 = COMPOSE_DIR / "yawmi-db-2-role.yml"
-ALL_COMPOSE = [API_COMPOSE, LOADER_1, LOADER_2]
+KEYGEN = COMPOSE_DIR / "yawmi-vapid-keygen.yml"
+ALL_COMPOSE = [API_COMPOSE, LOADER_1, LOADER_2, KEYGEN]
 
 
 def _yaml(path: Path) -> dict:
@@ -202,6 +203,35 @@ def test_api_compose_never_passes_the_database_password_or_url() -> None:
         assert re.fullmatch(r"\$\{" + name + r":\?[^}]+\}", env[name])  # required, typed by hand
     assert env["YAWMI_LOG_BODIES"] == "false"
     assert env["YAWMI_SEND_RAW_HEALTH"] == "false"
+
+
+def test_api_compose_passes_push_settings_off_by_default_and_never_a_key() -> None:
+    env = _yaml(API_COMPOSE)["services"]["yawmi-api"]["environment"]
+    assert env["YAWMI_PUSH_ENABLED"] == "${YAWMI_PUSH_ENABLED:-false}"
+    assert env["YAWMI_VAPID_SUBJECT"] == "${YAWMI_VAPID_SUBJECT:-}"
+    assert env["YAWMI_VAPID_PRIVATE_KEY_FILE"] == "/run/yawmi/vapid_private.pem"
+    assert env["YAWMI_PUSH_HOSTS"] == "${YAWMI_PUSH_HOSTS:-}"  # empty: the default list
+
+
+def test_vapid_keygen_is_one_shot_offline_hardened_and_writes_only_the_secrets_volume() -> None:
+    data = _yaml(KEYGEN)
+    assert data["name"] == "yawmi-vapid-keygen"
+    service = data["services"]["yawmi-vapid-keygen"]
+    api_image = _yaml(API_COMPOSE)["services"]["yawmi-api"]["image"]
+    assert service["image"].rsplit(":", 1)[0] == api_image.rsplit(":", 1)[0]
+    assert service["restart"] == "no"
+    assert service["network_mode"] == "none" and "networks" not in service
+    assert service["read_only"] is True
+    assert service["cap_drop"] == ["ALL"] and service["cap_add"] == ["CHOWN"]
+    assert "no-new-privileges:true" in service["security_opt"]
+    assert service["volumes"] == ["yawmi_secrets:/run/yawmi"]
+    assert data["volumes"]["yawmi_secrets"] == {"name": "yawmi_secrets", "external": True}
+    # no path on the command line: the key file comes from the same variable the API reads
+    assert service["entrypoint"] == ["python", "-I", "-m", "yawmi.push.keygen", "--group", "10001"]
+    api_env = _yaml(API_COMPOSE)["services"]["yawmi-api"]["environment"]
+    assert service["environment"] == {
+        "YAWMI_VAPID_PRIVATE_KEY_FILE": api_env["YAWMI_VAPID_PRIVATE_KEY_FILE"]
+    }
 
 
 def test_api_compose_is_hardened() -> None:

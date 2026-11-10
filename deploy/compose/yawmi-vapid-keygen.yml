@@ -1,0 +1,30 @@
+# Yawmi VAPID keygen: one-shot (RUNBOOK step 11e). Writes the Web Push private key (P-256) into
+# the external volume yawmi_secrets if it is missing, keeps it otherwise, and prints only the
+# public key. The private key is never printed or logged. It runs the yawmi-api image (Python
+# and cryptography are already in it): use the same tag as yawmi-api.api.yml.
+# The file is root-owned, group 10001 (the API's uid/gid), mode 0640; the API mounts it read-only.
+# No network, read-only root, every capability dropped except CHOWN (to hand the group over).
+name: yawmi-vapid-keygen
+services:
+  yawmi-vapid-keygen:
+    image: ghcr.io/nexgen94/yawmi-api:0.2.0
+    user: "0:0"
+    # the key path comes from the same variable the API reads, never from the command line
+    entrypoint: ["python", "-I", "-m", "yawmi.push.keygen", "--group", "10001"]
+    environment:
+      YAWMI_VAPID_PRIVATE_KEY_FILE: /run/yawmi/vapid_private.pem
+    restart: "no"
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - yawmi_secrets:/run/yawmi
+volumes:
+  yawmi_secrets:
+    name: yawmi_secrets
+    external: true

@@ -1,6 +1,8 @@
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 
+import { handleNotificationClick, handlePush, type PushTarget } from './push/handlers';
+
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<string | { url: string; revision: string | null }>;
 };
@@ -19,4 +21,22 @@ self.addEventListener('message', (event) => {
   if (typeof data === 'object' && data !== null && (data as { type?: unknown }).type === 'SKIP_WAITING') {
     void self.skipWaiting();
   }
+});
+
+// Habit reminders (Web Push). The logic lives in ./push/handlers; this only wires the worker in.
+const pushTarget: PushTarget = {
+  origin: self.location.origin,
+  showNotification: (title, options) => self.registration.showNotification(title, options),
+  // only where the worker has the Badging API; show() also catches a throwing one
+  ...(typeof self.navigator.setAppBadge === 'function' ? { setAppBadge: (n: number) => self.navigator.setAppBadge(n) } : {}),
+  windows: () => self.clients.matchAll({ type: 'window', includeUncontrolled: true }),
+  openWindow: (url) => self.clients.openWindow(url),
+};
+
+self.addEventListener('push', (event) => {
+  handlePush(event, pushTarget);
+});
+
+self.addEventListener('notificationclick', (event) => {
+  handleNotificationClick(event, pushTarget);
 });
