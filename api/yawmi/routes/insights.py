@@ -45,9 +45,9 @@ from yawmi.auth.deps import SettingsDep, require_kind
 from yawmi.auth.tokens import AccessClaims
 from yawmi.db.pool import get_pool
 from yawmi.domain.days import day_key
+from yawmi.errors import ErrorDetail
 from yawmi.events import models as event_models
-from yawmi.events.models import check_text
-from yawmi.routes.devices import ErrorDetail
+from yawmi.text import check_text
 
 router = APIRouter(prefix="/v1", tags=["insights"])
 

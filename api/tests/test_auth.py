@@ -582,6 +582,41 @@ async def test_refresh_with_lone_surrogate_is_a_normal_401(
     assert "x-request-id" in response.headers
 
 
+UNSTORABLE_ESCAPES = ["u0000", "ud800", "udfff", "ud83d"]
+
+
+@pytest.mark.parametrize("field", ["code", "name"])
+@pytest.mark.parametrize("escape", UNSTORABLE_ESCAPES)
+async def test_pair_with_nul_or_lone_surrogate_is_a_422_not_a_500(
+    client: httpx.AsyncClient, store: InMemoryDeviceStore, field: str, escape: str
+) -> None:
+    """Postgres cannot store NUL or a lone surrogate: the request is refused at the door."""
+    await seed_code(store, "iphone")
+    body = {"code": CODE, "name": "جهاز", "kind": "iphone"}
+    body[field] = "@"
+    payload = json.dumps(body).replace("@", "a" + chr(92) + escape + "b")
+    response = await client.post(
+        "/v1/devices/pair", content=payload, headers={"Content-Type": "application/json"}
+    )
+    assert response.status_code == 422
+    error = response.json()["errors"][0]
+    assert error == {"loc": ["body", field], "type": "text_invalid"}
+    assert response.json()["detail"] == "طلب غير صالح"
+    # the code was not burned: the refused request never reached the store
+    assert (await pair(client)).status_code == 200
+
+
+async def test_pair_with_invalid_utf8_bytes_is_a_client_error_not_a_500(
+    client: httpx.AsyncClient,
+) -> None:
+    """Bytes that are not UTF-8 never become text: FastAPI answers 400 before validation."""
+    payload = b'{"code": "1234' + bytes([0xFF]) + b'", "name": "x", "kind": "iphone"}'
+    response = await client.post(
+        "/v1/devices/pair", content=payload, headers={"Content-Type": "application/json"}
+    )
+    assert response.status_code == 400
+
+
 def test_hash_refresh_never_raises_and_does_not_collide_with_a_replacement_char() -> None:
     lone = chr(0xD800)
     assert hash_refresh(lone) != hash_refresh("?")

@@ -786,6 +786,52 @@ async def test_an_event_exactly_24_hours_ahead_is_accepted(
     }
 
 
+SESSION_TYPES = [("focus_ended", {}), ("breath_ended", {"pattern": "box"})]
+
+
+@pytest.mark.parametrize(("type_", "base"), SESSION_TYPES, ids=["focus", "breath"])
+@pytest.mark.parametrize(
+    ("fields", "code"),
+    [
+        ({"ended_at": "@"}, "ended_at_in_future"),
+        ({"started_at": "@", "ended_at": "@"}, "started_at_in_future"),
+    ],
+    ids=["ended", "started"],
+)
+async def test_session_times_more_than_24_hours_ahead_are_a_422(
+    client: httpx.AsyncClient,
+    backend: Backend,
+    iphone: Device,
+    server_now: datetime,
+    type_: str,
+    base: dict[str, Any],
+    fields: dict[str, str],
+    code: str,
+) -> None:
+    """`started_at` / `ended_at` get the same 24 h cap as `occurred_at` (it is checked first)."""
+    ahead = (server_now + timedelta(hours=24, seconds=1)).isoformat()
+    bad = event(type_, base | {key: ahead for key in fields})
+    response = await post(client, iphone, [event("app_opened"), bad])
+    assert response.status_code == 422
+    assert response.json()["errors"][0]["type"] == code
+    assert response.json()["errors"][0]["loc"][:3] == ["body", "events", 1]
+    assert await backend.event_count([UUID(bad["id"])]) == 0
+
+
+@pytest.mark.parametrize(("type_", "base"), SESSION_TYPES, ids=["focus", "breath"])
+async def test_session_times_exactly_24_hours_ahead_are_accepted(
+    client: httpx.AsyncClient,
+    iphone: Device,
+    server_now: datetime,
+    type_: str,
+    base: dict[str, Any],
+) -> None:
+    edge = (server_now + timedelta(hours=24)).isoformat()
+    body = base | {"started_at": NOON, "ended_at": edge}
+    response = await post(client, iphone, [event(type_, body)])
+    assert response.json() == {"accepted": 1, "duplicates": 0}
+
+
 async def test_tz_defaults_to_riyadh_and_unknown_tz_is_a_422(
     client: httpx.AsyncClient, iphone: Device
 ) -> None:
