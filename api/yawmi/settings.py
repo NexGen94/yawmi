@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     vapid_private_key_file: Path | None = None
     vapid_subject: str | None = None
 
+    @field_validator("vapid_private_key_file", "vapid_subject", mode="before")
+    @classmethod
+    def _empty_is_unset(cls, value: object) -> object:
+        # compose passes `${YAWMI_VAPID_SUBJECT:-}` as an empty string until it is filled in
+        return None if value == "" else value
+
     @field_validator("vapid_subject")
     @classmethod
     def _vapid_subject_is_mailto(cls, value: str | None) -> str | None:

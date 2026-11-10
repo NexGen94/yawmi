@@ -38,6 +38,8 @@ REQUIRED_PATHS: tuple[str, ...] = (
     "/v1/day/close",
     "/v1/ask",
     "/v1/reviews",
+    "/v1/push/subscribe",
+    "/v1/push/vapid-public-key",
 )
 
 # Not built yet. The task that adds a route moves its path to REQUIRED_PATHS and regenerates
@@ -48,9 +50,6 @@ PENDING_PATHS: tuple[str, ...] = (
     "/v1/habits/{code}",
     "/v1/habits/{code}/progress",
     "/v1/goals/{ref}/to-habit",
-    # task 19 (push)
-    "/v1/push/subscribe",
-    "/v1/push/vapid-public-key",
     # no owning task yet in the plan (calls n8n)
     "/v1/notion/refresh",
 )

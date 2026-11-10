@@ -1209,6 +1209,52 @@
         "title": "StoredEvent",
         "type": "object"
       },
+      "SubscribeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "endpoint": {
+            "description": "عنوان https من خدمة الدفع",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "keys": {
+            "$ref": "#/components/schemas/SubscriptionKeys"
+          }
+        },
+        "required": [
+          "endpoint",
+          "keys"
+        ],
+        "title": "SubscribeIn",
+        "type": "object"
+      },
+      "SubscriptionKeys": {
+        "additionalProperties": false,
+        "properties": {
+          "auth": {
+            "description": "سر المصادقة 16 بايتاً، base64url",
+            "maxLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+={0,2}$",
+            "title": "Auth",
+            "type": "string"
+          },
+          "p256dh": {
+            "description": "نقطة P-256 غير مضغوطة، base64url",
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9_-]+={0,2}$",
+            "title": "P256Dh",
+            "type": "string"
+          }
+        },
+        "required": [
+          "p256dh",
+          "auth"
+        ],
+        "title": "SubscriptionKeys",
+        "type": "object"
+      },
       "TodayHealth": {
         "description": "The day's scores and a 7-day recovery trend; a day without data is `missing`, not zero.",
         "properties": {
@@ -1412,6 +1458,23 @@
         "title": "TrendPoint",
         "type": "object"
       },
+      "UnsubscribeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "endpoint": {
+            "description": "عنوان https من خدمة الدفع",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Endpoint",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint"
+        ],
+        "title": "UnsubscribeIn",
+        "type": "object"
+      },
       "ValidationErrorBody": {
         "properties": {
           "detail": {
@@ -1459,6 +1522,20 @@
           "type"
         ],
         "title": "ValidationErrorItem",
+        "type": "object"
+      },
+      "VapidKeyOut": {
+        "properties": {
+          "key": {
+            "description": "المفتاح العام لـVAPID: نقطة P-256 غير مضغوطة، base64url",
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "VapidKeyOut",
         "type": "object"
       }
     },
@@ -2083,6 +2160,170 @@
         "summary": "الصورة الكاملة: المخرجات والبطاقات",
         "tags": [
           "today"
+        ]
+      }
+    },
+    "/v1/push/subscribe": {
+      "delete": {
+        "description": "يحذف الاشتراك إن كان لهذا الجهاز، وإلا لا يغيّر شيئاً (204 في الحالتين).",
+        "operationId": "unsubscribe_v1_push_subscribe_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnsubscribeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "إلغاء اشتراك الإشعارات لهذا الجهاز",
+        "tags": [
+          "push"
+        ]
+      },
+      "post": {
+        "description": "يحفظ اشتراك Web Push مربوطاً بالجهاز المصادَق، ويستبدل مفاتيح العنوان نفسه إن وُجد ويلغي أي تأجيل عليه. العنوان https فقط. رمز الخدمة لا يشترك.",
+        "operationId": "subscribe_v1_push_subscribe_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscribeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "تسجيل اشتراك الإشعارات لهذا الجهاز",
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/v1/push/vapid-public-key": {
+      "get": {
+        "operationId": "vapid_public_key_v1_push_vapid_public_key_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VapidKeyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "الإشعارات غير مفعّلة"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "مفتاح VAPID العام للاشتراك في الإشعارات",
+        "tags": [
+          "push"
         ]
       }
     },
