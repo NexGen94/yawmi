@@ -20,6 +20,7 @@ from pydantic import AwareDatetime
 from yawmi.auth.deps import current_device, require_kind
 from yawmi.auth.tokens import AccessClaims
 from yawmi.db.pool import get_pool
+from yawmi.errors import ErrorDetail, validation_response
 from yawmi.events.models import (
     MAX_BATCH,
     BatchResult,
@@ -29,7 +30,6 @@ from yawmi.events.models import (
 )
 from yawmi.events.project import plan
 from yawmi.events.store import AsyncpgEventStore, EventStore, InvalidPayloads, UnknownHabits
-from yawmi.routes.devices import ErrorDetail
 
 router = APIRouter(prefix="/v1", tags=["events"])
 
@@ -58,7 +58,7 @@ EventStoreDep = Annotated[EventStore, Depends(get_event_store)]
     responses={
         401: {"model": ErrorDetail, "description": "غير مصرّح"},
         403: {"model": ErrorDetail, "description": "غير مسموح (رمز الخدمة لا يسجّل أحداثاً)"},
-        422: {"description": "طلب غير صالح: الدفعة تُرفض كاملة"},
+        422: validation_response("طلب غير صالح: الدفعة تُرفض كاملة"),
     },
 )
 async def post_events(
@@ -108,7 +108,7 @@ async def post_events(
     dependencies=[Depends(current_device)],
     responses={
         401: {"model": ErrorDetail, "description": "غير مصرّح"},
-        422: {"description": "طلب غير صالح"},
+        422: validation_response(),
     },
 )
 async def pull_events(

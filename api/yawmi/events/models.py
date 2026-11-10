@@ -12,11 +12,14 @@ from yawmi.domain.days import DEFAULT_TZ, is_valid_tz
 from yawmi.events.project import (
     EARLIEST,
     LATEST,
+    BreathSession,
     EventType,
+    FocusSession,
     Instant,
     ProjectionError,
     project_event,
 )
+from yawmi.text import is_storable
 
 MAX_BATCH = 500
 MAX_PAYLOAD_BYTES = 16 * 1024
@@ -26,6 +29,7 @@ MAX_FUTURE = timedelta(hours=24)
 _BAD_TEXT = "نص الحمولة غير صالح"
 _NOT_FINITE = "الحمولة تحوي رقماً غير منتهٍ"
 _FUTURE = "وقت الحدث يسبق الوقت الحالي بأكثر من 24 ساعة"
+_SESSION_FUTURE = "وقت الجلسة يسبق الوقت الحالي بأكثر من 24 ساعة"
 
 
 class PayloadNotJson(ValueError):
@@ -60,13 +64,8 @@ def _check_storable(payload: dict[str, Any]) -> None:
                 stack.append(value)
         elif isinstance(item, list):
             stack.extend(item)
-        elif isinstance(item, str):
-            try:
-                item.encode("utf-8")
-            except UnicodeEncodeError:
-                raise PydanticCustomError("payload_text_invalid", _BAD_TEXT) from None
-            if "\x00" in item:
-                raise PydanticCustomError("payload_text_invalid", _BAD_TEXT)
+        elif isinstance(item, str) and not is_storable(item):
+            raise PydanticCustomError("payload_text_invalid", _BAD_TEXT)
     try:
         text = dump_payload(payload)
     except PayloadNotJson:
@@ -126,9 +125,18 @@ class EventIn(BaseModel):
     def _projectable(self) -> "EventIn":
         """Reject at the door what could not be projected; `source` does not change validity."""
         try:
-            project_event(self, "web")
+            intent = project_event(self, "web")
         except ProjectionError as exc:
             raise PydanticCustomError(exc.code, exc.message) from None
+        if isinstance(intent, FocusSession | BreathSession):
+            # the same 24 h cap as `occurred_at`: a far-future session time would poison the
+            # day it is filed under and every ordering by time
+            # (a start derived from the end is reported as the end's fault)
+            limit = server_now() + MAX_FUTURE
+            if self.payload.get("started_at") is not None and intent.started_at > limit:
+                raise PydanticCustomError("started_at_in_future", _SESSION_FUTURE)
+            if intent.ended_at > limit:
+                raise PydanticCustomError("ended_at_in_future", _SESSION_FUTURE)
         return self
 
 
