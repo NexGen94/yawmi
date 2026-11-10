@@ -4,13 +4,15 @@
 //
 // The server refuses a whole batch (422) when one event in it is bad, naming the event's index in
 // `errors[].loc`. Such an event is moved to a separate `quarantine` store, never dropped, so the
-// events around it can still go; `quarantined()` counts them.
+// events around it can still go. `quarantined()` counts them, `listQuarantined()` shows them and
+// `requeue(id)` puts one back (a refusal can be the server's, e.g. a type it does not know yet).
 
 import { type DBSchema, type IDBPDatabase, openDB } from 'idb';
 
 import { authedFetch } from '../api/auth';
 import type { components } from '../api/schema';
-import { withLock } from '../lib/locks';
+import { LockTimeout, withLock } from '../lib/locks';
+import { isAbortOrTimeout } from '../lib/timeout';
 import { uuidv7 } from './uuidv7';
 
 type Schemas = components['schemas'];
@@ -26,6 +28,21 @@ const TIMEZONE = 'Asia/Riyadh';
 const MAX_BATCH = 500;
 /** Cross-tab lock name: one tab at a time reads, sends and deletes queued events. */
 const FLUSH_LOCK = 'yawmi-outbox-flush';
+
+/**
+ * Bounds on a flush, in milliseconds. Each batch request is bounded because the drain runs under
+ * the cross-tab lock (500 events fit in well under that on a live connection). A tab that waits
+ * longer than `lockWaitMs` for another tab's flush gives up and reports nothing sent: the holder is
+ * sending (or stuck), and the next trigger tries again. Mutable for tests only.
+ */
+export const flushTimeouts = { requestMs: 30_000, lockWaitMs: 30_000 };
+
+/**
+ * How long the upgrade may stay blocked by another tab's open connection before `openDb` gives up
+ * and asks for a reload. A live old tab closes on `versionchange` at once (`blocking` below); one
+ * that is suspended or frozen does not. Mutable for tests only.
+ */
+export const dbTimeouts = { blockedGraceMs: 5_000 };
 
 /** The event types the server accepts: the `EventIn.type` enum of the generated schema. */
 export type EventType = Schemas['EventIn']['type'];
@@ -64,10 +81,18 @@ const EVENT_TYPE_SET = {
  */
 export const EVENT_TYPES: readonly EventType[] = Object.freeze(Object.keys(EVENT_TYPE_SET) as EventType[]);
 
-/** `flush` result. `offline` is true only when a request was attempted and the network failed. */
+/** `flush` result. `offline` is true only when a request was attempted and the network failed or timed out. */
 export interface FlushResult {
   sent: number;
   offline: boolean;
+  /** Events the server refused by index during this flush and that were moved to quarantine. */
+  quarantined: number;
+}
+
+/** What a flush had done before it was interrupted (see `flushedBefore`). */
+export interface FlushProgress {
+  sent: number;
+  quarantined: number;
 }
 
 /** `enqueue` refused the event: an unknown type or a payload that is not a plain object. Nothing was stored. */
@@ -96,6 +121,21 @@ export class BatchRejected extends Error {
   }
 }
 
+/**
+ * The outbox database cannot be opened by this copy of the app; the shell should ask for a reload.
+ * `version`: the stored database is newer than this code (a newer app version already ran here).
+ * `blocked`: the upgrade waited more than `dbTimeouts.blockedGraceMs` for another tab to close.
+ */
+export class DatabaseNeedsReload extends Error {
+  readonly reason: 'version' | 'blocked';
+
+  constructor(reason: 'version' | 'blocked', options?: ErrorOptions) {
+    super(`outbox database: reload needed (${reason})`, options);
+    this.name = 'DatabaseNeedsReload';
+    this.reason = reason;
+  }
+}
+
 interface YawmiDB extends DBSchema {
   outbox: { key: string; value: OutboxEvent };
   quarantine: { key: string; value: QuarantinedEvent };
@@ -118,35 +158,66 @@ async function seedIdClock(db: IDBPDatabase<YawmiDB>): Promise<void> {
   if (Number.isFinite(newest)) lastIdTime = Math.max(lastIdTime, newest);
 }
 
-/** The shared connection, opened on first use. */
+/** Open, upgrade and seed, mapping the two "this copy cannot open it" cases to `DatabaseNeedsReload`. */
+function connect(): Promise<IDBPDatabase<YawmiDB>> {
+  return new Promise<IDBPDatabase<YawmiDB>>((resolve, reject) => {
+    let gaveUp = false;
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    openDB<YawmiDB>(DB_NAME, DB_VERSION, {
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) db.createObjectStore(STORE, { keyPath: 'id' });
+        if (oldVersion < 2) db.createObjectStore(QUARANTINE, { keyPath: 'id' });
+      },
+      blocked() {
+        // Another tab still has the old version open. It usually closes on `versionchange` in a
+        // moment; if not, stop waiting so the caller can ask for a reload.
+        graceTimer ??= setTimeout(() => {
+          gaveUp = true;
+          reject(new DatabaseNeedsReload('blocked'));
+        }, dbTimeouts.blockedGraceMs);
+      },
+      blocking() {
+        // A newer version of the app wants to upgrade: step aside.
+        closeDb();
+      },
+      terminated() {
+        // The browser dropped the connection (Safari does this); open a new one next time.
+        dbPromise = null;
+      },
+    }).then(
+      async (db) => {
+        clearTimeout(graceTimer);
+        // The open completed after this call gave up on it: nobody holds the connection, so close it.
+        if (gaveUp) {
+          db.close();
+          return;
+        }
+        try {
+          await seedIdClock(db);
+          resolve(db);
+        } catch (error) {
+          db.close();
+          reject(error);
+        }
+      },
+      (error: unknown) => {
+        clearTimeout(graceTimer);
+        const name = (error as { name?: unknown } | null)?.name;
+        reject(name === 'VersionError' ? new DatabaseNeedsReload('version', { cause: error }) : error);
+      },
+    );
+  });
+}
+
+/**
+ * The shared connection, opened on first use. Rejects with `DatabaseNeedsReload` when this copy of
+ * the app cannot open it (older than the stored database, or the upgrade is blocked by another tab).
+ */
 export function openDb(): Promise<IDBPDatabase<YawmiDB>> {
-  dbPromise ??= openDB<YawmiDB>(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion) {
-      if (oldVersion < 1) db.createObjectStore(STORE, { keyPath: 'id' });
-      if (oldVersion < 2) db.createObjectStore(QUARANTINE, { keyPath: 'id' });
-    },
-    blocking() {
-      // A newer version of the app wants to upgrade: step aside.
-      closeDb();
-    },
-    terminated() {
-      // The browser dropped the connection (Safari does this); open a new one next time.
-      dbPromise = null;
-    },
-  })
-    .then(async (db) => {
-      try {
-        await seedIdClock(db);
-      } catch (error) {
-        db.close();
-        throw error;
-      }
-      return db;
-    })
-    .catch((error: unknown) => {
-      dbPromise = null;
-      throw error;
-    });
+  dbPromise ??= connect().catch((error: unknown) => {
+    dbPromise = null;
+    throw error;
+  });
   return dbPromise;
 }
 
@@ -193,6 +264,31 @@ export async function quarantined(): Promise<number> {
   return (await openDb()).count(QUARANTINE);
 }
 
+/** The quarantined events, oldest first, each with the reasons the server gave. */
+export async function listQuarantined(): Promise<QuarantinedEvent[]> {
+  return (await openDb()).getAll(QUARANTINE);
+}
+
+/**
+ * Put a quarantined event back in the queue under its own id, without the quarantine fields; the
+ * next flush sends it. Reusing the id is safe: the server stored nothing from the refused batch.
+ * Resolves false, changing nothing, when no quarantined event has that id.
+ */
+export async function requeue(id: string): Promise<boolean> {
+  const db = await openDb();
+  const tx = db.transaction([STORE, QUARANTINE], 'readwrite');
+  const held = await tx.objectStore(QUARANTINE).get(id);
+  if (held === undefined) {
+    await tx.done;
+    return false;
+  }
+  const { errors: _errors, quarantined_at: _at, ...event } = held;
+  await tx.objectStore(STORE).put(event);
+  await tx.objectStore(QUARANTINE).delete(id);
+  await tx.done;
+  return true;
+}
+
 function isErrorItem(value: unknown): value is Schemas['ValidationErrorItem'] {
   const item = value as { loc?: unknown; type?: unknown } | null;
   return (
@@ -221,7 +317,11 @@ function indexOf(error: Schemas['ValidationErrorItem'], size: number): number | 
   return Number.isInteger(index) && index >= 0 && index < size ? index : null;
 }
 
-type Step = { kind: 'empty' } | { kind: 'offline' } | { kind: 'sent'; count: number } | { kind: 'quarantined' };
+type Step =
+  | { kind: 'empty' }
+  | { kind: 'offline' }
+  | { kind: 'sent'; count: number }
+  | { kind: 'quarantined'; count: number };
 
 /** Move the events the server named to quarantine, in one transaction with their removal from the queue. */
 async function quarantine(
@@ -252,10 +352,12 @@ async function sendBatch(size: number, send: SendFn): Promise<Step> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(flushTimeouts.requestMs),
     });
   } catch (error) {
-    // Offline or the connection dropped: not an error, everything stays queued for the next trigger.
-    if (error instanceof TypeError) return { kind: 'offline' };
+    // Offline, the connection dropped, or no answer in time: not an error, everything stays queued
+    // for the next trigger. (A timeout is a DOMException, not a TypeError.)
+    if (error instanceof TypeError || isAbortOrTimeout(error)) return { kind: 'offline' };
     throw error;
   }
 
@@ -271,7 +373,7 @@ async function sendBatch(size: number, send: SendFn): Promise<Step> {
     }
     if (blamed.size === 0) throw new BatchRejected(422, errors);
     await quarantine(db, events, blamed);
-    return { kind: 'quarantined' };
+    return { kind: 'quarantined', count: blamed.size };
   }
 
   // Server contract (`post_events` in api/yawmi/routes/events.py): success is exactly HTTP 200
@@ -281,7 +383,13 @@ async function sendBatch(size: number, send: SendFn): Promise<Step> {
   if (res.status !== 200) throw new BatchRejected(res.status);
   // Delete only on an acknowledged answer that parses: a captive portal or proxy can answer 200
   // with something that is not the server's reply.
-  const reply: unknown = await res.json();
+  let reply: unknown;
+  try {
+    reply = await res.json();
+  } catch (error) {
+    if (isAbortOrTimeout(error)) return { kind: 'offline' };
+    throw error;
+  }
   if (typeof reply !== 'object' || reply === null) throw new Error('events: unexpected response body');
 
   const tx = db.transaction(STORE, 'readwrite');
@@ -290,34 +398,64 @@ async function sendBatch(size: number, send: SendFn): Promise<Step> {
   return { kind: 'sent', count: events.length };
 }
 
+// What each interrupted flush had done, keyed by the error it rejected with.
+const progressOf = new WeakMap<object, FlushProgress>();
+
+/**
+ * What a flush that rejected with `error` had already done: events sent (and deleted) and events
+ * quarantined before the failure. Zeros for any other error.
+ */
+export function flushedBefore(error: unknown): FlushProgress {
+  const known = typeof error === 'object' && error !== null ? progressOf.get(error) : undefined;
+  return known ?? { sent: 0, quarantined: 0 };
+}
+
 /** Send batches until the queue is empty, the network is down, or a batch is refused (thrown). */
 async function drain(batch: number, send: SendFn): Promise<FlushResult> {
   const size = Math.min(Math.max(Math.trunc(batch) || 1, 1), MAX_BATCH);
   let sent = 0;
+  let quarantinedNow = 0;
   // Ends: every pass that goes round again removed at least one event from the queue.
   for (;;) {
-    const step = await sendBatch(size, send);
-    if (step.kind === 'empty') return { sent, offline: false };
-    if (step.kind === 'offline') return { sent, offline: true };
+    let step: Step;
+    try {
+      step = await sendBatch(size, send);
+    } catch (error) {
+      if (typeof error === 'object' && error !== null) progressOf.set(error, { sent, quarantined: quarantinedNow });
+      throw error;
+    }
+    if (step.kind === 'empty') return { sent, offline: false, quarantined: quarantinedNow };
+    if (step.kind === 'offline') return { sent, offline: true, quarantined: quarantinedNow };
     if (step.kind === 'sent') sent += step.count;
+    else quarantinedNow += step.count;
   }
 }
 
 let inFlight: Promise<FlushResult> | null = null;
 
 /**
- * Send every queued event, oldest first, in requests of up to `batch` events (at most 500), each
- * deleted once the server answers 200. An event the server names in a 422 goes to quarantine and
- * the rest are sent. Concurrent callers in a tab share one run and its result; across tabs the run
- * holds a Web Lock, so a second tab waits and then finds only what is left.
+ * Send every queued event, oldest first, in requests of up to `batch` events (at most 500). `batch`
+ * sizes each request, it does not cap the flush: a large backlog goes out as back-to-back requests
+ * in one flush, which ends at the first failure. Each batch is deleted once the server answers 200.
+ * An event the server names in a 422 goes to quarantine and the rest are sent. Concurrent callers
+ * in a tab share one run and its result; across tabs the run holds a Web Lock, so a second tab
+ * waits (at most `flushTimeouts.lockWaitMs`, then resolves with nothing sent) and then finds only
+ * what is left.
  *
- * Resolves with how many events were sent, and `offline: true` when the network was down (0 sent
- * with `offline: false` means the queue was empty). Rejects, keeping the events not yet
- * acknowledged, on `Unauthorized`, `RefreshError`, `BatchRejected`, or a 200 that does not parse.
+ * Resolves with how many events were sent and quarantined, and `offline: true` when the network was
+ * down or a request timed out. All zeros with `offline: false` means there was nothing to send (or
+ * another tab kept the lock). Rejects, keeping the events not yet acknowledged, on `Unauthorized`,
+ * `RefreshError`, `BatchRejected`, `DatabaseNeedsReload`, or a 200 that does not parse;
+ * `flushedBefore(error)` then tells what had gone out before.
  */
 export function flush(batch = 100, send: SendFn = authedFetch): Promise<FlushResult> {
-  inFlight ??= withLock(FLUSH_LOCK, () => drain(batch, send)).finally(() => {
-    inFlight = null;
-  });
+  inFlight ??= withLock(FLUSH_LOCK, () => drain(batch, send), { waitMs: flushTimeouts.lockWaitMs })
+    .catch((error: unknown): FlushResult => {
+      if (error instanceof LockTimeout) return { sent: 0, offline: false, quarantined: 0 };
+      throw error;
+    })
+    .finally(() => {
+      inFlight = null;
+    });
   return inFlight;
 }
