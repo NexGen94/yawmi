@@ -1,0 +1,11 @@
+{
+  "name": "yawmi-openapi-gen",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Generator for web/src/api/schema.d.ts only, kept out of the app's tree: openapi-typescript 7 needs the TypeScript 5 compiler API, the app compiles with TypeScript 7.",
+  "type": "module",
+  "dependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}

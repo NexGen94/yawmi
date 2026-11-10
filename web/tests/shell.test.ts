@@ -94,24 +94,32 @@ describe('vite + pwa config', () => {
     expect(read('.nvmrc').trim()).toBe('24');
   });
 
-  it('pins exact dependency versions (no ranges)', () => {
-    const pkg = JSON.parse(read('package.json')) as {
-      dependencies: Record<string, string>;
-      devDependencies: Record<string, string>;
-      overrides?: Record<string, Record<string, string>>;
+  it.each(['package.json', 'tools/openapi-gen/package.json'])('%s pins exact dependency versions (no ranges)', (file) => {
+    const pkg = JSON.parse(read(file)) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      overrides?: unknown;
     };
     const all = { ...pkg.dependencies, ...pkg.devDependencies };
+    expect(Object.keys(all).length).toBeGreaterThan(0);
     for (const [name, version] of Object.entries(all)) {
-      // An npm alias (`npm:typescript@5.9.3`, see scripts/ts5-for-openapi.mjs) is pinned the same way.
-      expect(version, name).toMatch(/^(npm:(@[a-z0-9-]+\/)?[a-z0-9.-]+@)?\d+\.\d+\.\d+$/);
+      expect(version, name).toMatch(/^\d+\.\d+\.\d+$/);
     }
-    // Overrides may only point at an exact version or at a pinned root dependency (`$name`).
-    for (const [parent, inner] of Object.entries(pkg.overrides ?? {})) {
-      for (const [name, version] of Object.entries(inner)) {
-        expect(version, `${parent} > ${name}`).toMatch(/^(\d+\.\d+\.\d+|\$[a-z0-9-]+)$/);
-        if (version.startsWith('$')) expect(all[version.slice(1)], version).toMatch(/^\d+\.\d+\.\d+$/);
-      }
-    }
+    expect(pkg.overrides, 'overrides').toBeUndefined();
+  });
+
+  it('keeps one compiler in the app: TypeScript 7, and TypeScript 5 only inside the generator tool', () => {
+    const app = JSON.parse(read('package.json')) as { devDependencies: Record<string, string> };
+    const tool = JSON.parse(read('tools/openapi-gen/package.json')) as {
+      private?: boolean;
+      dependencies: Record<string, string>;
+    };
+    expect(app.devDependencies.typescript).toMatch(/^7\./);
+    expect(Object.keys(app.devDependencies).filter((name) => name.includes('typescript'))).toEqual(['typescript']);
+    expect(tool.private).toBe(true);
+    expect(tool.dependencies).toEqual({ 'openapi-typescript': '7.13.0', typescript: '5.9.3' });
+    expect(existsSync(join(webRoot, 'tools/openapi-gen/package-lock.json'))).toBe(true);
+    expect(existsSync(join(webRoot, 'scripts/ts5-for-openapi.mjs'))).toBe(false);
   });
 });
 

@@ -38,9 +38,17 @@ jobs:
         with:
           node-version-file: web/.nvmrc
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            web/tools/openapi-gen/package-lock.json
 
       - name: Install dependencies
+        run: npm ci
+
+      # The generator lives in its own package (TypeScript 5 for openapi-typescript), outside the
+      # app's tree, so the app's tsc stays TypeScript 7.
+      - name: Install the API type generator
+        working-directory: web/tools/openapi-gen
         run: npm ci
 
       # src/api/schema.d.ts is generated from openapi/openapi.json and checked in; a server change

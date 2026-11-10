@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "gen:api": "node --import ./scripts/ts5-for-openapi.mjs node_modules/openapi-typescript/bin/cli.js ../openapi/openapi.json -o src/api/schema.d.ts",
+    "gen:api": "node tools/openapi-gen/node_modules/openapi-typescript/bin/cli.js ../openapi/openapi.json -o src/api/schema.d.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.sw.json",
     "test": "vitest run",
     "check:budget": "node scripts/check-budget.mjs",
@@ -27,9 +27,7 @@
     "@types/node": "24.19.2",
     "@vite-pwa/assets-generator": "2.0.0",
     "fake-indexeddb": "6.2.8",
-    "openapi-typescript": "7.13.0",
     "typescript": "7.0.2",
-    "typescript-5": "npm:typescript@5.9.3",
     "vite": "8.3.7",
     "vite-plugin-pwa": "2.0.0",
     "vitest": "5.1.0",
@@ -38,10 +36,5 @@
     "workbox-precaching": "7.4.1",
     "workbox-routing": "7.4.1",
     "workbox-window": "7.4.1"
-  },
-  "overrides": {
-    "openapi-typescript": {
-      "typescript": "$typescript"
-    }
   }
 }
