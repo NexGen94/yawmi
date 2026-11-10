@@ -15,6 +15,8 @@ import pytest
 from yawmi import admin
 from yawmi.auth.memory_store import InMemoryDeviceStore
 from yawmi.auth.pg_store import AsyncpgDeviceStore, affected_rows, device_from_row
+from yawmi.auth.tokens import AuthError, verify_access
+from yawmi.settings import Settings
 
 NOW = datetime(2026, 11, 10, 9, 0, tzinfo=UTC)
 
@@ -203,3 +205,151 @@ async def test_pg_add_pairing_code_reports_whether_it_was_inserted() -> None:
     assert not await AsyncpgDeviceStore(FakePool(execute="INSERT 0 0")).add_pairing_code(  # type: ignore[arg-type]
         "1", "web", NOW
     )
+
+
+# --- admin: service-token ----------------------------------------------------------------------
+
+SECRET = "t" * 40
+
+
+async def test_issue_service_token_creates_a_service_device_and_signs_for_it() -> None:
+    store = InMemoryDeviceStore(clock=lambda: NOW)
+    token = await admin.issue_service_token(store, "n8n", secret=SECRET, ttl_hours=2)
+
+    claims = verify_access(token, SECRET)
+    assert claims.kind == "service"
+    device = await store.get_device(claims.sub)
+    assert device is not None
+    assert (device.name, device.kind, device.revoked_at) == ("n8n", "service", None)
+    remaining = claims.exp - datetime.now(UTC)
+    assert timedelta(hours=1, minutes=59) < remaining <= timedelta(hours=2)
+
+
+async def test_service_token_carries_no_usable_refresh_token() -> None:
+    store = InMemoryDeviceStore(clock=lambda: NOW)
+    token = await admin.issue_service_token(store, "n8n", secret=SECRET, ttl_hours=1)
+    device_id = verify_access(token, SECRET).sub
+    # nobody holds the raw refresh token, so no hash a client can present will ever rotate it
+    for guess in ("", "x", "0" * 64):
+        assert await store.rotate_refresh(device_id, guess, "new") is False
+
+
+async def test_service_token_is_signed_with_the_given_secret_only() -> None:
+    store = InMemoryDeviceStore(clock=lambda: NOW)
+    token = await admin.issue_service_token(store, "n8n", secret=SECRET, ttl_hours=1)
+    with pytest.raises(AuthError):
+        verify_access(token, "u" * 40)
+
+
+async def test_two_service_tokens_are_two_devices() -> None:
+    store = InMemoryDeviceStore(clock=lambda: NOW)
+    first = await admin.issue_service_token(store, "a", secret=SECRET, ttl_hours=1)
+    second = await admin.issue_service_token(store, "b", secret=SECRET, ttl_hours=1)
+    assert verify_access(first, SECRET).sub != verify_access(second, SECRET).sub
+
+
+@pytest.mark.parametrize("name", ["", "   ", "x" * 101])
+async def test_issue_service_token_rejects_a_bad_name(name: str) -> None:
+    store = InMemoryDeviceStore(clock=lambda: NOW)
+    with pytest.raises(ValueError):
+        await admin.issue_service_token(store, name, secret=SECRET, ttl_hours=1)
+
+
+@pytest.mark.parametrize("hours", [0, -1, admin.MAX_SERVICE_TTL_HOURS + 1])
+async def test_issue_service_token_rejects_a_bad_ttl(hours: int) -> None:
+    store = InMemoryDeviceStore(clock=lambda: NOW)
+    with pytest.raises(ValueError):
+        await admin.issue_service_token(store, "n8n", secret=SECRET, ttl_hours=hours)
+
+
+def test_parser_service_token_defaults_to_one_year() -> None:
+    args = admin.build_parser().parse_args(["service-token", "--name", "n8n"])
+    assert args.command == "service-token"
+    assert args.name == "n8n"
+    assert args.ttl_hours == 8760
+    assert args.dry_run is False
+
+
+def test_parser_service_token_accepts_ttl_and_dry_run() -> None:
+    args = admin.build_parser().parse_args(
+        ["service-token", "--name", "n8n", "--ttl-hours", "24", "--dry-run"]
+    )
+    assert (args.ttl_hours, args.dry_run) == (24, True)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["service-token"],
+        ["service-token", "--name", "n8n", "--ttl-hours", "0"],
+        ["service-token", "--name", "n8n", "--ttl-hours", "abc"],
+        ["service-token", "--name", "n8n", "--ttl-hours", str(admin.MAX_SERVICE_TTL_HOURS + 1)],
+    ],
+)
+def test_parser_service_token_rejects_bad_arguments(argv: list[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        admin.build_parser().parse_args(argv)
+    assert exc.value.code == 2
+
+
+def _settings() -> Settings:
+    return Settings(database_url="postgresql:///none", jwt_secret=SECRET)  # type: ignore[arg-type]
+
+
+def test_main_service_token_dry_run_prints_exactly_one_line_with_the_token(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(admin, "settings", _settings)
+    assert admin.main(["service-token", "--name", "n8n", "--dry-run"]) == 0
+    out, err = capsys.readouterr()
+    lines = out.splitlines()
+    assert len(lines) == 1
+    assert verify_access(lines[0], SECRET).kind == "service"
+    assert "تجريبي" in err
+    assert SECRET not in out + err
+
+
+class ClosablePool(FakePool):
+    def __init__(self) -> None:
+        super().__init__(execute="INSERT 0 1")
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def test_main_service_token_writes_one_service_device_row(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pool = ClosablePool()
+
+    async def fake_create_pool(dsn: str, **_: Any) -> ClosablePool:
+        return pool
+
+    monkeypatch.setattr(admin, "settings", _settings)
+    monkeypatch.setattr(admin, "create_pool", fake_create_pool)
+    assert admin.main(["service-token", "--name", "n8n", "--ttl-hours", "5"]) == 0
+
+    inserts = [call for call in pool.calls if "yawmi.devices" in call[1]]
+    assert len(inserts) == 1
+    device_id, name, kind, refresh_hash = inserts[0][2]
+    assert (name, kind) == ("n8n", "service")
+    assert len(refresh_hash) == 64  # a SHA-256 hex digest of a token nobody ever saw
+    token = capsys.readouterr().out.strip()
+    assert verify_access(token, SECRET).sub == device_id
+    assert pool.closed
+
+
+def test_main_service_token_failure_names_only_the_exception_class(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    async def boom(dsn: str, **_: Any) -> None:
+        raise ConnectionRefusedError("detail-that-must-not-leak")
+
+    monkeypatch.setattr(admin, "settings", _settings)
+    monkeypatch.setattr(admin, "create_pool", boom)
+    assert admin.main(["service-token", "--name", "n8n"]) == 1
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert "ConnectionRefusedError" in err
+    assert "detail-that-must-not-leak" not in err

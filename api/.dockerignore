@@ -1,0 +1,12 @@
+# Only pyproject.toml, uv.lock, yawmi/ and docker/ are copied into the image; this keeps the
+# build context small (the local .venv alone can be hundreds of megabytes).
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+tests/
+db/
+Dockerfile
+.dockerignore
