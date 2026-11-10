@@ -20,12 +20,18 @@
 | `challenge_progress.json` | `habits.challenge_progress` | كذلك | `{achieved, total, completion, remaining_days}` أو `null` |
 | `adherence.json` | `habits.adherence` | كذلك | عدد في `[0, 1]` أو `null` |
 | `goal_prefill.json` | `habits.goal_prefill` | `goal_target`، `current`، `today`، `deadline`، `period`، `week_start` | عدد صحيح |
-| `baseline.json` | `scores.baseline` | `values`، `log` | `{mean, sd, n, quality}` أو `null` |
+| `baseline.json` | `scores.baseline` (وبه `scores.baseline_quality`) | `nights`، `day`، `log` | `{mean, sd, n, quality}` أو `null` |
 | `recovery.json` | `scores.recovery` | `z_hrv`، `z_rhr`، `z_sleep`، `penalty` | عدد صحيح 0..100 |
 | `trimp.json` | `scores.trimp` | `minutes`، `hr_reserve`، `female` | عدد |
 | `strain.json` | `scores.strain` | `trimp_total` | عدد 0..21 |
 
 الويب (المرحلة 1ب) يقرأ العشرة الأولى فقط؛ وSwift يقرأ الأربعة عشر.
+
+لا ملف مستقل لـ`baseline_quality`: `baseline` تأخذ `quality` منها مباشرة على ليالي النافذة،
+فكل فروع قاعدتها (`null` و`provisional` و`full`، وحدود الكتل الثلاثة الداخلية، وطرفا النافذة)
+مثبّتة في حقل `quality` من `baseline.json`. الفرق الوحيد بينهما التاريخ المكرر (`baseline_quality`
+تعدّه ليلة واحدة)، والمتجهات لا تحمل تواريخ مكررة لأن المستدعي يمرّر ليلة واحدة لكل يوم. فالعدد
+يبقى أربعة عشر ملفاً.
 
 ## الصيغة
 
@@ -57,6 +63,12 @@
   - `logs`: مصفوفة `{day, value, status}`، و`status` من `done` و`skip` و`vacation` و`missed`،
     و`value` عدد أو `null`. الترتيب لا يؤثر في الناتج (حالات مقصودة تثبت ذلك).
   - `week_start`: `sat` أو `sun` أو `mon` في كل حالة تمرّ به للدالة.
+  - `baseline`: `nights` مصفوفة `{day, value}` لليالي الصالحة (التاريخ يوم الاستيقاظ، بلا تاريخ
+    مكرر، وبأي ترتيب)، و`day` اليوم المقيَّم، و`log` (`true` لـHRV: الحساب على `ln`). القاعدة
+    (D-065): النافذة الأيام التقويمية الـ28 `[day − 28، day − 1]` وما خارجها يُهمل (ومنه `day`
+    نفسه)؛ أقل من 7 ليالٍ فيها `null`؛ `quality = "full"` إن حوت كل كتلة من الكتل الأربع
+    `[day−28..day−22]` و`[day−21..day−15]` و`[day−14..day−8]` و`[day−7..day−1]` 4 ليالٍ على الأقل،
+    وإلا `"provisional"`؛ و`n` عدد ليالي النافذة وحدها.
 - `expect`: كائن بمفتاح واحد `value` يحمل الناتج: قيمة مفردة، أو `null`، أو كائن بحقول النتيجة
   بأسماء `snake_case`. التواريخ نصوص ISO.
 - `tol` (اختياري): هامش هذه الحالة وحدها للكسور.

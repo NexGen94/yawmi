@@ -154,7 +154,8 @@ def apply(function: str, inp: dict[str, Any]) -> Any:
                 inp["week_start"],
             )
         case "baseline":
-            result = scores.baseline([float(v) for v in inp["values"]], log=inp["log"])
+            dated = [(date.fromisoformat(n["day"]), float(n["value"])) for n in inp["nights"]]
+            result = scores.baseline(dated, date.fromisoformat(inp["day"]), log=inp["log"])
         case "recovery":
             result = scores.recovery(
                 float(inp["z_hrv"]),

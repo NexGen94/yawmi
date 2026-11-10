@@ -10,7 +10,8 @@
 
 المدخلات بدائيات JSON وحدها: تواريخ `YYYY-MM-DD`، ولحظات ISO بـ`Z`، وأعداد، ونصوص تعداد،
 ومصفوفات وكائنات منها بمفاتيح `snake_case`. `habit` بحقول `HabitSpec` العشرة كلها (ولو `null`)،
-و`logs` مصفوفة `{day, value, status}`، و`week_start` في كل حالة تمرّ به للدالة.
+و`logs` مصفوفة `{day, value, status}`، و`week_start` في كل حالة تمرّ به للدالة. و`baseline`
+بـ`nights` مصفوفة `{day, value}` (ليالٍ صالحة مؤرخة بيوم الاستيقاظ) و`day` اليوم المقيَّم و`log`.
 """
 
 from __future__ import annotations
@@ -958,41 +959,220 @@ GOAL_PREFILL = _numbered(
 # ---------------------------------------------------------------- baseline
 
 
-def _bl(values: list[float], log: bool = False) -> dict[str, Any]:
-    return {"values": values, "log": log}
+# خط الأساس ليوم `day` من ليالٍ مؤرخة (D-065): النافذة الأيام التقويمية الـ28 [day − 28، day − 1]،
+# وأقل من 7 ليالٍ فيها `null`، و`full` إن حوت كل كتلة من الكتل الأربع ذات السبعة أيام 4 ليالٍ على
+# الأقل، وإلا `provisional`. الليالي تُكتب هنا بعدد الأيام قبل اليوم المقيَّم (1 = أمس ... 28 = أقدم
+# يوم في النافذة؛ 0 = اليوم نفسه و29 فأكثر قبل النافذة، وكلاهما خارجها). الكتل بهذا العدّ:
+# 22..28 و15..21 و8..14 و1..7. لا تاريخ يتكرر في حالة واحدة.
+
+BASE_DAY = date(2026, 12, 1)  # النافذة 2026-11-03 .. 2026-11-30
+LEAP_EDGE_DAY = date(2028, 3, 28)  # النافذة تبدأ في 2028-02-29
+OUTSIDE = 1000.0  # قيمة لليالي خارج النافذة: لو حُسبت لأفسدت المتوسط
 
 
-_HRV7 = [40.0, 50.0, 60.0, 45.0, 55.0, 65.0, 50.0]
-_RHR7 = [50.0, 60.0, 70.0, 50.0, 60.0, 70.0, 60.0]
-_RHR14 = [58.0, 60.0, 62.0, 59.0, 61.0, 57.0, 63.0, 60.0, 58.0, 62.0, 61.0, 59.0, 60.0, 64.0]
+def night(offset: int, value: float = 60.0, day: date = BASE_DAY) -> dict[str, Any]:
+    return {"day": iso(day - timedelta(days=offset)), "value": value}
+
+
+def nights(offsets: Any, value: float = 60.0, day: date = BASE_DAY) -> list[dict[str, Any]]:
+    """ليالٍ بقيمة واحدة، من الأقدم إلى الأحدث."""
+    return [night(k, value, day) for k in sorted(offsets, reverse=True)]
+
+
+def valued(pairs: list[tuple[int, float]], day: date = BASE_DAY) -> list[dict[str, Any]]:
+    """ليالٍ `(كم يوماً قبل اليوم، القيمة)` بالترتيب المعطى."""
+    return [night(k, v, day) for k, v in pairs]
+
+
+def varied(offsets: Any, base: float = 55.0, day: date = BASE_DAY) -> list[dict[str, Any]]:
+    """ليالٍ بقيم متنوعة محدَّدة من موضعها، من الأقدم إلى الأحدث."""
+    return [night(k, base + (k * 7 % 11) * 0.5, day) for k in sorted(offsets, reverse=True)]
+
+
+def _bl(
+    night_list: list[dict[str, Any]], day: date = BASE_DAY, log: bool = False
+) -> dict[str, Any]:
+    return {"nights": night_list, "day": iso(day), "log": log}
+
+
+def _flat(n: int, quality: str) -> tuple[dict[str, Any], float]:
+    """القيمة المعلنة حين كل ليالي النافذة 60: المتوسط 60 والانحراف 0، و`n` و`quality` من القاعدة."""
+    return {"mean": 60.0, "sd": 0.0, "n": n, "quality": quality}, 1e-9
+
+
+_NO_BASELINE = (None, 0.0)
+# 16 ليلة، 4 في كل كتلة، وفي كل من الكتل الثلاث الأقدم ليلة على حدّها الأحدث (22 و15 و8)
+_FULL16 = (28, 27, 26, 22, 20, 19, 18, 15, 13, 12, 11, 8, 6, 5, 4, 3)
+_WINDOW_EDGES = (28, 27, 20, 14, 9, 2, 1)  # 7 ليالٍ منها طرفا النافذة
+_RHR7 = [(7, 50.0), (6, 60.0), (5, 70.0), (4, 50.0), (3, 60.0), (2, 70.0), (1, 60.0)]
+_HRV7 = [(7, 40.0), (6, 50.0), (5, 60.0), (4, 45.0), (3, 55.0), (2, 65.0), (1, 50.0)]
+
+
+def _moved(a: int, b: int) -> tuple[int, ...]:
+    """`_FULL16` بعد نقل الليلة `a` إلى `b` (عبور حد داخلي بين كتلتين)."""
+    return tuple(b if k == a else k for k in _FULL16)
+
 
 BASELINE = _numbered(
     "baseline",
     [
-        (1, _bl([60.0] * 6), "6 ليالٍ: لا خط أساس (null)"),
-        (2, _bl([]), "بلا قيم: null"),
+        (1, _bl(nights(range(1, 7))), "6 ليالٍ في النافذة: لا خط أساس", None, _NO_BASELINE),
+        (2, _bl([]), "بلا ليالٍ: null", None, _NO_BASELINE),
         (
             3,
-            _bl([60.0] * 7),
-            "7 ليالٍ: أولي",
+            _bl(nights(range(1, 8))),
+            "7 ليالٍ متتالية كلها في الكتلة الأحدث: أولي",
             None,
-            ({"mean": 60.0, "sd": 0.0, "n": 7, "quality": "provisional"}, 1e-9),
+            _flat(7, "provisional"),
         ),
-        (4, _bl([60.0] * 27), "27 ليلة: ما زال أولياً"),
+        (4, _bl(nights(_FULL16)), "16 ليلة، 4 في كل كتلة: كامل", None, _flat(16, "full")),
         (
             5,
-            _bl([60.0] * 28),
-            "28 ليلة: كامل",
+            _bl(nights(_moved(22, 21))),
+            "ليلة تعبر الحد 22|21: الكتلة الأقدم صارت 3 → أولي",
             None,
-            ({"mean": 60.0, "sd": 0.0, "n": 28, "quality": "full"}, 1e-9),
+            _flat(16, "provisional"),
         ),
-        (6, _bl([60.0] * 40), "40 ليلة: آخر 28 فقط وn = 28"),
-        (7, _bl(_RHR7), "المتوسط 60 والانحراف المعياري للعيّنة sqrt(400/6)"),
-        (8, _bl([1000.0] * 10 + [60.0] * 28), "القيم القديمة خارج النافذة تُهمل"),
-        (9, _bl(_HRV7, True), "HRV على مقياس ln"),
-        (10, _bl(_RHR14), "14 ليلة بقيم متنوعة"),
-        (11, _bl(_RHR14 + _RHR14, True), "28 قيمة بمقياس ln: كامل"),
-        (12, _bl([52.5, 48.0, 61.25, 55.0, 49.5, 58.75, 50.0, 53.0], True), "كسور بمقياس ln"),
+        (
+            6,
+            _bl(nights(_moved(15, 14))),
+            "ليلة تعبر الحد 15|14: الكتلة الثانية صارت 3 → أولي",
+            None,
+            _flat(16, "provisional"),
+        ),
+        (
+            7,
+            _bl(nights(_moved(8, 7))),
+            "ليلة تعبر الحد 8|7: الكتلة الثالثة صارت 3 → أولي",
+            None,
+            _flat(16, "provisional"),
+        ),
+        (
+            8,
+            _bl([night(29, OUTSIDE), *nights(_FULL16), night(0, OUTSIDE)]),
+            "ليلتان خارج النافذة (اليوم − 29، واليوم نفسه) تُهملان: الناتج كالحالة 004",
+            None,
+            _flat(16, "full"),
+        ),
+        (
+            9,
+            _bl([night(30, OUTSIDE), night(29, OUTSIDE), *nights(range(1, 7)), night(0, OUTSIDE)]),
+            "6 في النافذة و3 خارجها: ما زال null",
+            None,
+            _NO_BASELINE,
+        ),
+        (
+            10,
+            _bl(nights(range(1, 25))),
+            "24 ليلة متتالية حتى أمس: الكتلة الأقدم فيها 3 → أولي",
+            None,
+            _flat(24, "provisional"),
+        ),
+        (
+            11,
+            _bl(nights(range(1, 26))),
+            "25 ليلة متتالية حتى أمس: الكتلة الأقدم بلغت 4 → كامل",
+            None,
+            _flat(25, "full"),
+        ),
+        (
+            12,
+            _bl(nights(range(5, 29))),
+            "24 متتالية من أقدم النافذة: الكتلة الأحدث فيها 3 → أولي",
+            None,
+            _flat(24, "provisional"),
+        ),
+        (
+            13,
+            _bl(nights(range(4, 29))),
+            "25 متتالية من أقدم النافذة: كامل",
+            None,
+            _flat(25, "full"),
+        ),
+        (14, _bl(nights(range(1, 29))), "النافذة كلها: n = 28 وكامل", None, _flat(28, "full")),
+        (
+            15,
+            _bl([*nights(range(29, 40), OUTSIDE), *nights(range(1, 29)), night(0, OUTSIDE)]),
+            "40 ليلة متتالية (11 قبل النافذة واليوم نفسه): n = 28 فقط",
+            None,
+            _flat(28, "full"),
+        ),
+        (
+            16,
+            _bl(nights(_WINDOW_EDGES)),
+            "طرفا النافذة (اليوم − 28 واليوم − 1) يُحسبان: 7 ليالٍ",
+            None,
+            _flat(7, "provisional"),
+        ),
+        (
+            17,
+            _bl(nights((29, 27, 20, 14, 9, 2, 1))),
+            "الحالة 016 وأقدم لياليها أُزيحت إلى اليوم − 29: 6 في النافذة → null",
+            None,
+            _NO_BASELINE,
+        ),
+        (
+            18,
+            _bl(nights((28, 27, 20, 14, 9, 2, 0))),
+            "الحالة 016 وأحدث لياليها أُزيحت إلى اليوم نفسه: 6 في النافذة → null",
+            None,
+            _NO_BASELINE,
+        ),
+        (
+            19,
+            _bl(nights(_FULL16[:-1])),
+            "4 و4 و4 و3: كتلة واحدة ناقصة تكفي للأولي",
+            None,
+            _flat(15, "provisional"),
+        ),
+        (
+            20,
+            _bl(nights(range(1, 22))),
+            "21 ليلة والكتلة الأقدم فارغة: أولي",
+            None,
+            _flat(21, "provisional"),
+        ),
+        (
+            21,
+            _bl(valued(_RHR7)),
+            "المتوسط 60 والانحراف المعياري للعيّنة sqrt(400/6)",
+            None,
+            ({"mean": 60.0, "sd": 8.16496580927726, "n": 7, "quality": "provisional"}, 1e-9),
+        ),
+        (22, _bl(varied(_FULL16)), "16 ليلة بقيم متنوعة: كامل"),
+        (
+            23,
+            _bl([night(29, OUTSIDE), *varied(_FULL16), night(0, OUTSIDE)]),
+            "الحالة 022 مع ليلتين خارج النافذة: المتوسط والانحراف لا يتغيران",
+        ),
+        (24, _bl(list(reversed(varied(_FULL16)))), "الحالة 022 بترتيب معكوس (الأحدث أولاً)"),
+        (
+            25,
+            _bl(valued(_HRV7), log=True),
+            "HRV على مقياس ln: المتوسط ≈ 3.942236 والانحراف ≈ 0.166165",
+            None,
+            ({"mean": 3.942236, "sd": 0.166165, "n": 7, "quality": "provisional"}, 1e-6),
+        ),
+        (26, _bl(varied(_FULL16, base=42.5), log=True), "16 ليلة بمقياس ln: كامل"),
+        (
+            27,
+            _bl(varied(range(1, 26), day=date(2028, 3, 15)), day=date(2028, 3, 15)),
+            "25 ليلة متتالية تعبر 2028-02-29: كامل",
+        ),
+        (
+            28,
+            _bl(nights(_WINDOW_EDGES, day=LEAP_EDGE_DAY), day=LEAP_EDGE_DAY),
+            "أقدم يوم في النافذة هو 2028-02-29 ويُحسب",
+            None,
+            _flat(7, "provisional"),
+        ),
+        (
+            29,
+            _bl(nights((29, 27, 20, 14, 9, 2, 1), day=LEAP_EDGE_DAY), day=LEAP_EDGE_DAY),
+            "ليلة 2028-02-28 قبل النافذة بيوم: 6 في النافذة → null",
+            None,
+            _NO_BASELINE,
+        ),
     ],
 )
 
