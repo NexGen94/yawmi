@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from uuid import UUID, uuid4
 
 import asyncpg
@@ -1148,11 +1148,43 @@ async def test_an_empty_pull_echoes_the_since_it_was_given(
     assert datetime.fromisoformat(page["next_since"]) == future
 
 
+@pytest.fixture
+async def no_events(backend: Backend, iphone: Device) -> AsyncIterator[None]:
+    """An empty `yawmi.events` for one test, without touching what other tests rely on.
+
+    A shared Postgres database may already hold events (other modules leave theirs behind).
+    The pool the routes use is swapped for one connection that sits in a transaction which
+    truncates the table; the rollback restores every row, so nothing leaks into other tests,
+    whatever their order. The in-memory backend starts empty and needs nothing.
+    """
+    if not isinstance(backend, PostgresBackend):
+        yield
+        return
+    async with backend.pool.acquire() as conn:
+        transaction = conn.transaction()
+        await transaction.start()
+        try:
+            await conn.execute("TRUNCATE yawmi.events CASCADE")
+            set_pool(cast(Any, _OneConnection(conn)))
+            yield
+        finally:
+            set_pool(backend.pool)
+            await transaction.rollback()
+
+
+class _OneConnection:
+    """Just enough of `asyncpg.Pool` for the read paths: every call runs on one connection."""
+
+    def __init__(self, conn: asyncpg.Connection) -> None:
+        self._conn = conn
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
+
 async def test_pull_without_a_cursor_and_without_events_has_a_null_cursor(
-    client: httpx.AsyncClient, backend: Backend, iphone: Device
+    client: httpx.AsyncClient, iphone: Device, no_events: None
 ) -> None:
-    if backend.store is None:
-        pytest.skip("a shared Postgres database may already hold events")
     page = await pull(client, iphone)
     assert page == {"events": [], "next_since": None}
 
