@@ -15,6 +15,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import importlib
 import json
 import os
 import re
@@ -1055,3 +1056,64 @@ async def test_role_can_log_in_with_the_supplied_password(
         assert await api.fetchval("SELECT count(*) FROM raqib.goals") == 0
     finally:
         await api.close()
+
+
+# ---------------------------------------------------------------------------
+# Grant coverage (C-1(b)): every statement of every store, planned as yawmi_api
+# ---------------------------------------------------------------------------
+
+STORE_MODULES = (
+    "yawmi.events.store",
+    "yawmi.habits.store",
+    "yawmi.today.reader",
+    "yawmi.push.store",
+    "yawmi.health.store",
+    "yawmi.ai.store",
+    "yawmi.auth.pg_store",
+)
+_SQL_START = re.compile(r"\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b", re.IGNORECASE)
+
+
+def store_sql() -> dict[str, str]:
+    """Every module-level SQL string of the stores, by `module.NAME`."""
+    found: dict[str, str] = {}
+    for name in STORE_MODULES:
+        module = importlib.import_module(name)
+        for attr, value in vars(module).items():
+            if isinstance(value, str) and _SQL_START.match(value):
+                found[f"{name}.{attr}"] = value
+    return found
+
+
+def test_every_store_module_has_named_sql_to_check():
+    sql = store_sql()
+    for module in STORE_MODULES:
+        assert any(key.startswith(module + ".") for key in sql), module
+    # the AI store's statements were inline; they are named now so the check can reach them
+    for name in ("_LOCK", "_GET_CLOSURE", "_INSERT_INSIGHT", "_LIST_REVIEWS"):
+        assert f"yawmi.ai.store.{name}" in sql
+    assert "yawmi.auth.pg_store._EXPIRE_PAIRING_CODES" in sql
+    assert "yawmi.auth.pg_store._LIST_DEVICES" in sql
+
+
+@needs_db
+async def test_yawmi_api_can_plan_every_store_statement(migrated: asyncpg.Connection):
+    """`EXPLAIN (GENERIC_PLAN)` checks privileges (columns included) without running anything.
+
+    Every failure is collected, so one run names every missing grant or misread column.
+    """
+    problems: list[str] = []
+    await migrated.execute("SET ROLE yawmi_api")
+    await migrated.execute("SET search_path = yawmi")  # as the pool does
+    try:
+        for key, sql in sorted(store_sql().items()):
+            try:
+                await migrated.execute(f"EXPLAIN (GENERIC_PLAN) {sql}")
+            except pgerr.InsufficientPrivilegeError as exc:
+                problems.append(f"{key}: insufficient_privilege: {exc}")
+            except asyncpg.PostgresError as exc:
+                problems.append(f"{key}: {type(exc).__name__}: {exc}")
+    finally:
+        await migrated.execute("RESET search_path")
+        await migrated.execute("RESET ROLE")
+    assert problems == []

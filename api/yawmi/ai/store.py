@@ -82,6 +82,23 @@ class InMemoryInsightStore:
 
 _COLUMNS = "id, kind, day, provider, model, request_hash, lines, question, source_ids, priorities, created_at"
 
+# Every statement is a named constant, so the grant-coverage test can plan each one as yawmi_api.
+_LOCK = "SELECT pg_advisory_xact_lock($1, $2)"
+_GET_CLOSURE = (
+    f"SELECT {_COLUMNS} FROM yawmi.ai_insights WHERE kind = $1 AND day = $2"
+    " ORDER BY created_at, id LIMIT 1"
+)
+_INSERT_INSIGHT = (
+    "INSERT INTO yawmi.ai_insights (id, kind, day, provider, model, request_hash, lines,"
+    " question, source_ids, priorities)"
+    " VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb, $10::jsonb)"
+    f" RETURNING {_COLUMNS}"
+)
+_LIST_REVIEWS = (
+    f"SELECT {_COLUMNS} FROM yawmi.ai_insights WHERE kind = $1"
+    " AND ($2::date IS NULL OR day < $2) ORDER BY day DESC, created_at DESC, id LIMIT $3"
+)
+
 
 def _from_record(row: asyncpg.Record) -> StoredInsight:
     response = InsightResponse.model_validate(
@@ -109,31 +126,18 @@ class AsyncpgInsightStore:
         self._pool = pool
 
     async def get_closure(self, day: date) -> StoredInsight | None:
-        row = await self._pool.fetchrow(
-            f"SELECT {_COLUMNS} FROM yawmi.ai_insights WHERE kind = $1 AND day = $2"
-            " ORDER BY created_at, id LIMIT 1",
-            CLOSURE_KIND,
-            day,
-        )
+        row = await self._pool.fetchrow(_GET_CLOSURE, CLOSURE_KIND, day)
         return None if row is None else _from_record(row)
 
     async def save_closure(self, insight: StoredInsight) -> StoredInsight:
         r = insight.response
         async with self._pool.acquire() as conn, conn.transaction():
-            await conn.execute("SELECT pg_advisory_xact_lock($1, $2)", *CLOSURE_LOCK_KEYS)
-            row = await conn.fetchrow(
-                f"SELECT {_COLUMNS} FROM yawmi.ai_insights WHERE kind = $1 AND day = $2"
-                " ORDER BY created_at, id LIMIT 1",
-                CLOSURE_KIND,
-                insight.day,
-            )
+            await conn.execute(_LOCK, *CLOSURE_LOCK_KEYS)
+            row = await conn.fetchrow(_GET_CLOSURE, CLOSURE_KIND, insight.day)
             if row is not None:
                 return _from_record(row)
             row = await conn.fetchrow(
-                "INSERT INTO yawmi.ai_insights (id, kind, day, provider, model, request_hash, lines,"
-                " question, source_ids, priorities)"
-                " VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb, $10::jsonb)"
-                f" RETURNING {_COLUMNS}",
+                _INSERT_INSIGHT,
                 insight.id,
                 insight.kind,
                 insight.day,
@@ -149,11 +153,5 @@ class AsyncpgInsightStore:
             return _from_record(row)
 
     async def list_reviews(self, kind: str, limit: int, before: date | None) -> list[StoredInsight]:
-        rows = await self._pool.fetch(
-            f"SELECT {_COLUMNS} FROM yawmi.ai_insights WHERE kind = $1"
-            " AND ($2::date IS NULL OR day < $2) ORDER BY day DESC, created_at DESC, id LIMIT $3",
-            kind,
-            before,
-            limit,
-        )
+        rows = await self._pool.fetch(_LIST_REVIEWS, kind, before, limit)
         return [_from_record(r) for r in rows]
