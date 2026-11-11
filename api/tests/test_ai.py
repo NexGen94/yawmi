@@ -63,7 +63,7 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def make_settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
         "database_url": "postgresql://yawmi_api@localhost:5432/raqib",
-        "jwt_secret": "test-secret",
+        "jwt_secret": "test-secret-for-unit-tests-only-0123456789",
         "anthropic_api_key": FAKE_KEY,
         "deepseek_api_key": FAKE_DEEPSEEK_KEY,
         **overrides,

@@ -9,10 +9,11 @@ from pydantic import SecretStr, ValidationError
 
 from yawmi import settings as settings_module
 from yawmi.db import pool as pool_module
+from yawmi.push.hosts import DEFAULT_PUSH_HOSTS
 from yawmi.settings import Settings
 
 FAKE_DSN = "postgresql://yawmi_api@localhost:5432/raqib"
-FAKE_JWT = "test-secret"
+FAKE_JWT = "test-secret-for-unit-tests-only-0123456789"
 
 
 @pytest.fixture(autouse=True)
@@ -198,3 +199,54 @@ def test_default_pool_leaves_a_connection_for_the_cli_and_the_loader() -> None:
     default = inspect.signature(pool_module.create_pool).parameters["max_size"].default
     assert default == 4
     assert default < limits.pop()
+
+
+# --- push_hosts edge cases (I-12) --------------------------------------------------------------
+
+
+def _with(**extra: object) -> Settings:
+    return Settings(database_url=FAKE_DSN, jwt_secret=SecretStr("j" * 32), **extra)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("text", [",", ", ", " , ,", "[]"])
+def test_an_explicit_but_empty_push_host_list_means_the_default_list(
+    monkeypatch: pytest.MonkeyPatch, text: str
+) -> None:
+    """A stray comma must not empty the allow-list (every subscription would be dropped)."""
+    monkeypatch.setenv("YAWMI_PUSH_HOSTS", text)
+    on = _with(push_enabled=True)
+    assert on.push_hosts == list(DEFAULT_PUSH_HOSTS)
+    assert len(on.push_hosts) == 4
+
+
+def test_an_empty_list_passed_in_code_also_means_the_default_list() -> None:
+    assert _with(push_hosts=[]).push_hosts == list(DEFAULT_PUSH_HOSTS)
+
+
+@pytest.mark.parametrize("text", ["[1]", '["push.apple.com", 2]', "[null]", '[["a.b"]]'])
+def test_a_non_string_push_host_is_a_malformed_entry(
+    monkeypatch: pytest.MonkeyPatch, text: str
+) -> None:
+    monkeypatch.setenv("YAWMI_PUSH_HOSTS", text)
+    off = _with()  # push off: the API starts and the entry is left out
+    assert off.push_enabled is False
+    assert all(isinstance(h, str) for h in off.push_hosts)
+    with pytest.raises(ValidationError, match="push_hosts"):
+        _with(push_enabled=True)
+
+
+# --- jwt_secret length (I-14) ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("length", [0, 1, 16, 31])
+def test_a_jwt_secret_shorter_than_32_characters_is_refused(length: int) -> None:
+    secret = "k" * length
+    with pytest.raises(ValidationError, match="jwt_secret") as exc:
+        Settings(database_url=FAKE_DSN, jwt_secret=SecretStr(secret))  # type: ignore[arg-type]
+    if secret:
+        assert secret not in str(exc.value)
+
+
+def test_a_jwt_secret_of_32_characters_is_accepted() -> None:
+    s = Settings(database_url=FAKE_DSN, jwt_secret=SecretStr("k" * 32))  # type: ignore[arg-type]
+    assert len(s.jwt_secret.get_secret_value()) == 32
