@@ -316,7 +316,7 @@ class PostgresBackend:
                     await self.pool.execute(
                         "INSERT INTO raqib.cycles (cycle_no, stage_no, start_date, end_date,"
                         " review_start, review_end, theme, gate) VALUES"
-                        " ($1, 1, $2, $3, $3 + 1, $4, 'موضوع', 'بوابة')",
+                        " ($1, 1, $2, $3, $3::date + 1, $4, 'موضوع', 'بوابة')",
                         row.cycle_no,
                         row.start_date,
                         row.end_date,
