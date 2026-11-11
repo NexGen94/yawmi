@@ -104,7 +104,8 @@ export function checkHabitSpec(spec: HabitSpec): void {
   if (spec.endDay !== null && toOrdinal(spec.endDay) < start) {
     throw new RangeError('the end day is before the start day');
   }
-  const polarity = spec.polarity ?? 'build';
+  // A missing key is build; an explicit null is refused, as the reference refuses None.
+  const polarity = spec.polarity === undefined ? 'build' : spec.polarity;
   if (!POLARITIES.has(polarity)) throw new RangeError(`unknown polarity: ${JSON.stringify(polarity)}`);
   if (polarity === 'abstain' && (spec.kind !== 'boolean' || spec.period !== 'day' || spec.targetPerPeriod !== 1)) {
     throw new RangeError('an abstain habit is a daily boolean with target 1');

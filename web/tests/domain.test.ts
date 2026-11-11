@@ -154,6 +154,7 @@ describe('habit specs the reference refuses', () => {
     ['bad anchor day on a schedule that does not use it', { anchorDay: '2026-02-30' }],
     ['bad end day', { endDay: '2026-11-31' }],
     ['unknown polarity', { polarity: 'quit' as HabitSpec['polarity'] }],
+    ['null polarity (the reference refuses None; only a missing key means build)', { polarity: null as unknown as HabitSpec['polarity'] }],
     ['abstain count habit', { polarity: 'abstain', kind: 'count', unit: 'session' }],
     ['abstain duration habit', { polarity: 'abstain', kind: 'duration', unit: 'min' }],
     ['abstain weekly habit', { polarity: 'abstain', period: 'week' }],
@@ -252,13 +253,13 @@ describe('abstain habits (rulesVersion 2, design 9.6)', () => {
     new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
   const slip = (day: string): HabitLog => ({ day, value: 1, status: 'done' });
 
-  /** The build twin: `done` on every kept day up to `today`, `skip`/`vacation` as they are. */
+  /** The build twin: `done` on every kept (scheduled, unmarked) day up to `today`, `skip`/`vacation` as they are. */
   function keptAsBuild(spec: HabitSpec, logs: HabitLog[], today: string): HabitLog[] {
     const last = spec.endDay !== null && spec.endDay < today ? spec.endDay : today;
     const marked = new Set(logs.filter((l) => l.status !== 'missed').map((l) => l.day));
     const kept: HabitLog[] = [];
     for (let day = spec.startDay; day <= last; day = addDays(day, 1)) {
-      if (!marked.has(day)) kept.push({ day, value: 1, status: 'done' });
+      if (!marked.has(day) && isScheduled(day, spec)) kept.push({ day, value: 1, status: 'done' });
     }
     return [...kept, ...logs.filter((l) => l.status === 'skip' || l.status === 'vacation')];
   }
@@ -288,10 +289,17 @@ describe('abstain habits (rulesVersion 2, design 9.6)', () => {
   ];
   const weekStarts: WeekStart[] = ['sat', 'sun', 'mon'];
 
-  it.for(slipSets)('at T equals the build twin on kept days at T + 1: %s', ([, logs]) => {
+  const schedules: [string, Partial<HabitSpec>][] = [
+    ['every day', {}],
+    ['Mon, Wed, Fri', { scheduleKind: 'weekdays', weekdayMask: 42 }],
+  ];
+
+  it.for(slipSets.flatMap(([name, logs]) => schedules.map(([label, schedule]) => [`${name}, ${label}`, logs, schedule] as const)))(
+    'at T equals the build twin on kept days at T + 1: %s',
+    ([, logs, schedule]) => {
     for (const endDay of ['2026-11-30', null]) {
-      const spec = { ...abstain, endDay };
-      const build = { ...twin, endDay };
+      const spec = { ...abstain, ...schedule, endDay };
+      const build = { ...twin, ...schedule, endDay };
       for (let offset = -2; offset < 34; offset += 1) {
         const today = addDays('2026-11-01', offset);
         const tomorrow = addDays(today, 1);
@@ -305,5 +313,34 @@ describe('abstain habits (rulesVersion 2, design 9.6)', () => {
         }
       }
     }
+    },
+  );
+
+  // Decided behaviours (review I-1). Abstain daily from 2026-11-01, today 2026-11-10 (a Tuesday).
+  const today = '2026-11-10';
+  const skipToday = { done: 0, target: 1, completion: 0, reached: false, expected: 0, onTrack: true, needPerDay: 1 };
+  const cleanToday = { done: 1, target: 1, completion: 1, reached: true, expected: 1, onTrack: true, needPerDay: 0 };
+  const unscheduledToday = { done: 0, target: 1, completion: 0, reached: false, expected: 0, onTrack: true, needPerDay: 0 };
+  const monWedFri: Partial<HabitSpec> = { scheduleKind: 'weekdays', weekdayMask: 42 };
+  const decided: [string, Partial<HabitSpec>, HabitLog[], object, number, number, number][] = [
+    // skip or vacation today is neutral, as for a build habit (controller ruling, fix round 1)
+    ['skip today', {}, [{ day: today, value: null, status: 'skip' }], skipToday, 9, 1, 0.381137],
+    ['vacation today', {}, [{ day: today, value: null, status: 'vacation' }], skipToday, 9, 1, 0.381137],
+    // a missed log is not a slip: the day is kept unless a done log is recorded
+    ['missed log today', {}, [{ day: today, value: null, status: 'missed' }], cleanToday, 10, 1, 0.41327],
+    // a slip and a skip on one day: the skip makes the day neutral
+    ['slip and skip today', {}, [slip(today), { day: today, value: null, status: 'skip' }], skipToday, 9, 1, 0.381137],
+    // unscheduled days are not kept, and a slip on one changes nothing
+    ['Mon, Wed, Fri with no logs', monWedFri, [], unscheduledToday, 4, 1, 0.192067],
+    ['Mon, Wed, Fri with a slip on Saturday', monWedFri, [slip('2026-11-07')], unscheduledToday, 4, 1, 0.192067],
+    ['Mon, Wed, Fri with a slip today (Tuesday)', monWedFri, [slip(today)], unscheduledToday, 4, 1, 0.192067],
+  ];
+
+  it.for(decided)('%s', ([, change, logs, progress, streakValue, adherenceValue, strengthValue]) => {
+    const spec = { ...abstain, ...change };
+    expect(periodProgress(spec, logs, today, 'sun')).toEqual(progress);
+    expect(streak(spec, logs, today, 'sun')).toBe(streakValue);
+    expect(adherence(spec, logs, today, 'sun')).toBe(adherenceValue);
+    expect(Math.abs(strength(spec, logs, today, 'sun') - strengthValue)).toBeLessThanOrEqual(1e-6);
   });
 });
