@@ -12,6 +12,19 @@ struct HabitModelTests {
         #expect(ScheduleKind.allCases.map(\.rawValue) == ["every_day", "weekdays", "every_n_days"])
         #expect(WeekStart.allCases.map(\.rawValue) == ["sat", "sun", "mon"])
         #expect(HabitLogStatus.allCases.map(\.rawValue) == ["done", "skip", "vacation", "missed"])
+        #expect(HabitPolarity.allCases.map(\.rawValue) == ["build", "abstain"])
+    }
+
+    @Test
+    func specPolarityIsBuildWhenMissingAndDecodesAbstain() throws {
+        let build = #"{"kind":"boolean","unit":null,"target_per_period":1,"period":"day","schedule_kind":"every_day","start_day":"2026-11-01"}"#
+        #expect(try JSONDecoder().decode(HabitSpec.self, from: Data(build.utf8)).polarity == .build)
+        let abstain = #"{"kind":"boolean","unit":null,"target_per_period":1,"period":"day","schedule_kind":"every_day","start_day":"2026-11-01","polarity":"abstain"}"#
+        let spec = try JSONDecoder().decode(HabitSpec.self, from: Data(abstain.utf8))
+        #expect(spec.polarity == .abstain)
+        #expect(try JSONDecoder().decode(HabitSpec.self, from: JSONEncoder().encode(spec)) == spec)
+        let unknown = #"{"kind":"boolean","target_per_period":1,"period":"day","schedule_kind":"every_day","start_day":"2026-11-01","polarity":"quit"}"#
+        #expect(throws: DecodingError.self) { try JSONDecoder().decode(HabitSpec.self, from: Data(unknown.utf8)) }
     }
 
     @Test

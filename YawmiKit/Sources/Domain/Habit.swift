@@ -28,6 +28,12 @@ public enum HabitLogStatus: String, Codable, Sendable, Hashable, CaseIterable {
     case done, skip, vacation, missed
 }
 
+/// rulesVersion 2 (design 9.6): `abstain` is a daily boolean habit with target 1 whose `done` log
+/// is a slip; every scheduled day up to and including today is kept unless a slip is logged.
+public enum HabitPolarity: String, Codable, Sendable, Hashable, CaseIterable {
+    case build, abstain
+}
+
 /// A habit as the rules need it (the columns of `yawmi.habits` that matter for the maths).
 ///
 /// - `targetPerPeriod` is in the habit's unit and greater than zero.
@@ -35,6 +41,8 @@ public enum HabitLogStatus: String, Codable, Sendable, Hashable, CaseIterable {
 /// - `everyN` and `anchorDay`: required for `.everyNDays`.
 /// - `endDay`: the last day of a challenge with an end, `nil` for an open habit.
 /// - Weekly and monthly habits take `.everyDay` scheduling only.
+/// - `polarity`: `.build` (the default, and what a missing key decodes to) or `.abstain`, which
+///   must be a daily boolean with target 1.
 ///
 /// Unlike the Python reference this type does not validate on construction: invalid specs are
 /// rejected by the server, and the rules treat the vectors' inputs as already valid.
@@ -49,6 +57,7 @@ public struct HabitSpec: Codable, Sendable, Hashable {
     public var anchorDay: DayKey?
     public var startDay: DayKey
     public var endDay: DayKey?
+    public var polarity: HabitPolarity
 
     public init(
         kind: HabitKind,
@@ -60,7 +69,8 @@ public struct HabitSpec: Codable, Sendable, Hashable {
         everyN: Int?,
         anchorDay: DayKey?,
         startDay: DayKey,
-        endDay: DayKey?
+        endDay: DayKey?,
+        polarity: HabitPolarity = .build
     ) {
         self.kind = kind
         self.unit = unit
@@ -72,10 +82,11 @@ public struct HabitSpec: Codable, Sendable, Hashable {
         self.anchorDay = anchorDay
         self.startDay = startDay
         self.endDay = endDay
+        self.polarity = polarity
     }
 
     private enum CodingKeys: String, CodingKey {
-        case kind, unit, period
+        case kind, unit, period, polarity
         case targetPerPeriod = "target_per_period"
         case scheduleKind = "schedule_kind"
         case weekdayMask = "weekday_mask"
@@ -110,7 +121,8 @@ public struct HabitSpec: Codable, Sendable, Hashable {
             everyN: try container.decodeIfPresent(Int.self, forKey: .everyN),
             anchorDay: try container.decodeIfPresent(DayKey.self, forKey: .anchorDay),
             startDay: try container.decode(DayKey.self, forKey: .startDay),
-            endDay: try container.decodeIfPresent(DayKey.self, forKey: .endDay)
+            endDay: try container.decodeIfPresent(DayKey.self, forKey: .endDay),
+            polarity: try container.decodeIfPresent(HabitPolarity.self, forKey: .polarity) ?? .build
         )
     }
 }

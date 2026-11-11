@@ -36,7 +36,23 @@ struct RuleInputTests {
         habit(schedule: .everyNDays, everyN: 0, anchor: start),
         habit(schedule: .everyNDays, everyN: 3),
         habit(end: DayKey(year: 2026, month: 10, day: 31)),
+        // rulesVersion 2: an abstain habit is a daily boolean with target 1 (design 9.6)
+        abstain(kind: .count),
+        abstain(kind: .duration),
+        abstain(period: .week),
+        abstain(period: .month),
+        abstain(target: 2),
+        abstain(target: 0.5),
     ]
+
+    private static func abstain(
+        kind: HabitKind = .boolean, period: HabitPeriod = .day, target: Double = 1, end: DayKey? = nil
+    ) -> HabitSpec {
+        HabitSpec(
+            kind: kind, unit: nil, targetPerPeriod: target, period: period, scheduleKind: .everyDay,
+            weekdayMask: nil, everyN: nil, anchorDay: nil, startDay: start, endDay: end, polarity: .abstain
+        )
+    }
 
     @Test(arguments: invalidSpecs)
     func everyRuleRefusesASpecTheReferenceRefuses(_ spec: HabitSpec) {
@@ -59,6 +75,8 @@ struct RuleInputTests {
         try Self.habit(schedule: .everyNDays, everyN: 2, anchor: DayKey(year: 2030, month: 1, day: 1)).validate()
         try Self.habit(end: Self.start).validate()
         try Self.habit(target: .infinity).validate()  // `not inf > 0` is False in the reference too
+        try Self.abstain().validate()
+        try Self.abstain(end: Self.today).validate()
     }
 
     @Test(arguments: [0, -1, Int.min])
@@ -160,5 +178,73 @@ struct RuleInputTests {
         let window = Scores.baselineWindow(for: DayKey(year: 2026, month: 3, day: 1))
         #expect(window.lowerBound == DayKey(year: 2026, month: 2, day: 1))
         #expect(window.upperBound == DayKey(year: 2026, month: 2, day: 28))
+    }
+
+    // MARK: Abstain habits (rulesVersion 2, design 9.6)
+
+    private static func day(_ offset: Int) -> DayKey { DayKey(epochDay: start.epochDay + offset) }
+
+    /// The build twin of an abstain habit: `done` on every kept day up to `today`, `skip` and
+    /// `vacation` as they are.
+    private static func keptAsBuild(_ spec: HabitSpec, _ logs: [HabitLog], _ today: DayKey) -> [HabitLog] {
+        let last = min(today.epochDay, spec.endDay?.epochDay ?? Int.max)
+        let marked = Set(logs.filter { $0.status != .missed }.map(\.day.epochDay))
+        let kept = stride(from: spec.startDay.epochDay, through: last, by: 1)
+            .filter { !marked.contains($0) }
+            .map { HabitLog(day: DayKey(epochDay: $0), value: 1, status: .done) }
+        return kept + logs.filter { $0.status == .skip || $0.status == .vacation }
+    }
+
+    static let slipSets: [[HabitLog]] = [
+        [HabitLog(day: day(0), value: 1, status: .done)],
+        [HabitLog(day: day(29), value: 1, status: .done)],
+        [2, 14, 27].map { HabitLog(day: day($0), value: 1, status: .done) },
+        [
+            HabitLog(day: day(6), value: 1, status: .done),
+            HabitLog(day: day(11), value: nil, status: .skip),
+            HabitLog(day: day(24), value: nil, status: .vacation),
+        ],
+    ]
+
+    /// Abstain at T equals its build twin on the kept days at T + 1, for strength, streak,
+    /// adherence and challenge progress, from before the start to past the end.
+    @Test(arguments: slipSets)
+    func abstainAtTodayEqualsTheBuildTwinTomorrow(_ logs: [HabitLog]) throws {
+        for end in [Self.day(29), nil] as [DayKey?] {
+            let spec = Self.abstain(end: end)
+            var twin = spec
+            twin.polarity = .build
+            for offset in -2..<34 {
+                let today = Self.day(offset)
+                let tomorrow = Self.day(offset + 1)
+                let build = Self.keptAsBuild(spec, logs, today)
+                for weekStart in WeekStart.allCases {
+                    let at = "\(today) \(weekStart) \(String(describing: end))"
+                    #expect(
+                        try HabitRules.strength(spec, logs: logs, today: today, weekStart: weekStart)
+                            == HabitRules.strength(twin, logs: build, today: tomorrow, weekStart: weekStart), "\(at)")
+                    #expect(
+                        try HabitRules.streak(spec, logs: logs, today: today, weekStart: weekStart)
+                            == HabitRules.streak(twin, logs: build, today: tomorrow, weekStart: weekStart), "\(at)")
+                    #expect(
+                        try HabitRules.adherence(spec, logs: logs, today: today, weekStart: weekStart)
+                            == HabitRules.adherence(twin, logs: build, today: tomorrow, weekStart: weekStart), "\(at)")
+                    #expect(
+                        try HabitRules.challengeProgress(spec, logs: logs, today: today, weekStart: weekStart)
+                            == HabitRules.challengeProgress(twin, logs: build, today: tomorrow, weekStart: weekStart), "\(at)")
+                }
+            }
+        }
+    }
+
+    @Test
+    func abstainTodayIsKeptUntilASlipIsLogged() throws {
+        let today = Self.day(9)
+        let clean = try HabitRules.periodProgress(Self.abstain(), logs: [], today: today, weekStart: .sun)
+        #expect(clean == PeriodProgress(done: 1, target: 1, completion: 1, reached: true, expected: 1, onTrack: true, needPerDay: 0))
+        let slipped = try HabitRules.periodProgress(
+            Self.abstain(), logs: [HabitLog(day: today, value: 1, status: .done)], today: today, weekStart: .sun
+        )
+        #expect(slipped == PeriodProgress(done: 0, target: 1, completion: 0, reached: false, expected: 1, onTrack: false, needPerDay: 1))
     }
 }
