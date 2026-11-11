@@ -1218,12 +1218,9 @@ export interface components {
             /** Habits Due */
             habits_due: components["schemas"]["HabitDue"][];
             health: components["schemas"]["TodayHealth"];
+            /** @description رؤية الصباح: سطران وحتى ثلاث أولويات بمعرّفات مصادرها. `null` إلى أن تُبنى خدمة توليدها */
+            insight: components["schemas"]["InsightResponse"] | null;
             plan: components["schemas"]["TodayPlan"];
-            /**
-             * Priorities
-             * @description تملؤها خدمة الذكاء الاصطناعي؛ فارغة حتى ذلك
-             */
-            priorities: string[];
         };
         /** TodayPlan */
         TodayPlan: {

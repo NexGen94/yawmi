@@ -2255,22 +2255,25 @@
           "health": {
             "$ref": "#/components/schemas/TodayHealth"
           },
+          "insight": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InsightResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "رؤية الصباح: سطران وحتى ثلاث أولويات بمعرّفات مصادرها. `null` إلى أن تُبنى خدمة توليدها"
+          },
           "plan": {
             "$ref": "#/components/schemas/TodayPlan"
-          },
-          "priorities": {
-            "description": "تملؤها خدمة الذكاء الاصطناعي؛ فارغة حتى ذلك",
-            "items": {
-              "type": "string"
-            },
-            "title": "Priorities",
-            "type": "array"
           }
         },
         "required": [
           "day",
           "habits_due",
-          "priorities",
+          "insight",
           "health",
           "plan"
         ],

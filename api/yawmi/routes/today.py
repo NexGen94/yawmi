@@ -2,7 +2,7 @@
 
 Both are read-only. The local day is the server's day in Asia/Riyadh. The pieces are built by
 `yawmi.today.assemble` from rows read through a `TodayReader`; this module only wires them.
-`priorities` stays empty until the insight service fills it. Habit indicators (each due
+`insight` (the morning insight, typed as the AI reply) is `null` until its generation exists. Habit indicators (each due
 habit's `period_progress`, each card's linked habits with their adherence) come from the pure
 rules in `yawmi.domain.habits`, with the week starting on the `week_start` setting.
 """
@@ -68,7 +68,7 @@ async def get_today(reader: TodayReaderDep, settings: SettingsDep) -> TodayOut:
             await reader.habit_logs(logs_first, logs_last),
             settings.week_start,
         ),
-        priorities=[],
+        insight=None,
         health=build_health(day, await reader.daily_metrics(first, last)),
         plan=build_plan(day, await reader.cycles(), await reader.milestones()),
     )
