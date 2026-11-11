@@ -1,0 +1,55 @@
+/* Design tokens (design section 5.1). The only file in src/ that may contain a color value:
+   every other stylesheet and component reads these variables. Logical properties only. */
+
+:root {
+  /* Surfaces and ink */
+  --c-bg: #F1FAEE;
+  --c-surface: #FFFFFF;
+  --c-ink: #1D3557;
+  --c-ink-2: #3B6A89;
+
+  /* Blues: bars, icons, charts, borders that carry meaning (blue), decorative tracks (light, pale) */
+  --c-blue: #457B9D;
+  --c-blue-light: #A8DADC;
+  --c-blue-pale: #DCEFEF;
+
+  /* The one red: what needs attention. Signal is for drawing only; text uses signal-ink */
+  --c-signal: #E63946;
+  --c-signal-ink: #B8232F;
+  --c-signal-bg: #FCE4E6;
+
+  /* Type: IBM Plex Sans Arabic 400 and 600, self-hosted by index.css, with system fallbacks */
+  --font: "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --fs-title: 28px;
+  --fs-section: 17px;
+  --fs-body: 15px;
+  --fs-note: 13px;
+  --fs-min: 11px;
+  --fs-num: 22px;
+  --fs-num-lg: 56px;
+  --lh: 1.5;
+
+  /* Spacing, multiples of 4 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 40px;
+
+  /* Corners */
+  --radius-card: 20px;
+  --radius-hero: 28px;
+  --radius-pill: 999px;
+
+  /* Smallest tap target, and the shell */
+  --hit: 44px;
+  --sidebar-w: 248px;
+  --content-max: 1120px;
+
+  /* Focus ring: blue on light surfaces, light blue on the ink surfaces (sidebar, focus, breathing) */
+  --focus: 0 0 0 3px #457B9D;
+  --focus-on-ink: 0 0 0 3px #A8DADC;
+}
