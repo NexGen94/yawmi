@@ -44,7 +44,17 @@ PAGE = "t10b-"
 KPI = "t10b-kpi"
 # real KPI codes: the prefill rule of owner decision 5 is keyed by them (`kpi_prefill_kind`)
 BOOKS = "books_done"  # cumulative: 12 books over the whole horizon, `monthly` in the mirror
-REAL_KPIS = ("books_done", "english_minutes", "steps_avg", "consumer_debt_sar", "weight_kg")
+REAL_KPIS = (
+    "books_done",
+    "english_minutes",
+    "steps_avg",
+    "consumer_debt_sar",
+    "weight_kg",
+    "strength_sessions",
+    "sleep_7h_nights",
+    "emergency_months",
+    "side_income_sar",
+)
 SYSTEM_START = date(2026, 11, 1)
 SYSTEM_LOCKED = "عادة نظامية: يُعدَّل المرسى والتذكيرات فقط"
 
@@ -849,7 +859,42 @@ async def test_a_per_period_kpi_prefills_its_own_target_when_the_periods_match(
             response = await client.post(
                 f"/v1/goals/{PAGE}{ref}/to-habit", json=payload, headers=auth()
             )
-            assert kind_period_target(response) == ("count", "week", 285.0), (ref, payload)
+            assert kind_period_target(response) == ("duration", "week", 285.0), (ref, payload)
+            assert response.json()["unit"] == "min"
+    saved = await client.post(
+        "/v1/habits", json={**response.json(), "title_ar": TITLE + "إنجليزية"}, headers=auth()
+    )
+    assert saved.status_code == 201, saved.text
+
+
+@pytest.mark.parametrize(
+    ("code", "unit", "target", "habit_unit"),
+    [
+        ("strength_sessions", "جلسة", "2", "session"),
+        ("sleep_7h_nights", "ليلة", "5", ""),
+    ],
+)
+async def test_a_per_period_count_maps_the_kpi_unit_when_the_habit_has_one(
+    client: httpx.AsyncClient,
+    backend: Backend,
+    code: str,
+    unit: str,
+    target: str,
+    habit_unit: str,
+) -> None:
+    await backend.add_card(CardRef("بطاقة", ()), PAGE + "card")
+    await backend.add_kpi(code, target, [], unit=unit, frequency="weekly")
+    response = await client.post(
+        f"/v1/goals/{PAGE}card/to-habit", json={"kpi_code": code, "period": "week"}, headers=auth()
+    )
+    assert kind_period_target(response) == ("count", "week", float(target))
+    assert response.json()["unit"] == habit_unit
+    saved = await client.post(
+        "/v1/habits",
+        json={**response.json(), "title_ar": TITLE + "مسودة"},
+        headers=auth(),
+    )
+    assert saved.status_code == 201, saved.text
 
 
 @pytest.mark.parametrize("period", ["month", "day"])
@@ -873,6 +918,8 @@ async def test_a_per_period_kpi_has_no_numeric_prefill_for_another_period(
         ("steps_avg", "8000", "up", "خطوة", "weekly", "week"),  # an average
         ("consumer_debt_sar", "0", "down", "ريال", "monthly", "month"),  # going down
         ("weight_kg", None, "band", "كجم", "weekly", "week"),  # a band
+        ("emergency_months", "6", "up", "شهر", "monthly", "month"),  # a level
+        ("side_income_sar", "6000", "up", "ريال", "monthly", "month"),  # money, not an act
     ],
 )
 async def test_rates_averages_and_non_up_kpis_have_no_numeric_prefill(

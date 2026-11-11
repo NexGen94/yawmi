@@ -9,10 +9,12 @@ milestone (or the first outcome of the card). With a `kpi_code`, the KPI's type 
   deadline (the milestone's `due_date`, else the outcome's `target_date` in `raqib.goals`), a
   `count` habit whose target per period spreads what is left (the target minus the newest
   reading on or before today, or 0) over the periods up to the deadline (`goal_prefill`);
-* a count per period (direction `up`, one target, daily/weekly/monthly, not a rate or average):
-  a `count` habit whose target is the KPI's own `target` when the requested `period` matches
-  the KPI's frequency (`per_period_prefill`); the reading and the deadline play no part;
-* anything else (down, band, rates, averages, levels), or a period that does not match:
+* a count per period (direction `up`, one target, daily/weekly/monthly, not a rate, average,
+  level or sum of money): a habit whose target is the KPI's own `target` when the requested
+  `period` matches the KPI's frequency (`per_period_prefill`); the reading and the deadline play
+  no part. A KPI in minutes gives a `duration` habit in `min`, one in sessions a `count` in
+  `session`, any other a `count` with no unit (`kpi_habit_shape`);
+* anything else (down, band, rates, averages, levels, money), or a period that does not match:
   no numeric target.
 
 Without a numeric target the draft is a daily yes/no habit with target 1. Nothing is written:
@@ -35,7 +37,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from yawmi.auth.deps import SettingsDep, require_kind
 from yawmi.db.pool import get_pool
 from yawmi.domain.days import DEFAULT_TZ, day_key
-from yawmi.domain.habits import goal_prefill, kpi_prefill_kind, per_period_prefill
+from yawmi.domain.habits import (
+    HabitKind,
+    goal_prefill,
+    kpi_habit_shape,
+    kpi_prefill_kind,
+    per_period_prefill,
+)
 from yawmi.domain.periods import Period, WeekStart
 from yawmi.errors import FORBIDDEN, INVALID, UNAUTHORIZED, ErrorDetail
 from yawmi.events import models as event_models
@@ -97,8 +105,8 @@ async def _kpi_target(
     today: date,
     deadline: date | None,
     week_start: WeekStart,
-) -> float | None:
-    """The habit's numeric target for the KPI, or `None` for the daily yes/no draft.
+) -> tuple[HabitKind, str, float] | None:
+    """The habit's kind, unit and numeric target for the KPI, or `None` for the yes/no draft.
 
     A target that is not a finite number above zero and at most `MAX_TARGET` is `None` too, so a
     draft is always one that `POST /v1/habits` accepts.
@@ -107,6 +115,7 @@ async def _kpi_target(
     if not math.isfinite(goal):
         return None
     value: float | None = None
+    kind, unit = "count", ""
     match kpi_prefill_kind(code, kpi.direction, kpi.unit, goal, kpi.frequency):
         case "cumulative":
             if deadline is None:
@@ -120,9 +129,10 @@ async def _kpi_target(
             value = float(goal_prefill(goal, reading, today, deadline, period, week_start))
         case "per_period":  # the reading and the deadline play no part
             value = per_period_prefill(goal, kpi.frequency, period)
+            kind, unit = kpi_habit_shape(kpi.unit)
     if value is None or not 0 < value <= MAX_TARGET:
         return None
-    return value
+    return kind, unit, value
 
 
 @router.post(
@@ -131,9 +141,10 @@ async def _kpi_target(
     description=(
         "`ref` معرّف صفحة محطة أو بطاقة في المرآة. مع مؤشر تراكمي (مجموع يُبلغ بالموعد) وموعد: "
         "عادة عدّ هدفها في الفترة = ⌈(الهدف − آخر قراءة) ÷ عدد الفترات حتى الموعد⌉. ومع مؤشر عدّ "
-        "في الفترة (صاعد بهدف واحد، يومي أو أسبوعي أو شهري، وليس نسبة ولا متوسطاً): عادة عدّ هدفها "
-        "هدف المؤشر نفسه إن طابقت الفترة تواتره. وغير ذلك (نازل، نطاق، نسبة، متوسط، مستوى، أو "
-        "فترة لا تطابق): عادة يومية بنعم أو لا هدفها 1. لا تغيّر نسبة إنجاز Notion."
+        "في الفترة (صاعد بهدف واحد، يومي أو أسبوعي أو شهري، وليس نسبة ولا متوسطاً ولا مستوى ولا "
+        "مالاً): عادة هدفها هدف المؤشر نفسه إن طابقت الفترة تواتره، مدةً بالدقائق لمؤشر بالدقائق "
+        "وعدّاً لغيره. وغير ذلك (نازل، نطاق، نسبة، متوسط، مستوى، مال، أو فترة لا تطابق): عادة "
+        "يومية بنعم أو لا هدفها 1. لا تغيّر نسبة إنجاز Notion."
     ),
     responses={**NOT_FOUND, **INVALID},
 )
@@ -159,7 +170,7 @@ async def to_habit(
         deadline = await mirror.outcome_deadline(outcome)
 
     today: date = day_key(event_models.server_now(), DEFAULT_TZ)
-    kind, period, target = "boolean", "day", 1.0
+    kind, unit, period, target = "boolean", "", "day", 1.0
     if request.kpi_code is not None:
         kpi = await mirror.kpi(request.kpi_code)
         if kpi is None:
@@ -170,14 +181,15 @@ async def to_habit(
             mirror, request.kpi_code, kpi, request.period, today, deadline, settings.week_start
         )
         if prefill is not None:
-            kind, period, target = "count", request.period, prefill
+            kind, unit, target = prefill
+            period = request.period
     return HabitDraft(
         title_ar=title.strip()[:MAX_TITLE].strip() or DEFAULT_TITLE,
         goal_ref=ref,
         outcome=outcome,
         ac_ref=None,
         kind=kind,  # type: ignore[arg-type]
-        unit="",
+        unit=unit,  # type: ignore[arg-type]
         target_per_period=target,
         period=period,  # type: ignore[arg-type]
         schedule_kind="every_day",

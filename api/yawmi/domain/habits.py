@@ -477,11 +477,26 @@ KpiPrefillKind = Literal["cumulative", "per_period", "none"]
 # وتواترها في المرآة لا يدل عليه (`books_done` شهري وهدفه 12 كتاباً في المدى كله).
 CUMULATIVE_KPIS: frozenset[str] = frozenset({"measured_projects", "workshops_count", "books_done"})
 
-# مؤشرات اتجاهها صاعد ولها هدف واحد لكنها متوسط أو مستوى لا عدد في الفترة. وكل رمز ينتهي بـ`_pct`
-# وكل وحدة `%` نسبةٌ أيضاً.
+# مؤشرات اتجاهها صاعد ولها هدف واحد لكنها ليست عدد فعلٍ يتكرر في الفترة: متوسط (`steps_avg`)،
+# أو مستوى (`weight_kg`، `who5_raw`، `clarity_score`، و`emergency_months` أشهر مدّخرة)، أو مال لا
+# فعل (`side_income_sar`). وكل رمز ينتهي بـ`_pct` وكل وحدة `%` نسبةٌ أيضاً.
 RATE_OR_AVERAGE_KPIS: frozenset[str] = frozenset(
-    {"steps_avg", "weight_kg", "who5_raw", "clarity_score"}
+    {
+        "steps_avg",
+        "weight_kg",
+        "who5_raw",
+        "clarity_score",
+        "emergency_months",
+        "side_income_sar",
+    }
 )
+
+# وحدة المؤشر ← شكل مسودة العادة لمؤشر عدّ في الفترة: الدقائق مدة بوحدة `min`، والجلسات عدّ بوحدة
+# `session`، وما سواهما عدّ بلا وحدة (وحدات العادة: `''` و`session` للعدّ، و`min` و`hour` للمدة).
+_KPI_UNIT_SHAPE: dict[str, tuple[HabitKind, str]] = {
+    "دقيقة": ("duration", "min"),
+    "جلسة": ("count", "session"),
+}
 
 # تواتر المؤشر وفترة العادة التي تقابله.
 KPI_FREQUENCY_PERIOD: dict[str, Period] = {"daily": "day", "weekly": "week", "monthly": "month"}
@@ -499,7 +514,8 @@ def kpi_prefill_kind(
     1. `cumulative`: رمز من `CUMULATIVE_KPIS` وله هدف واحد. `goal_prefill` يوزّع
        (الهدف − آخر قراءة) على الفترات حتى الموعد.
     2. `per_period`: عدد في كل فترة: اتجاه `up` وهدف واحد وتواتر يومي أو أسبوعي أو شهري، وليس نسبة
-       ولا متوسطاً (لا وحدة `%`، ولا رمز ينتهي بـ`_pct`، ولا رمز من `RATE_OR_AVERAGE_KPIS`).
+       ولا متوسطاً ولا مستوى ولا مالاً (لا وحدة `%`، ولا رمز ينتهي بـ`_pct`، ولا رمز من
+       `RATE_OR_AVERAGE_KPIS`). وشكل المسودة من وحدة المؤشر (`kpi_habit_shape`).
        `per_period_prefill` يعطي هدف المؤشر نفسه إن طابقت فترةُ العادة تواترَه، وآخر قراءة لا تدخل.
     3. `none`: كل ما سواه (اتجاه `down` أو `band`، نسبة، متوسط، مستوى، تواتر الدورة): لا هدف رقمي،
        والمسودة عادة يومية بنعم أو لا.
@@ -520,3 +536,10 @@ def per_period_prefill(target: float, frequency: str, period: Period) -> float |
     (`day`↔`daily`، `week`↔`weekly`، `month`↔`monthly`)، وإلا `None` (لا تعبئة رقمية).
     """
     return float(target) if KPI_FREQUENCY_PERIOD.get(frequency) == period else None
+
+
+def kpi_habit_shape(unit: str | None) -> tuple[HabitKind, str]:
+    """نوع عادة مؤشر العدّ في الفترة ووحدتها من وحدة المؤشر: «دقيقة» مدة بـ`min` (285 دقيقة في
+    الأسبوع تبقى 285 دقيقة)، و«جلسة» عدّ بـ`session`، وغيرهما عدّ بلا وحدة.
+    """
+    return _KPI_UNIT_SHAPE.get((unit or "").strip(), ("count", ""))

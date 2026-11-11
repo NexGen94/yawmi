@@ -17,6 +17,7 @@ from yawmi.domain.habits import (
     adherence,
     challenge_progress,
     goal_prefill,
+    kpi_habit_shape,
     kpi_prefill_kind,
     per_period_prefill,
     period_progress,
@@ -887,9 +888,9 @@ EXPECTED_KIND = {
     "meditation_days": "per_period",
     "visualization_days": "per_period",
     "consumer_debt_sar": "none",  # اتجاه نازل
-    "emergency_months": "per_period",  # القاعدة كما صيغت: لا يستثنيها رمز ولا وحدة
+    "emergency_months": "none",  # مستوى: أشهر مدّخرة
     "savings_rate_pct": "none",
-    "side_income_sar": "per_period",
+    "side_income_sar": "none",  # مال لا فعل يتكرر
     "social_initiations": "per_period",
     "family_halfday": "per_period",
     "workshops_count": "cumulative",
@@ -928,6 +929,8 @@ def test_a_cumulative_kpi_without_a_single_target_has_no_prefill():
         ("weight_kg", "كجم", "up", 80, "weekly"),
         ("who5_raw", "نقطة", "up", 13, "monthly"),
         ("clarity_score", "1–10", "up", 8, "monthly"),
+        ("emergency_months", "شهر", "up", 6, "monthly"),  # مستوى
+        ("side_income_sar", "ريال", "up", 6000, "monthly"),  # مال
     ],
 )
 def test_rates_averages_levels_and_non_up_kpis_have_no_prefill(
@@ -941,6 +944,24 @@ def test_rates_averages_levels_and_non_up_kpis_have_no_prefill(
 )
 def test_a_per_period_kpi_prefills_its_own_target_when_the_periods_match(frequency, period):
     assert per_period_prefill(285, frequency, period) == 285.0
+
+
+@pytest.mark.parametrize(
+    ("unit", "shape"),
+    [
+        ("دقيقة", ("duration", "min")),  # english_minutes: 285 دقيقة في الأسبوع
+        (" دقيقة ", ("duration", "min")),
+        ("جلسة", ("count", "session")),  # strength_sessions, english_speaking
+        ("ليلة", ("count", "")),  # لا وحدة عادة تقابلها
+        ("يوم", ("count", "")),
+        ("مبادرة", ("count", "")),
+        ("نعم/لا", ("count", "")),
+        ("", ("count", "")),
+        (None, ("count", "")),
+    ],
+)
+def test_a_per_period_draft_takes_its_kind_and_unit_from_the_kpi_unit(unit, shape):
+    assert kpi_habit_shape(unit) == shape
 
 
 @pytest.mark.parametrize(
