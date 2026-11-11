@@ -25,6 +25,9 @@ struct HabitModelTests {
         #expect(try JSONDecoder().decode(HabitSpec.self, from: JSONEncoder().encode(spec)) == spec)
         let unknown = #"{"kind":"boolean","target_per_period":1,"period":"day","schedule_kind":"every_day","start_day":"2026-11-01","polarity":"quit"}"#
         #expect(throws: DecodingError.self) { try JSONDecoder().decode(HabitSpec.self, from: Data(unknown.utf8)) }
+        // the reference refuses polarity None: only a missing key means build
+        let null = #"{"kind":"boolean","target_per_period":1,"period":"day","schedule_kind":"every_day","start_day":"2026-11-01","polarity":null}"#
+        #expect(throws: DecodingError.self) { try JSONDecoder().decode(HabitSpec.self, from: Data(null.utf8)) }
     }
 
     @Test

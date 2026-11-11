@@ -42,7 +42,7 @@ public enum HabitPolarity: String, Codable, Sendable, Hashable, CaseIterable {
 /// - `endDay`: the last day of a challenge with an end, `nil` for an open habit.
 /// - Weekly and monthly habits take `.everyDay` scheduling only.
 /// - `polarity`: `.build` (the default, and what a missing key decodes to) or `.abstain`, which
-///   must be a daily boolean with target 1.
+///   must be a daily boolean with target 1. An explicit `null` does not decode.
 ///
 /// Unlike the Python reference this type does not validate on construction: invalid specs are
 /// rejected by the server, and the rules treat the vectors' inputs as already valid.
@@ -122,7 +122,8 @@ public struct HabitSpec: Codable, Sendable, Hashable {
             anchorDay: try container.decodeIfPresent(DayKey.self, forKey: .anchorDay),
             startDay: try container.decode(DayKey.self, forKey: .startDay),
             endDay: try container.decodeIfPresent(DayKey.self, forKey: .endDay),
-            polarity: try container.decodeIfPresent(HabitPolarity.self, forKey: .polarity) ?? .build
+            // a missing key is build; an explicit null is refused, as the reference refuses None
+            polarity: container.contains(.polarity) ? try container.decode(HabitPolarity.self, forKey: .polarity) : .build
         )
     }
 }
