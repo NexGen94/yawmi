@@ -118,13 +118,16 @@ _NEWEST_RECEIVED = "SELECT max(received_at) FROM yawmi.events"
 
 _KNOWN_HABITS = "SELECT code FROM yawmi.habits WHERE code = ANY($1::text[])"
 
-# last writer wins by event time: an older event arriving late changes nothing
+# One row per habit and day, whatever the device kind (I-10). The last writer wins by event
+# time, regardless of source: an older event arriving late changes nothing, a tie goes to the
+# later arrival, and `source` records the kind of the device that wrote the value kept.
 _UPSERT_HABIT_LOG = """
 INSERT INTO yawmi.habit_logs (id, habit_code, day, value, status, source, event_id, logged_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-ON CONFLICT (habit_code, day, source) DO UPDATE
+ON CONFLICT (habit_code, day) DO UPDATE
 SET value = excluded.value,
     status = excluded.status,
+    source = excluded.source,
     event_id = excluded.event_id,
     logged_at = excluded.logged_at
 WHERE excluded.logged_at >= yawmi.habit_logs.logged_at

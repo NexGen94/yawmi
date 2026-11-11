@@ -90,7 +90,7 @@ class HabitStore(Protocol):
         ...
 
     async def logs(self, code: str, first: date, last: date) -> list[LogRow]:
-        """The habit's logs, of every source, with `day` in `[first, last]`."""
+        """The habit's logs with `day` in `[first, last]`: one per day, whatever the device."""
         ...
 
 

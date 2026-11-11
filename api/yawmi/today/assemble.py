@@ -136,9 +136,9 @@ def build_habits_due(
     """Habits scheduled on `day`, in code order.
 
     A weekly or monthly habit is scheduled every day of its window (its target is spread over
-    the period), so it is listed every day. `done_today` is true when any source logged `done`
-    for it on `day`; `period_progress` is the domain's progress of the period holding `day`
-    (it needs the logs of `logs_window`).
+    the period), so it is listed every day. `done_today` is true when the day's log (one per
+    habit and day, whichever device wrote it last) is `done`; `period_progress` is the domain's
+    progress of the period holding `day` (it needs the logs of `logs_window`).
     """
     logs = list(logs)
     done = {log.habit_code for log in logs if log.day == day and log.status == "done"}

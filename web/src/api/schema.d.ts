@@ -110,7 +110,7 @@ export interface paths {
         put?: never;
         /**
          * استقبال دفعة أحداث (متكررة الأثر)
-         * @description حتى 500 حدثاً في الدفعة. معرّف الحدث هو مفتاح التكرار: إعادة إرسال الدفعة نفسها لا تضاعف شيئاً ولا تُرفض. `habit_logged` و`habit_skipped` و`habit_vacation` و`focus_ended` و`breath_ended` تُسقَط أيضاً إلى جداولها؛ بقية الأنواع تُحفظ في الأحداث فقط.
+         * @description حتى 500 حدثاً في الدفعة. معرّف الحدث هو مفتاح التكرار: إعادة إرسال الدفعة نفسها لا تضاعف شيئاً ولا تُرفض. `habit_logged` و`habit_skipped` و`habit_vacation` و`focus_ended` و`breath_ended` تُسقَط أيضاً إلى جداولها؛ بقية الأنواع تُحفظ في الأحداث فقط. للعادة سجل واحد في اليوم أياً كان الجهاز: الحدث الأحدث (`occurred_at`) يحلّ محل قيمة اليوم ولا تُجمع قيم الأجهزة، والحدث الأقدم الواصل متأخراً لا يغيّر شيئاً.
          */
         post: operations["post_events_v1_events_post"];
         delete?: never;

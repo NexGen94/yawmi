@@ -95,7 +95,7 @@ class TodayReader(Protocol):
         ...
 
     async def habit_logs(self, first: date, last: date) -> list[LogRow]:
-        """Habit logs of every source with `day` in `[first, last]`."""
+        """Habit logs with `day` in `[first, last]`: at most one per habit and day (I-10)."""
         ...
 
     async def linked_habits(self) -> list[HabitRow]:
@@ -103,7 +103,7 @@ class TodayReader(Protocol):
         ...
 
     async def habit_logs_of(self, codes: list[str], first: date, last: date) -> list[LogRow]:
-        """Logs of the habits `codes` only, of every source, with `day` in `[first, last]`."""
+        """Logs of the habits `codes` only, with `day` in `[first, last]`, one per day."""
         ...
 
     async def daily_metrics(self, first: date, last: date) -> list[MetricsRow]:

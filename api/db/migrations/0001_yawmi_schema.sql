@@ -121,6 +121,8 @@ CREATE TABLE yawmi.habit_reminders (
 
 CREATE INDEX habit_reminders_habit_code_idx ON yawmi.habit_reminders (habit_code);
 
+-- One row per habit and local day, whatever the device kind (I-10): a correction on any
+-- device replaces the day's value (the newest logged_at wins), values are never added up.
 CREATE TABLE yawmi.habit_logs (
   id uuid PRIMARY KEY,
   habit_code text NOT NULL REFERENCES yawmi.habits,
@@ -130,8 +132,11 @@ CREATE TABLE yawmi.habit_logs (
   source text NOT NULL,
   event_id uuid REFERENCES yawmi.events,
   logged_at timestamptz NOT NULL,
-  UNIQUE (habit_code, day, source)
+  UNIQUE (habit_code, day)
 );
+
+COMMENT ON COLUMN yawmi.habit_logs.source IS
+'Device kind of the last writer (iphone, watch, web); not part of the key.';
 
 CREATE INDEX habit_logs_day_idx ON yawmi.habit_logs (day);
 

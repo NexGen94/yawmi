@@ -149,7 +149,8 @@ class BreathEndedPayload(BaseModel):
 
 @dataclass(frozen=True)
 class HabitLog:
-    """Upsert into `habit_logs` on `(habit_code, day, source)`, last writer (`logged_at`) wins."""
+    """Upsert into `habit_logs` on `(habit_code, day)`: the newest `logged_at` wins, whatever
+    the device kind, and `source` becomes the kind of that last writer (I-10)."""
 
     event_id: "UUID"
     habit_code: str

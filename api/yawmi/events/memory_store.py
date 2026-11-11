@@ -1,9 +1,10 @@
 """In-memory `EventStore`: for tests and local experiments, never for production.
 
 It follows the Postgres store's semantics (idempotent ids, atomic batches, last-writer-wins on
-`(habit_code, day, source)`, habit existence checked only for new events, `received_at` strictly
-increasing, pages that never split a timestamp) so the HTTP tests can run without a database;
-the same API tests also run against Postgres when `TEST_DATABASE_URL` is set.
+`(habit_code, day)` whatever the device kind, habit existence checked only for new events,
+`received_at` strictly increasing, pages that never split a timestamp) so the HTTP tests can run
+without a database; the same API tests also run against Postgres when `TEST_DATABASE_URL` is
+set.
 """
 
 from collections.abc import Callable, Sequence
@@ -30,7 +31,8 @@ class InMemoryEventStore:
         self.clock = clock
         self.habits: set[str] = set()  # the habit codes that "exist"
         self.events: dict[UUID, StoredEvent] = {}
-        self.habit_logs: dict[tuple[str, date, str], HabitLog] = {}
+        # one row per habit and day (I-10); the row's `source` is its last writer
+        self.habit_logs: dict[tuple[str, date], HabitLog] = {}
         self.focus_sessions: list[FocusSession] = []
         self.breath_sessions: list[BreathSession] = []
 
@@ -71,7 +73,7 @@ class InMemoryEventStore:
             )
             intent = item.intent
             if isinstance(intent, HabitLog):
-                key = (intent.habit_code, intent.day, intent.source)
+                key = (intent.habit_code, intent.day)
                 current = self.habit_logs.get(key)
                 if current is None or intent.logged_at >= current.logged_at:
                     self.habit_logs[key] = intent

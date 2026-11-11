@@ -30,6 +30,8 @@ from pydantic import SecretStr
 from yawmi.auth.memory_store import InMemoryDeviceStore
 from yawmi.auth.tokens import issue_access
 from yawmi.db.pool import create_pool, set_pool
+from yawmi.domain.habits import HabitLog as HabitLogRule
+from yawmi.domain.habits import HabitSpec, period_progress
 from yawmi.events.memory_store import InMemoryEventStore
 from yawmi.events.models import EventIn, StoredEvent
 from yawmi.events.project import BreathSession, FocusSession, HabitLog, plan
@@ -48,6 +50,8 @@ from yawmi.events.store import (
 )
 from yawmi.main import create_app
 from yawmi.settings import Settings
+from yawmi.today.reader import AsyncpgTodayReader
+from yawmi.today.reader import LogRow as ReaderLogRow
 
 SECRET = "test-secret-for-unit-tests-only-0123456789"
 TTL = 900
@@ -56,6 +60,10 @@ FORBIDDEN = {"detail": "غير مسموح"}
 INVALID = "طلب غير صالح"
 
 NOON = "2026-11-10T09:00:00Z"  # 12:00 in Riyadh on 2026-11-10
+# the habit `new_habit` makes: a daily count with target 1 from 2026-01-01
+COUNT_DAILY = HabitSpec(
+    "count", None, 1.0, "day", "every_day", None, None, None, date(2026, 1, 1), None
+)
 
 
 def make_settings() -> Settings:
@@ -74,6 +82,7 @@ class LogRow:
     value: Decimal | None
     event_id: UUID | None
     logged_at: datetime
+    source: str
 
 
 class Backend(Protocol):
@@ -81,8 +90,9 @@ class Backend(Protocol):
 
     async def new_device(self, kind: str) -> UUID: ...
     async def new_habit(self) -> str: ...
-    async def habit_log(self, code: str, day: date, source: str) -> LogRow | None: ...
+    async def habit_log(self, code: str, day: date) -> LogRow | None: ...
     async def habit_log_count(self, code: str) -> int: ...
+    async def reader_logs(self, code: str) -> list[ReaderLogRow]: ...
     async def event_count(self, ids: list[UUID]) -> int: ...
     async def focus_rows(self, ids: list[UUID]) -> list[dict[str, Any]]: ...
     async def breath_rows(self, ids: list[UUID]) -> list[dict[str, Any]]: ...
@@ -108,16 +118,24 @@ class MemoryBackend:
         self.store.habits.add(code)
         return code
 
-    async def habit_log(self, code: str, day: date, source: str) -> LogRow | None:
+    async def habit_log(self, code: str, day: date) -> LogRow | None:
         assert self.store is not None
-        row = self.store.habit_logs.get((code, day, source))
+        row = self.store.habit_logs.get((code, day))
         if row is None:
             return None
-        return LogRow(row.status, row.value, row.event_id, row.logged_at)
+        return LogRow(row.status, row.value, row.event_id, row.logged_at, row.source)
 
     async def habit_log_count(self, code: str) -> int:
         assert self.store is not None
         return sum(1 for key in self.store.habit_logs if key[0] == code)
+
+    async def reader_logs(self, code: str) -> list[ReaderLogRow]:
+        assert self.store is not None
+        return [
+            ReaderLogRow(log.habit_code, log.day, log.value, log.status)
+            for log in self.store.habit_logs.values()
+            if log.habit_code == code
+        ]
 
     async def event_count(self, ids: list[UUID]) -> int:
         assert self.store is not None
@@ -185,19 +203,24 @@ class PostgresBackend:
         self.habits.append(code)
         return code
 
-    async def habit_log(self, code: str, day: date, source: str) -> LogRow | None:
+    async def habit_log(self, code: str, day: date) -> LogRow | None:
         row = await self.pool.fetchrow(
-            "SELECT status, value, event_id, logged_at FROM yawmi.habit_logs"
-            " WHERE habit_code = $1 AND day = $2 AND source = $3",
+            "SELECT status, value, event_id, logged_at, source FROM yawmi.habit_logs"
+            " WHERE habit_code = $1 AND day = $2",
             code,
             day,
-            source,
         )
         return None if row is None else LogRow(**dict(row))
 
     async def habit_log_count(self, code: str) -> int:
         return await self.pool.fetchval(
             "SELECT count(*) FROM yawmi.habit_logs WHERE habit_code = $1", code
+        )
+
+    async def reader_logs(self, code: str) -> list[ReaderLogRow]:
+        """The rows the today, overview and progress readers get (their own SQL)."""
+        return await AsyncpgTodayReader(self.pool).habit_logs_of(
+            [code], date(2026, 1, 1), date(2026, 12, 31)
         )
 
     async def event_count(self, ids: list[UUID]) -> int:
@@ -384,7 +407,7 @@ async def test_skip_status_makes_a_skip_row(
 ) -> None:
     response = await post(client, iphone, [event("habit_logged", logged(habit, "skip"))])
     assert response.json() == {"accepted": 1, "duplicates": 0}
-    row = await backend.habit_log(habit, date(2026, 11, 10), "iphone")
+    row = await backend.habit_log(habit, date(2026, 11, 10))
     assert row is not None
     assert row.status == "skip"
     assert row.value is None
@@ -395,7 +418,7 @@ async def test_a_value_sent_with_skip_or_vacation_is_not_stored(
     client: httpx.AsyncClient, backend: Backend, iphone: Device, habit: str, status: str
 ) -> None:
     await post(client, iphone, [event("habit_logged", logged(habit, status, value=3))])
-    row = await backend.habit_log(habit, date(2026, 11, 10), "iphone")
+    row = await backend.habit_log(habit, date(2026, 11, 10))
     assert row is not None
     assert (row.status, row.value) == (status, None)
 
@@ -406,7 +429,7 @@ async def test_skipping_a_day_that_was_done_clears_its_value(
     await post(client, iphone, [event("habit_logged", logged(habit, value=5), at=NOON)])
     later = event("habit_logged", logged(habit, "skip", value=3), at="2026-11-10T10:00:00Z")
     await post(client, iphone, [later])
-    row = await backend.habit_log(habit, date(2026, 11, 10), "iphone")
+    row = await backend.habit_log(habit, date(2026, 11, 10))
     assert row is not None
     assert (row.status, row.value) == ("skip", None)  # not the 5 from before, not the 3 sent
 
@@ -438,7 +461,7 @@ async def test_a_day_seven_days_back_is_accepted(
 ) -> None:
     response = await post(client, iphone, [event("habit_logged", logged(habit, day="2026-11-03"))])
     assert response.json() == {"accepted": 1, "duplicates": 0}
-    assert await backend.habit_log(habit, date(2026, 11, 3), "iphone") is not None
+    assert await backend.habit_log(habit, date(2026, 11, 3)) is not None
 
 
 async def test_two_edits_arriving_in_reverse_order_keep_the_newest(
@@ -448,7 +471,7 @@ async def test_two_edits_arriving_in_reverse_order_keep_the_newest(
     newer = event("habit_logged", logged(habit, value=5), at="2026-11-10T09:05:00Z")
     assert (await post(client, iphone, [newer])).json()["accepted"] == 1  # the newest arrives first
     assert (await post(client, iphone, [older])).json()["accepted"] == 1  # then the stale edit
-    row = await backend.habit_log(habit, date(2026, 11, 10), "iphone")
+    row = await backend.habit_log(habit, date(2026, 11, 10))
     assert row is not None
     assert row.value == Decimal(5)
     assert row.event_id == UUID(newer["id"])
@@ -464,7 +487,7 @@ async def test_two_edits_in_one_batch_keep_the_newest_in_either_order(
     newer = event("habit_logged", logged(habit, value=5), at="2026-11-10T09:05:00Z")
     batch = [newer, older] if newest_first else [older, newer]
     assert (await post(client, iphone, batch)).json() == {"accepted": 2, "duplicates": 0}
-    row = await backend.habit_log(habit, date(2026, 11, 10), "iphone")
+    row = await backend.habit_log(habit, date(2026, 11, 10))
     assert row is not None
     assert row.value == Decimal(5)
 
@@ -475,7 +498,7 @@ async def test_an_edit_made_later_replaces_the_earlier_one(
     await post(client, iphone, [event("habit_logged", logged(habit, value=1), at=NOON)])
     later = event("habit_logged", logged(habit, "skip"), at="2026-11-10T10:00:00Z")
     await post(client, iphone, [later])
-    row = await backend.habit_log(habit, date(2026, 11, 10), "iphone")
+    row = await backend.habit_log(habit, date(2026, 11, 10))
     assert row is not None
     assert (row.status, row.value, row.event_id) == ("skip", None, UUID(later["id"]))
 
@@ -487,7 +510,7 @@ async def test_equal_event_times_let_the_later_arrival_win(
     second = event("habit_logged", logged(habit, value=9), at=NOON)
     await post(client, iphone, [first])
     await post(client, iphone, [second])
-    row = await backend.habit_log(habit, date(2026, 11, 10), "iphone")
+    row = await backend.habit_log(habit, date(2026, 11, 10))
     assert row is not None
     assert row.value == Decimal(9)  # `>=`: a tie is a re-save of the same moment
 
@@ -502,7 +525,7 @@ async def test_a_replayed_event_is_never_applied_again_even_on_a_time_tie(
     await post(client, iphone, [second])
     replay = await post(client, iphone, [first])
     assert replay.json() == {"accepted": 0, "duplicates": 1}
-    row = await backend.habit_log(habit, date(2026, 11, 10), "iphone")
+    row = await backend.habit_log(habit, date(2026, 11, 10))
     assert row is not None
     assert (row.value, row.event_id) == (Decimal(9), UUID(second["id"]))
 
@@ -517,7 +540,7 @@ async def test_replaying_an_old_batch_does_not_undo_a_newer_edit(
     )
     replay = await post(client, iphone, old)
     assert replay.json() == {"accepted": 0, "duplicates": 1}
-    row = await backend.habit_log(habit, date(2026, 11, 10), "iphone")
+    row = await backend.habit_log(habit, date(2026, 11, 10))
     assert row is not None
     assert row.value == Decimal(7)
 
@@ -529,8 +552,8 @@ async def test_an_event_just_before_riyadh_midnight_belongs_to_the_next_local_da
     client: httpx.AsyncClient, backend: Backend, iphone: Device, habit: str
 ) -> None:
     await post(client, iphone, [event("habit_logged", logged(habit), at="2026-11-09T23:30:00Z")])
-    assert await backend.habit_log(habit, date(2026, 11, 10), "iphone") is not None
-    assert await backend.habit_log(habit, date(2026, 11, 9), "iphone") is None
+    assert await backend.habit_log(habit, date(2026, 11, 10)) is not None
+    assert await backend.habit_log(habit, date(2026, 11, 9)) is None
 
 
 async def test_the_day_follows_the_tz_sent_with_the_event(
@@ -538,7 +561,7 @@ async def test_the_day_follows_the_tz_sent_with_the_event(
 ) -> None:
     ev = event("habit_logged", logged(habit), at="2026-11-09T23:30:00Z", tz="America/New_York")
     await post(client, iphone, [ev])
-    assert await backend.habit_log(habit, date(2026, 11, 9), "iphone") is not None
+    assert await backend.habit_log(habit, date(2026, 11, 9)) is not None
 
 
 async def test_yesterday_logged_today_lands_on_yesterday_and_leaves_today_alone(
@@ -547,8 +570,8 @@ async def test_yesterday_logged_today_lands_on_yesterday_and_leaves_today_alone(
     today = event("habit_logged", logged(habit, value=1), at=NOON)
     yesterday = event("habit_logged", logged(habit, value=3, day="2026-11-09"), at=NOON)
     await post(client, iphone, [today, yesterday])
-    today_row = await backend.habit_log(habit, date(2026, 11, 10), "iphone")
-    yesterday_row = await backend.habit_log(habit, date(2026, 11, 9), "iphone")
+    today_row = await backend.habit_log(habit, date(2026, 11, 10))
+    yesterday_row = await backend.habit_log(habit, date(2026, 11, 9))
     assert today_row is not None
     assert yesterday_row is not None
     assert (today_row.value, yesterday_row.value) == (Decimal(1), Decimal(3))
@@ -573,21 +596,110 @@ async def test_device_id_is_taken_from_the_token_not_the_body(
 async def test_the_habit_log_source_is_the_device_kind(
     client: httpx.AsyncClient, backend: Backend, habit: str
 ) -> None:
-    phone = await device(backend, "iphone")
-    watch = await device(backend, "watch")
     web = await device(backend, "web")
-    for dev, value in ((phone, 1), (watch, 2), (web, 3)):
-        assert (
-            await post(client, dev, [event("habit_logged", logged(habit, value=value))])
-        ).status_code == 200
-    day = date(2026, 11, 10)
-    rows = {s: await backend.habit_log(habit, day, s) for s in ("iphone", "watch", "web")}
-    assert {s: r.value for s, r in rows.items() if r} == {
-        "iphone": Decimal(1),
-        "watch": Decimal(2),
-        "web": Decimal(3),
-    }
-    assert await backend.habit_log_count(habit) == 3
+    await post(client, web, [event("habit_logged", logged(habit, value=3))])
+    row = await backend.habit_log(habit, date(2026, 11, 10))
+    assert row is not None
+    assert (row.source, row.value) == ("web", Decimal(3))
+
+
+# --- one row per habit and day, whatever the device (I-10) -------------------------------------
+
+
+async def test_a_phone_correction_replaces_the_web_value_of_the_same_day(
+    client: httpx.AsyncClient, backend: Backend, habit: str
+) -> None:
+    """30 minutes on the web, corrected to 45 on the phone: one row, 45, never 75."""
+    web, phone = await device(backend, "web"), await device(backend, "iphone")
+    first = event("habit_logged", logged(habit, value=30), at="2026-11-10T09:00:00Z")
+    second = event("habit_logged", logged(habit, value=45), at="2026-11-10T09:30:00Z")
+    assert (await post(client, web, [first])).json() == {"accepted": 1, "duplicates": 0}
+    assert (await post(client, phone, [second])).json() == {"accepted": 1, "duplicates": 0}
+    assert await backend.habit_log_count(habit) == 1
+    row = await backend.habit_log(habit, date(2026, 11, 10))
+    assert row is not None
+    assert (row.value, row.source, row.event_id) == (Decimal(45), "iphone", UUID(second["id"]))
+    # what the readers (today, overview, progress, push) get, and what the rules make of it
+    logs = await backend.reader_logs(habit)
+    assert [(log.day, log.value, log.status) for log in logs] == [
+        (date(2026, 11, 10), Decimal(45), "done")
+    ]
+    rule_logs = [
+        HabitLogRule(log.day, None if log.value is None else float(log.value), "done")
+        for log in logs
+    ]
+    progress = period_progress(COUNT_DAILY, rule_logs, date(2026, 11, 10), "sun")
+    assert progress.done == 45.0
+
+
+async def test_an_older_event_from_another_device_does_not_overwrite_a_newer_one(
+    client: httpx.AsyncClient, backend: Backend, habit: str
+) -> None:
+    phone, watch = await device(backend, "iphone"), await device(backend, "watch")
+    newer = event("habit_logged", logged(habit, value=45), at="2026-11-10T09:30:00Z")
+    older = event("habit_logged", logged(habit, value=30), at="2026-11-10T09:00:00Z")
+    await post(client, phone, [newer])
+    assert (await post(client, watch, [older])).json() == {"accepted": 1, "duplicates": 0}
+    row = await backend.habit_log(habit, date(2026, 11, 10))
+    assert row is not None
+    assert (row.value, row.source, row.event_id) == (Decimal(45), "iphone", UUID(newer["id"]))
+    assert await backend.habit_log_count(habit) == 1
+
+
+@pytest.mark.parametrize("newest_first", [True, False])
+async def test_two_devices_in_either_arrival_order_keep_the_newest(
+    client: httpx.AsyncClient, backend: Backend, habit: str, newest_first: bool
+) -> None:
+    """The same day from two device kinds, in either arrival order: the newest wins."""
+    web, phone = await device(backend, "web"), await device(backend, "iphone")
+    older = event("habit_logged", logged(habit, value=30), at="2026-11-10T09:00:00Z")
+    newer = event("habit_logged", logged(habit, value=45), at="2026-11-10T09:30:00Z")
+    sends = [(phone, newer), (web, older)] if newest_first else [(web, older), (phone, newer)]
+    for dev, ev in sends:
+        await post(client, dev, [ev])
+    row = await backend.habit_log(habit, date(2026, 11, 10))
+    assert row is not None
+    assert (row.value, row.source) == (Decimal(45), "iphone")
+
+
+async def test_a_later_skip_from_another_device_replaces_a_done(
+    client: httpx.AsyncClient, backend: Backend, habit: str
+) -> None:
+    web, watch = await device(backend, "web"), await device(backend, "watch")
+    await post(client, web, [event("habit_logged", logged(habit, value=2), at=NOON)])
+    skip = event("habit_skipped", {"habit_code": habit}, at="2026-11-10T10:00:00Z")
+    await post(client, watch, [skip])
+    row = await backend.habit_log(habit, date(2026, 11, 10))
+    assert row is not None
+    assert (row.status, row.value, row.source) == ("skip", None, "watch")
+    assert await backend.habit_log_count(habit) == 1
+
+
+async def test_equal_times_from_two_devices_let_the_later_arrival_win(
+    client: httpx.AsyncClient, backend: Backend, habit: str
+) -> None:
+    web, phone = await device(backend, "web"), await device(backend, "iphone")
+    await post(client, web, [event("habit_logged", logged(habit, value=1), at=NOON)])
+    second = event("habit_logged", logged(habit, value=9), at=NOON)
+    await post(client, phone, [second])
+    row = await backend.habit_log(habit, date(2026, 11, 10))
+    assert row is not None
+    assert (row.value, row.source, row.event_id) == (Decimal(9), "iphone", UUID(second["id"]))
+
+
+async def test_different_days_from_different_devices_stay_separate_rows(
+    client: httpx.AsyncClient, backend: Backend, habit: str
+) -> None:
+    web, phone = await device(backend, "web"), await device(backend, "iphone")
+    await post(client, web, [event("habit_logged", logged(habit, value=1, day="2026-11-09"))])
+    await post(client, phone, [event("habit_logged", logged(habit, value=2))])
+    assert await backend.habit_log_count(habit) == 2
+    yesterday = await backend.habit_log(habit, date(2026, 11, 9))
+    today = await backend.habit_log(habit, date(2026, 11, 10))
+    assert yesterday is not None
+    assert today is not None
+    assert (yesterday.source, yesterday.value) == ("web", Decimal(1))
+    assert (today.source, today.value) == ("iphone", Decimal(2))
 
 
 async def test_the_same_event_id_from_two_devices_is_stored_once(
@@ -616,8 +728,8 @@ async def test_skip_and_vacation_events_project_their_status(
     )
     day = date(2026, 11, 10)
     skipped, vacation = (
-        await backend.habit_log(habit, day, "iphone"),
-        await backend.habit_log(other, day, "iphone"),
+        await backend.habit_log(habit, day),
+        await backend.habit_log(other, day),
     )
     assert skipped is not None
     assert vacation is not None
