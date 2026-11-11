@@ -4,6 +4,7 @@ idempotent closure. Providers are `respx` mocks; no network, no real key."""
 import json
 import logging
 import os
+import re
 from collections.abc import AsyncIterator
 from datetime import date, timedelta
 from typing import Any
@@ -201,6 +202,38 @@ async def test_close_validation_errors_use_the_contract(client):
     missing = await client.post("/v1/day/close", json={}, headers=auth())
     assert missing.status_code == 422
     assert missing.json()["errors"] == [{"loc": ["body", "day"], "type": "missing"}]
+
+
+async def test_close_refuses_a_day_older_than_seven_days_without_calling_the_provider(
+    client, app, anthropic
+):
+    route = anthropic.mock(return_value=anthropic_reply(GOOD))
+    old = (date(2026, 11, 10) - timedelta(days=8)).isoformat()
+    response = await client.post("/v1/day/close", json=close_body(day=old), headers=auth())
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "طلب غير صالح",
+        "errors": [{"loc": ["body", "day"], "type": "day_out_of_window"}],
+    }
+    assert route.call_count == 0
+    assert app.state.insights_store.rows == []
+
+
+async def test_close_accepts_a_day_exactly_seven_days_back(client, app, anthropic):
+    anthropic.mock(return_value=anthropic_reply(GOOD))
+    oldest = (date(2026, 11, 10) - timedelta(days=7)).isoformat()
+    response = await client.post("/v1/day/close", json=close_body(day=oldest), headers=auth())
+    assert response.status_code == 200
+    assert response.json()["day"] == oldest
+    assert len(app.state.insights_store.rows) == 1
+
+
+async def test_close_in_the_future_is_still_refused_without_calling_the_provider(client, anthropic):
+    route = anthropic.mock(return_value=anthropic_reply(GOOD))
+    future = (date(2026, 11, 10) + timedelta(days=1)).isoformat()
+    response = await client.post("/v1/day/close", json=close_body(day=future), headers=auth())
+    assert response.status_code == 422
+    assert route.call_count == 0
 
 
 async def test_close_strips_raw_samples_before_the_provider(client, anthropic):
@@ -441,6 +474,50 @@ def test_route_messages_are_gender_neutral():
     )
     for message, result in zip(messages, json.loads(run.stdout), strict=True):
         assert result["pass"], (message, result)
+
+
+def _gendered_words() -> list[str]:
+    """`GENDERED_WORDS` of the eval support module, read from its source."""
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "eval" / "promptfoo_support.js").read_text(
+        encoding="utf-8"
+    )
+    block = re.search(r"const GENDERED_WORDS = \[(.*?)\];", source, re.DOTALL)
+    assert block is not None
+    return re.findall(r"'([^']+)'", block.group(1))
+
+
+_LETTER = "ء-ي"
+_DIACRITICS = re.compile("[ً-ِْ-ٰٟـ]")  # shadda kept, as in JS
+
+
+def _gendered_hit(text: str, words: list[str]) -> str | None:
+    """A Python port of `findWord` (same marks, same glued prefixes, whole words only)."""
+    plain = _DIACRITICS.sub("", text)
+    for word in words:
+        bare = _DIACRITICS.sub("", word)
+        letters = len(re.sub(f"[^{_LETTER}]", "", bare))
+        prefix = "[وف]?" if letters <= 3 else "[وفبلك]?"
+        if re.search(f"(?<![{_LETTER}]){prefix}{re.escape(bare)}(?![{_LETTER}])", plain):
+            return word
+    return None
+
+
+def test_route_messages_are_gender_neutral_without_node():
+    """Runs everywhere, so the check never depends on `node` being installed (M-5(d))."""
+    from yawmi.routes.insights import USER_MESSAGES
+
+    words = _gendered_words()
+    assert len(words) > 50
+    # the port is not vacuous: it finds what the JS check finds
+    assert _gendered_hit("تذكّر شرب الماء", words) == "تذكّر"
+    assert _gendered_hit("وعليك المتابعة", words) == "عليك"
+    assert _gendered_hit("لكن اليوم انتهى", words) is None
+    messages = sorted(USER_MESSAGES)
+    assert len(messages) >= 5
+    for message in messages:
+        assert _gendered_hit(message, words) is None, message
 
 
 async def test_oversized_inputs_are_422(client, anthropic):

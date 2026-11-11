@@ -316,7 +316,7 @@ class PostgresBackend:
                     await self.pool.execute(
                         "INSERT INTO raqib.cycles (cycle_no, stage_no, start_date, end_date,"
                         " review_start, review_end, theme, gate) VALUES"
-                        " ($1, 1, $2, $3, $3 + 1, $4, 'موضوع', 'بوابة')",
+                        " ($1, 1, $2, $3, $3::date + 1, $4, 'موضوع', 'بوابة')",
                         row.cycle_no,
                         row.start_date,
                         row.end_date,
@@ -436,7 +436,9 @@ async def test_today_on_an_empty_system(client: httpx.AsyncClient) -> None:
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["day"] == "2026-11-10"
-    assert body["priorities"] == []
+    # the morning insight is part of the contract and stays null until it is generated (I-6)
+    assert body["insight"] is None
+    assert "priorities" not in body
     assert body["plan"] == {"cycle": None, "day_in_cycle": None, "focus_outcomes": []}
     assert body["health"]["data_quality"] == "missing"
     assert body["health"]["recovery_score"] is None
@@ -710,3 +712,18 @@ async def test_overview_answers_for_the_widest_linked_habits(
     assert response.status_code == 200, response.text
     today = await client.get("/v1/today", headers=auth())
     assert today.status_code == 200, today.text
+
+
+def test_today_contract_carries_a_typed_insight_not_a_list_of_strings() -> None:
+    config = Settings(
+        database_url="postgresql://yawmi_api@localhost:5432/raqib", jwt_secret=SecretStr(SECRET)
+    )
+    schema = create_app(settings=config, devices=InMemoryDeviceStore()).openapi()
+    today = schema["components"]["schemas"]["TodayOut"]
+    assert "priorities" not in today["properties"]
+    refs = {
+        option.get("$ref") or option.get("type")
+        for option in today["properties"]["insight"]["anyOf"]
+    }
+    assert refs == {"#/components/schemas/InsightResponse", "null"}
+    assert "insight" in today["required"]

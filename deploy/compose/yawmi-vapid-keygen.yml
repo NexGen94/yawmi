@@ -7,7 +7,7 @@
 name: yawmi-vapid-keygen
 services:
   yawmi-vapid-keygen:
-    image: ghcr.io/nexgen94/yawmi-api:0.2.0
+    image: ghcr.io/nexgen94/yawmi-api:0.1.0
     user: "0:0"
     # the key path comes from the same variable the API reads, never from the command line
     entrypoint: ["python", "-I", "-m", "yawmi.push.keygen", "--group", "10001"]

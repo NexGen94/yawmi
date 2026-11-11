@@ -17,6 +17,7 @@ from typing import cast
 
 from pydantic import BaseModel, Field
 
+from yawmi.ai.schema import InsightResponse
 from yawmi.domain.habits import HabitKind, HabitLog, HabitSpec, adherence, period_progress
 from yawmi.domain.periods import Period, WeekStart, is_scheduled, period_bounds
 from yawmi.domain.scores import DataQuality
@@ -76,7 +77,11 @@ class TodayPlan(BaseModel):
 class TodayOut(BaseModel):
     day: date
     habits_due: list[HabitDue]
-    priorities: list[str] = Field(description="تملؤها خدمة الذكاء الاصطناعي؛ فارغة حتى ذلك")
+    insight: InsightResponse | None = Field(
+        description=(
+            "رؤية الصباح: سطران وحتى ثلاث أولويات بمعرّفات مصادرها. `null` إلى أن تُبنى خدمة توليدها"
+        )
+    )
     health: TodayHealth
     plan: TodayPlan
 

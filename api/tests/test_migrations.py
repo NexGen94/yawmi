@@ -11,9 +11,11 @@ Two groups:
   happens in GitHub Actions (``.github/workflows/api-tests.yml``).
 """
 
+import asyncio
 import base64
 import hashlib
 import hmac
+import importlib
 import json
 import os
 import re
@@ -29,6 +31,8 @@ import asyncpg
 import pytest
 from asyncpg import exceptions as pgerr
 
+from yawmi import admin
+from yawmi.auth.pg_store import AsyncpgDeviceStore
 from yawmi.db.migrate import (
     MIGRATIONS_DIR,
     MigrationError,
@@ -512,6 +516,100 @@ async def test_device_kind_is_checked(migrated: asyncpg.Connection):
 
 
 @needs_db
+async def test_device_refresh_rotated_at_is_a_nullable_timestamptz(migrated: asyncpg.Connection):
+    row = await migrated.fetchrow(
+        "SELECT data_type, is_nullable FROM information_schema.columns "
+        "WHERE table_schema = 'yawmi' AND table_name = 'devices' "
+        "AND column_name = 'refresh_rotated_at'"
+    )
+    assert row is not None
+    assert row["data_type"] == "timestamp with time zone"
+    assert row["is_nullable"] == "YES"
+
+
+@pytest.fixture
+async def device_store(migrated: asyncpg.Connection) -> AsyncIterator[AsyncpgDeviceStore]:
+    assert DSN
+    pool = await asyncpg.create_pool(DSN, min_size=2, max_size=2)
+    try:
+        yield AsyncpgDeviceStore(pool)
+    finally:
+        await pool.close()
+
+
+@needs_db
+async def test_pg_two_rotations_with_the_same_old_hash_give_exactly_one_success(
+    device_store: AsyncpgDeviceStore,
+):
+    device_id = await device_store.create_device("هاتف", "iphone", "old-hash")
+    ttl = timedelta(days=90)
+    results = await asyncio.gather(
+        device_store.rotate_refresh(device_id, "old-hash", "new-a", max_age=ttl),
+        device_store.rotate_refresh(device_id, "old-hash", "new-b", max_age=ttl),
+    )
+    assert sorted(results) == [False, True]
+    device = await device_store.get_device(device_id)
+    assert device is not None
+    assert device.refresh_hash in {"new-a", "new-b"}
+
+
+@needs_db
+async def test_pg_rotation_sets_the_timestamp_and_refuses_an_expired_token(
+    migrated: asyncpg.Connection, device_store: AsyncpgDeviceStore
+):
+    device_id = await device_store.create_device("هاتف", "iphone", "h0")
+    created = await migrated.fetchval(
+        "SELECT refresh_rotated_at FROM yawmi.devices WHERE id = $1", device_id
+    )
+    assert created is not None
+    ttl = timedelta(days=90)
+    assert await device_store.rotate_refresh(device_id, "h0", "h1", max_age=ttl)
+    rotated = await migrated.fetchval(
+        "SELECT refresh_rotated_at FROM yawmi.devices WHERE id = $1", device_id
+    )
+    assert rotated >= created
+
+    await migrated.execute(
+        "UPDATE yawmi.devices SET refresh_rotated_at = now() - interval '91 days' WHERE id = $1",
+        device_id,
+    )
+    assert not await device_store.rotate_refresh(device_id, "h1", "h2", max_age=ttl)
+    device = await device_store.get_device(device_id)
+    assert device is not None
+    assert device.refresh_hash == "h1"
+
+
+@needs_db
+async def test_pg_admin_lists_devices_and_revokes_one_with_its_subscriptions(
+    migrated: asyncpg.Connection, device_store: AsyncpgDeviceStore
+):
+    phone = await device_store.create_device("هاتف", "iphone", "a" * 64)
+    web = await device_store.create_device("Safari", "web", "b" * 64)
+    await migrated.execute(
+        "INSERT INTO yawmi.push_subscriptions (endpoint, device_id, p256dh, auth) "
+        "VALUES ('https://web.push.apple.com/x', $1, 'k', 'a')",
+        web,
+    )
+    listed = await device_store.list_devices()
+    assert {d.id for d in listed} == {phone, web}
+    assert all(not hasattr(d, "refresh_hash") for d in listed)
+
+    assert await admin.revoke_device(device_store, web) is True
+    assert (
+        await migrated.fetchval(
+            "SELECT count(*) FROM yawmi.push_subscriptions WHERE device_id = $1", web
+        )
+        == 0
+    )
+    revoked = await migrated.fetchrow(
+        "SELECT revoked_at, refresh_hash FROM yawmi.devices WHERE id = $1", web
+    )
+    assert revoked["revoked_at"] is not None
+    assert revoked["refresh_hash"] is None
+    assert await admin.revoke_device(device_store, uuid.uuid4()) is False
+
+
+@needs_db
 async def test_reminder_defaults_and_foreign_key(migrated: asyncpg.Connection):
     await insert_habit(migrated)
     reminder_id = uuid.uuid4()
@@ -958,3 +1056,64 @@ async def test_role_can_log_in_with_the_supplied_password(
         assert await api.fetchval("SELECT count(*) FROM raqib.goals") == 0
     finally:
         await api.close()
+
+
+# ---------------------------------------------------------------------------
+# Grant coverage (C-1(b)): every statement of every store, planned as yawmi_api
+# ---------------------------------------------------------------------------
+
+STORE_MODULES = (
+    "yawmi.events.store",
+    "yawmi.habits.store",
+    "yawmi.today.reader",
+    "yawmi.push.store",
+    "yawmi.health.store",
+    "yawmi.ai.store",
+    "yawmi.auth.pg_store",
+)
+_SQL_START = re.compile(r"\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b", re.IGNORECASE)
+
+
+def store_sql() -> dict[str, str]:
+    """Every module-level SQL string of the stores, by `module.NAME`."""
+    found: dict[str, str] = {}
+    for name in STORE_MODULES:
+        module = importlib.import_module(name)
+        for attr, value in vars(module).items():
+            if isinstance(value, str) and _SQL_START.match(value):
+                found[f"{name}.{attr}"] = value
+    return found
+
+
+def test_every_store_module_has_named_sql_to_check():
+    sql = store_sql()
+    for module in STORE_MODULES:
+        assert any(key.startswith(module + ".") for key in sql), module
+    # the AI store's statements were inline; they are named now so the check can reach them
+    for name in ("_LOCK", "_GET_CLOSURE", "_INSERT_INSIGHT", "_LIST_REVIEWS"):
+        assert f"yawmi.ai.store.{name}" in sql
+    assert "yawmi.auth.pg_store._EXPIRE_PAIRING_CODES" in sql
+    assert "yawmi.auth.pg_store._LIST_DEVICES" in sql
+
+
+@needs_db
+async def test_yawmi_api_can_plan_every_store_statement(migrated: asyncpg.Connection):
+    """`EXPLAIN (GENERIC_PLAN)` checks privileges (columns included) without running anything.
+
+    Every failure is collected, so one run names every missing grant or misread column.
+    """
+    problems: list[str] = []
+    await migrated.execute("SET ROLE yawmi_api")
+    await migrated.execute("SET search_path = yawmi")  # as the pool does
+    try:
+        for key, sql in sorted(store_sql().items()):
+            try:
+                await migrated.execute(f"EXPLAIN (GENERIC_PLAN) {sql}")
+            except pgerr.InsufficientPrivilegeError as exc:
+                problems.append(f"{key}: insufficient_privilege: {exc}")
+            except asyncpg.PostgresError as exc:
+                problems.append(f"{key}: {type(exc).__name__}: {exc}")
+    finally:
+        await migrated.execute("RESET search_path")
+        await migrated.execute("RESET ROLE")
+    assert problems == []

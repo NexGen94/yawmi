@@ -5,8 +5,12 @@ import asyncpg
 _pool: asyncpg.Pool | None = None
 
 
-async def create_pool(dsn: str, *, min_size: int = 1, max_size: int = 5) -> asyncpg.Pool:
-    """Open a pool whose connections use schema `yawmi` and UTC (`timestamptz` always)."""
+async def create_pool(dsn: str, *, min_size: int = 1, max_size: int = 4) -> asyncpg.Pool:
+    """Open a pool whose connections use schema `yawmi` and UTC (`timestamptz` always).
+
+    `max_size` stays below the role's `CONNECTION LIMIT 5` (0002): the fifth connection is kept
+    for `yawmi-admin` and for loader 2's checks while the API is up.
+    """
     return await asyncpg.create_pool(
         dsn,
         min_size=min_size,

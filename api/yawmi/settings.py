@@ -15,12 +15,17 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from yawmi.push.hosts import DEFAULT_PUSH_HOSTS, valid_push_host
 
+MIN_JWT_SECRET_LENGTH = 32
+_MALFORMED = "?"  # stands for a non-string entry of push_hosts; never a valid host
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="YAWMI_", env_file=None)
+    # hide_input_in_errors: a rejected value (a short secret, a DSN) never reaches the log
+    model_config = SettingsConfigDict(env_prefix="YAWMI_", env_file=None, hide_input_in_errors=True)
 
     # The DSN may embed the role password, so it is kept out of repr/str like the other secrets.
     database_url: str = Field(repr=False)
+    # HS256 signs every access token and the service token with it: refuse a short phrase.
     jwt_secret: SecretStr
     jwt_ttl_seconds: int = 900
     refresh_ttl_days: int = 90
@@ -42,7 +47,8 @@ class Settings(BaseSettings):
     vapid_private_key_file: Path | None = None
     vapid_subject: str | None = None
     # Push services the server may contact (exact host or any subdomain). In the environment a
-    # JSON list or a comma-separated list; empty means the default list.
+    # JSON list or a comma-separated list. Empty means the default list, and so does a list that
+    # parses to nothing (`,`, `[]`): a stray comma must not drop every subscription.
     push_hosts: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: list(DEFAULT_PUSH_HOSTS)
     )
@@ -53,20 +59,32 @@ class Settings(BaseSettings):
         # compose passes `${YAWMI_VAPID_SUBJECT:-}` as an empty string until it is filled in
         return None if value == "" else value
 
+    @field_validator("jwt_secret")
+    @classmethod
+    def _jwt_secret_is_long_enough(cls, value: SecretStr) -> SecretStr:
+        if len(value.get_secret_value()) < MIN_JWT_SECRET_LENGTH:
+            # the length rule only: the value itself is never echoed
+            raise ValueError(f"jwt_secret must be at least {MIN_JWT_SECRET_LENGTH} characters")
+        return value
+
     @field_validator("push_hosts", mode="before")
     @classmethod
     def _hosts_from_text(cls, value: object) -> object:
-        if not isinstance(value, str):
-            return value
-        text = value.strip()
-        if not text:
-            return list(DEFAULT_PUSH_HOSTS)
-        if text.startswith("["):
-            try:
-                return json.loads(text)
-            except ValueError:
-                return [text]  # kept as one malformed entry: refused below when push is on
-        return [part.strip() for part in text.split(",") if part.strip()]
+        if isinstance(value, str):
+            text = value.strip()
+            if text.startswith("["):
+                try:
+                    value = json.loads(text)
+                except ValueError:
+                    return [text]  # kept as one malformed entry: refused below when push is on
+            else:
+                value = [part.strip() for part in text.split(",") if part.strip()]
+        if isinstance(value, list | tuple):
+            if not value:
+                return list(DEFAULT_PUSH_HOSTS)
+            # a non-string element is a malformed entry, like a malformed host name
+            return [item if isinstance(item, str) else _MALFORMED for item in value]
+        return value
 
     @model_validator(mode="after")
     def _push_hosts_are_host_names(self) -> Self:

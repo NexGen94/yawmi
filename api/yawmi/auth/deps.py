@@ -6,7 +6,7 @@
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Protocol
 from uuid import UUID
 
@@ -38,6 +38,17 @@ class Device:
     revoked_at: datetime | None
 
 
+@dataclass(frozen=True)
+class DeviceInfo:
+    """What an operator may see of a device: never its refresh hash."""
+
+    id: UUID
+    name: str
+    kind: str
+    paired_at: datetime | None
+    revoked_at: datetime | None
+
+
 class DeviceStore(Protocol):
     """Devices and one-time pairing codes."""
 
@@ -53,14 +64,25 @@ class DeviceStore(Protocol):
         """Insert a paired device holding the hash of its first refresh token."""
         ...
 
+    async def expire_pairing_codes(self) -> int:
+        """Expire every unused code that is still valid; how many were expired."""
+        ...
+
     async def get_device(self, device_id: UUID) -> Device | None: ...
 
-    async def rotate_refresh(self, device_id: UUID, old_hash: str, new_hash: str) -> bool:
-        """Swap the refresh hash iff `old_hash` is current and the device is not revoked."""
+    async def rotate_refresh(
+        self, device_id: UUID, old_hash: str, new_hash: str, *, max_age: timedelta
+    ) -> bool:
+        """Swap the refresh hash iff `old_hash` is current, the device is not revoked and the
+        hash was issued (paired or last rotated) less than `max_age` ago; restart that clock."""
         ...
 
     async def revoke(self, device_id: UUID) -> bool:
         """Revoke the device and drop its refresh hash; `False` only if it does not exist."""
+        ...
+
+    async def list_devices(self) -> list[DeviceInfo]:
+        """Every device, oldest pairing first, for `yawmi-admin devices`."""
         ...
 
 

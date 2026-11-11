@@ -510,6 +510,9 @@ async def db():
         transaction = conn.transaction()
         await transaction.start()
         try:
+            # Other modules leave the system habits behind (with their own clock); start from none.
+            # TRUNCATE is transactional, so the rollback below restores whatever was there.
+            await conn.execute("TRUNCATE yawmi.habits CASCADE")
             yield conn
         finally:
             await transaction.rollback()

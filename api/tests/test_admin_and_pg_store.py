@@ -174,10 +174,17 @@ class FakePool:
 async def test_pg_rotate_refresh_reports_whether_a_row_changed() -> None:
     device_id = uuid4()
     hit = FakePool(execute="UPDATE 1")
-    assert await AsyncpgDeviceStore(hit).rotate_refresh(device_id, "old", "new") is True  # type: ignore[arg-type]
-    assert hit.calls[0][2] == (device_id, "old", "new")
+    ttl = timedelta(days=90)
+    assert (
+        await AsyncpgDeviceStore(hit).rotate_refresh(device_id, "old", "new", max_age=ttl) is True
+    )  # type: ignore[arg-type]
+    assert hit.calls[0][2] == (device_id, "old", "new", ttl)
+    assert "refresh_rotated_at > now() - $4::interval" in hit.calls[0][1]
+    assert "refresh_rotated_at = now()" in hit.calls[0][1]
     miss = FakePool(execute="UPDATE 0")
-    assert await AsyncpgDeviceStore(miss).rotate_refresh(device_id, "old", "new") is False  # type: ignore[arg-type]
+    assert (
+        await AsyncpgDeviceStore(miss).rotate_refresh(device_id, "old", "new", max_age=ttl) is False
+    )  # type: ignore[arg-type]
 
 
 async def test_pg_revoke_reports_whether_the_device_exists() -> None:
@@ -257,7 +264,9 @@ async def test_service_token_carries_no_usable_refresh_token() -> None:
     device_id = verify_access(token, SECRET).sub
     # nobody holds the raw refresh token, so no hash a client can present will ever rotate it
     for guess in ("", "x", "0" * 64):
-        assert await store.rotate_refresh(device_id, guess, "new") is False
+        assert (
+            await store.rotate_refresh(device_id, guess, "new", max_age=timedelta(days=90)) is False
+        )
 
 
 async def test_service_token_is_signed_with_the_given_secret_only() -> None:
@@ -379,3 +388,122 @@ def test_main_service_token_failure_names_only_the_exception_class(
     assert out == ""
     assert "ConnectionRefusedError" in err
     assert "detail-that-must-not-leak" not in err
+
+
+# --- admin: devices and revoke (I-2) -----------------------------------------------------------
+
+
+async def _two_devices(store: InMemoryDeviceStore) -> tuple[Any, Any]:
+    phone = await store.create_device("هاتف", "iphone", "f" * 64)
+    web = await store.create_device("Safari", "web", "e" * 64)
+    return phone, web
+
+
+async def test_list_devices_never_carries_the_refresh_hash() -> None:
+    store = InMemoryDeviceStore(clock=lambda: NOW)
+    phone, web = await _two_devices(store)
+    listed = await store.list_devices()
+    assert [d.id for d in listed] == [phone, web]
+    assert not hasattr(listed[0], "refresh_hash")
+    assert (listed[0].name, listed[0].kind, listed[0].paired_at, listed[0].revoked_at) == (
+        "هاتف",
+        "iphone",
+        NOW,
+        None,
+    )
+
+
+async def test_format_devices_prints_one_line_per_device_without_hashes() -> None:
+    store = InMemoryDeviceStore(clock=lambda: NOW)
+    phone, web = await _two_devices(store)
+    await store.revoke(web)
+    lines = admin.format_devices(await store.list_devices())
+    assert len(lines) == 3  # a header and two rows
+    assert lines[0].split("\t") == ["id", "name", "kind", "paired_at", "revoked_at"]
+    assert lines[1].split("\t") == [str(phone), "هاتف", "iphone", NOW.isoformat(), "-"]
+    assert lines[2].split("\t")[4] == NOW.isoformat()
+    text = "\n".join(lines)
+    assert "f" * 64 not in text and "e" * 64 not in text
+
+
+async def test_revoke_device_revokes_and_drops_push_subscriptions() -> None:
+    dropped: list[Any] = []
+    store = InMemoryDeviceStore(clock=lambda: NOW, on_revoke=dropped.append)
+    phone, _ = await _two_devices(store)
+    assert await admin.revoke_device(store, phone) is True
+    device = await store.get_device(phone)
+    assert device is not None
+    assert device.revoked_at == NOW
+    assert device.refresh_hash is None
+    assert dropped == [phone]
+    assert await admin.revoke_device(store, uuid4()) is False
+
+
+def test_parser_devices_and_revoke() -> None:
+    parser = admin.build_parser()
+    assert parser.parse_args(["devices"]).command == "devices"
+    device_id = uuid4()
+    args = parser.parse_args(["revoke", "--id", str(device_id)])
+    assert (args.command, args.id) == ("revoke", device_id)
+
+
+@pytest.mark.parametrize("argv", [["revoke"], ["revoke", "--id", "not-a-uuid"]])
+def test_parser_revoke_rejects_bad_arguments(argv: list[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        admin.build_parser().parse_args(argv)
+    assert exc.value.code == 2
+
+
+class ListingPool(ClosablePool):
+    def __init__(self, rows: list[dict[str, Any]], execute: str = "UPDATE 1") -> None:
+        super().__init__()
+        self._rows = rows
+        self._execute = execute
+
+    async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
+        self.calls.append(("fetch", sql, args))
+        return self._rows
+
+
+def test_main_devices_lists_rows_and_never_selects_the_hash(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    device_id = uuid4()
+    row = {"id": device_id, "name": "هاتف", "kind": "iphone", "paired_at": NOW, "revoked_at": None}
+    pool = ListingPool([row])
+
+    async def fake_create_pool(dsn: str, **_: Any) -> ListingPool:
+        return pool
+
+    monkeypatch.setattr(admin, "settings", _settings)
+    monkeypatch.setattr(admin, "create_pool", fake_create_pool)
+    assert admin.main(["devices"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[1].startswith(f"{device_id}\tهاتف\tiphone\t")
+    selects = [c for c in pool.calls if c[0] == "fetch"]
+    assert len(selects) == 1
+    assert "refresh_hash" not in selects[0][1]
+    assert pool.closed
+
+
+@pytest.mark.parametrize(("tag", "code"), [("UPDATE 1", 0), ("UPDATE 0", 1)])
+def test_main_revoke_uses_the_same_transaction_as_the_route(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tag: str, code: int
+) -> None:
+    device_id = uuid4()
+    pool = ListingPool([], execute=tag)
+
+    async def fake_create_pool(dsn: str, **_: Any) -> ListingPool:
+        return pool
+
+    monkeypatch.setattr(admin, "settings", _settings)
+    monkeypatch.setattr(admin, "create_pool", fake_create_pool)
+    assert admin.main(["revoke", "--id", str(device_id)]) == code
+    statements = [c for c in pool.calls if c[0] == "execute"]
+    assert "UPDATE yawmi.devices" in statements[0][1]
+    assert "DELETE FROM yawmi.push_subscriptions" in statements[1][1]
+    assert pool.calls[0][0] == "begin"
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err.strip()
+    assert pool.closed

@@ -15,7 +15,9 @@ web/dist/
 
 # Secrets and local environment
 .env
+.env.*
 *.pem
+*.key
 
 # Generated caches
 openapi/.cache/

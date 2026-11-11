@@ -1,10 +1,17 @@
 """`yawmi-admin`: operator commands, run on the server by hand.
 
     uv run yawmi-admin pair-code --kind iphone|watch|web
+    uv run yawmi-admin devices
+    uv run yawmi-admin revoke --id <uuid>
     uv run yawmi-admin service-token --name <name> [--ttl-hours N] [--dry-run]
 
 `pair-code` prints an 8-digit, single-use pairing code valid for 10 minutes. It inserts into
 `yawmi.pairing_codes` through `YAWMI_DATABASE_URL` (see `AsyncpgDeviceStore`).
+
+`devices` prints a header line, then one tab-separated line per device (id, name, kind,
+paired_at, revoked_at); the refresh hash is never read. `revoke --id` revokes one device in the
+same transaction as `POST /v1/devices/{id}/revoke` (refresh hash cleared, Web Push
+subscriptions deleted): this is how a lost phone is cut off, with no service token involved.
 
 `service-token` registers a `service` device (for the scheduler and for `POST
 /v1/devices/{id}/revoke`) and prints its access token on one line, and nothing else, on stdout.
@@ -18,8 +25,9 @@ import secrets
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
-from yawmi.auth.deps import DeviceStore
+from yawmi.auth.deps import DeviceInfo, DeviceStore
 from yawmi.auth.memory_store import InMemoryDeviceStore
 from yawmi.auth.pg_store import AsyncpgDeviceStore
 from yawmi.auth.tokens import issue_access, new_refresh
@@ -80,6 +88,31 @@ async def issue_service_token(
     return issue_access(device_id, "service", secret, ttl_hours * 3600)
 
 
+def format_devices(devices: Sequence[DeviceInfo]) -> list[str]:
+    """A header and one tab-separated line per device; `-` for an empty timestamp."""
+
+    def when(value: datetime | None) -> str:
+        return value.isoformat() if value is not None else "-"
+
+    lines = ["id\tname\tkind\tpaired_at\trevoked_at"]
+    for d in devices:
+        fields = (str(d.id), d.name, d.kind, when(d.paired_at), when(d.revoked_at))
+        lines.append("\t".join(fields))
+    return lines
+
+
+async def revoke_device(store: DeviceStore, device_id: UUID) -> bool:
+    """Revoke `device_id` exactly as the route does; `False` if no such device exists."""
+    return await store.revoke(device_id)
+
+
+def _uuid_arg(value: str) -> UUID:
+    try:
+        return UUID(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("المعرّف ليس UUID صالحاً") from None
+
+
 def _name_arg(value: str) -> str:
     try:
         return _checked_name(value)
@@ -105,6 +138,9 @@ def build_parser() -> argparse.ArgumentParser:
     pair_code.add_argument(
         "--kind", required=True, choices=PAIRABLE_KINDS, help="نوع الجهاز المراد إقرانه"
     )
+    commands.add_parser("devices", help="عرض الأجهزة المقترنة (بلا رمز التحديث)")
+    revoke = commands.add_parser("revoke", help="إبطال جهاز وحذف اشتراكات إشعاراته")
+    revoke.add_argument("--id", required=True, type=_uuid_arg, help="معرّف الجهاز من أمر devices")
     service_token = commands.add_parser(
         "service-token", help="إنشاء جهاز خدمة وطباعة رمز وصوله (سطر واحد، بلا رمز تحديث)"
     )
@@ -133,6 +169,22 @@ async def _pair_code(kind: str) -> str:
         await pool.close()
 
 
+async def _devices() -> list[DeviceInfo]:
+    pool = await create_pool(settings().database_url, min_size=1, max_size=1)
+    try:
+        return await AsyncpgDeviceStore(pool).list_devices()
+    finally:
+        await pool.close()
+
+
+async def _revoke(device_id: UUID) -> bool:
+    pool = await create_pool(settings().database_url, min_size=1, max_size=1)
+    try:
+        return await revoke_device(AsyncpgDeviceStore(pool), device_id)
+    finally:
+        await pool.close()
+
+
 async def _service_token(name: str, ttl_hours: int, *, dry_run: bool) -> str:
     config = settings()
     secret = config.jwt_secret.get_secret_value()
@@ -154,6 +206,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
     args = build_parser().parse_args(argv)
+    if args.command == "devices":
+        try:
+            devices = asyncio.run(_devices())
+        except Exception as exc:  # noqa: BLE001  # class name only: messages may carry connection details
+            print(f"تعذّر عرض الأجهزة ({type(exc).__name__})", file=sys.stderr)
+            return 1
+        for line in format_devices(devices):
+            print(line)
+        return 0
+    if args.command == "revoke":
+        try:
+            found = asyncio.run(_revoke(args.id))
+        except Exception as exc:  # noqa: BLE001  # class name only: messages may carry connection details
+            print(f"تعذّر إبطال الجهاز ({type(exc).__name__})", file=sys.stderr)
+            return 1
+        if not found:
+            print("الجهاز غير موجود", file=sys.stderr)
+            return 1
+        print("أُبطل الجهاز وحُذفت اشتراكات إشعاراته", file=sys.stderr)
+        return 0
     if args.command == "service-token":
         try:
             token = asyncio.run(_service_token(args.name, args.ttl_hours, dry_run=args.dry_run))

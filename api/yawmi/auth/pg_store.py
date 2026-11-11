@@ -9,13 +9,13 @@ with the same token cannot both succeed and a pairing code cannot be consumed tw
 """
 
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
 import asyncpg
 
-from yawmi.auth.deps import Device, PairingCode
+from yawmi.auth.deps import Device, DeviceInfo, PairingCode
 
 _ADD_PAIRING_CODE = """
 INSERT INTO yawmi.pairing_codes (code, kind, expires_at)
@@ -30,9 +30,16 @@ WHERE code = $1 AND used_at IS NULL AND expires_at > now()
 RETURNING code, kind, expires_at
 """
 
+# Fail closed after repeated wrong codes (see `PairingGuard` in `yawmi.routes.devices`).
+_EXPIRE_PAIRING_CODES = """
+UPDATE yawmi.pairing_codes
+SET expires_at = now()
+WHERE used_at IS NULL AND expires_at > now()
+"""
+
 _CREATE_DEVICE = """
-INSERT INTO yawmi.devices (id, name, kind, refresh_hash, paired_at)
-VALUES ($1, $2, $3, $4, now())
+INSERT INTO yawmi.devices (id, name, kind, refresh_hash, paired_at, refresh_rotated_at)
+VALUES ($1, $2, $3, $4, now(), now())
 """
 
 _GET_DEVICE = """
@@ -41,16 +48,25 @@ FROM yawmi.devices
 WHERE id = $1
 """
 
+# The refresh token expires on the server too: a hash last rotated `$4` ago or earlier is dead.
 _ROTATE_REFRESH = """
 UPDATE yawmi.devices
-SET refresh_hash = $3
+SET refresh_hash = $3, refresh_rotated_at = now()
 WHERE id = $1 AND refresh_hash = $2 AND revoked_at IS NULL
+  AND refresh_rotated_at > now() - $4::interval
 """
 
 _REVOKE = """
 UPDATE yawmi.devices
 SET revoked_at = COALESCE(revoked_at, now()), refresh_hash = NULL
 WHERE id = $1
+"""
+
+# For the operator: no refresh hash, ever.
+_LIST_DEVICES = """
+SELECT id, name, kind, paired_at, revoked_at
+FROM yawmi.devices
+ORDER BY paired_at NULLS LAST, id
 """
 
 # Same transaction as _REVOKE: a revoked device keeps no Web Push subscription.
@@ -87,6 +103,9 @@ class AsyncpgDeviceStore:
             return None
         return PairingCode(code=row["code"], kind=row["kind"], expires_at=row["expires_at"])
 
+    async def expire_pairing_codes(self) -> int:
+        return affected_rows(await self._pool.execute(_EXPIRE_PAIRING_CODES))
+
     async def create_device(self, name: str, kind: str, refresh_hash: str) -> UUID:
         device_id = uuid4()
         await self._pool.execute(_CREATE_DEVICE, device_id, name, kind, refresh_hash)
@@ -96,8 +115,10 @@ class AsyncpgDeviceStore:
         row = await self._pool.fetchrow(_GET_DEVICE, device_id)
         return None if row is None else device_from_row(row)
 
-    async def rotate_refresh(self, device_id: UUID, old_hash: str, new_hash: str) -> bool:
-        tag = await self._pool.execute(_ROTATE_REFRESH, device_id, old_hash, new_hash)
+    async def rotate_refresh(
+        self, device_id: UUID, old_hash: str, new_hash: str, *, max_age: timedelta
+    ) -> bool:
+        tag = await self._pool.execute(_ROTATE_REFRESH, device_id, old_hash, new_hash, max_age)
         return affected_rows(tag) == 1
 
     async def revoke(self, device_id: UUID) -> bool:
@@ -105,3 +126,16 @@ class AsyncpgDeviceStore:
             tag = await conn.execute(_REVOKE, device_id)
             await conn.execute(_DROP_PUSH, device_id)
         return affected_rows(tag) == 1
+
+    async def list_devices(self) -> list[DeviceInfo]:
+        rows = await self._pool.fetch(_LIST_DEVICES)
+        return [
+            DeviceInfo(
+                id=r["id"],
+                name=r["name"],
+                kind=r["kind"],
+                paired_at=r["paired_at"],
+                revoked_at=r["revoked_at"],
+            )
+            for r in rows
+        ]

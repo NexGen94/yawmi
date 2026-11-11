@@ -52,7 +52,7 @@ export interface paths {
         put?: never;
         /**
          * إغلاق اليوم بملخص من سطرين (متكرر الأثر)
-         * @description يستلم ملخصات اليوم ومصادره، ويعيد ملخصاً من سطرين كحد أقصى لا يستشهد إلا بمصادر الطلب. أول إغلاق لليوم يُحفظ، وكل تكرار لليوم نفسه يعيده دون استدعاء المزوّد. الملخصات والمصادر يرسلها العميل حالياً إلى أن يبنيها الخادم (المهمتان 8b و10b).
+         * @description يستلم ملخصات اليوم ومصادره، ويعيد ملخصاً من سطرين كحد أقصى لا يستشهد إلا بمصادر الطلب. يُقبل اليوم الحالي والأيام السبعة قبله فقط (`day_out_of_window` لما قبلها). أول إغلاق لليوم يُحفظ، وكل تكرار لليوم نفسه يعيده دون استدعاء المزوّد. الملخصات والمصادر يرسلها العميل حالياً إلى أن يبنيها الخادم (المهمتان 8b و10b).
          */
         post: operations["close_day_v1_day_close_post"];
         delete?: never;
@@ -460,7 +460,7 @@ export interface components {
             exertion?: components["schemas"]["ExertionSegment"][];
             /**
              * Has Watch Night
-             * @description هل لبست الساعة في النوم المنسوب إلى اليوم
+             * @description هل لُبست الساعة في النوم المنسوب إلى اليوم
              */
             has_watch_night: boolean;
             /**
@@ -1218,12 +1218,9 @@ export interface components {
             /** Habits Due */
             habits_due: components["schemas"]["HabitDue"][];
             health: components["schemas"]["TodayHealth"];
+            /** @description رؤية الصباح: سطران وحتى ثلاث أولويات بمعرّفات مصادرها. `null` إلى أن تُبنى خدمة توليدها */
+            insight: components["schemas"]["InsightResponse"] | null;
             plan: components["schemas"]["TodayPlan"];
-            /**
-             * Priorities
-             * @description تملؤها خدمة الذكاء الاصطناعي؛ فارغة حتى ذلك
-             */
-            priorities: string[];
         };
         /** TodayPlan */
         TodayPlan: {

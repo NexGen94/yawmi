@@ -6,6 +6,7 @@ Unit tests only: the app is built with the in-memory `DeviceStore`, so no databa
 import hashlib
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -34,6 +35,7 @@ from yawmi.auth.tokens import (
 from yawmi.db.pool import get_pool
 from yawmi.main import app as module_app
 from yawmi.main import create_app
+from yawmi.routes.devices import PairingGuard
 from yawmi.settings import Settings
 
 SECRET = "test-secret-for-unit-tests-only-0123456789"
@@ -269,6 +271,32 @@ async def test_access_log_keeps_normal_paths_readable(
     assert line.startswith("GET /v1/health/live -> 200 ")
 
 
+@pytest.mark.parametrize("name", ["yawmi.access", "yawmi.ai", "yawmi.push"])
+def test_app_loggers_are_enabled_for_info_without_any_test_help(name: str) -> None:
+    """uvicorn configures only its own loggers: the app must switch its own on (I-1)."""
+    create_app(settings=make_settings(), devices=InMemoryDeviceStore())
+    assert logging.getLogger(name).isEnabledFor(logging.INFO)
+
+
+def test_logging_is_configured_once_however_many_apps_are_built() -> None:
+    for _ in range(3):
+        create_app(settings=make_settings(), devices=InMemoryDeviceStore())
+    assert len(logging.getLogger("yawmi").handlers) == 1
+
+
+async def test_one_request_writes_one_access_line_to_stderr(
+    client: httpx.AsyncClient, capsys: pytest.CaptureFixture[str]
+) -> None:
+    capsys.readouterr()  # drop anything written while the app was built
+    await client.get("/v1/health/live")
+    lines = [line for line in capsys.readouterr().err.splitlines() if "yawmi.access" in line]
+    assert len(lines) == 1
+    line = lines[0]
+    assert "INFO" in line
+    assert "GET /v1/health/live -> 200 " in line
+    assert re.match(r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}", line)  # time first
+
+
 # --- current_device / require_kind -------------------------------------------------------------
 
 
@@ -385,6 +413,105 @@ async def test_unknown_pairing_code_is_rejected(client: httpx.AsyncClient) -> No
     response = await pair(client, code="00000000")
     assert response.status_code == 400
     assert response.json() == BAD_CODE
+
+
+# --- pairing fails closed after repeated wrong codes (I-13(a)) ---------------------------------
+
+
+class _Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+@pytest.fixture
+def guard_clock(app: FastAPI) -> _Clock:
+    clock = _Clock()
+    app.state.pairing_guard = PairingGuard(clock=clock)
+    return clock
+
+
+async def fail(client: httpx.AsyncClient, times: int) -> None:
+    for _ in range(times):
+        assert (await pair(client, code="99999999")).status_code == 400
+
+
+@pytest.mark.usefixtures("guard_clock")
+async def test_the_21st_failed_pairing_expires_every_unused_code(
+    client: httpx.AsyncClient, store: InMemoryDeviceStore
+) -> None:
+    await seed_code(store, code="11111111")
+    await seed_code(store, code="22222222")
+    await fail(client, 20)
+    assert (await pair(client, code="11111111")).status_code == 200  # 20 failures: still open
+    await fail(client, 1)
+    assert (await pair(client, code="22222222")).json() == BAD_CODE  # 21st: every code expired
+    # a code issued afterwards works: the owner issues a new one
+    await seed_code(store, code="33333333")
+    assert (await pair(client, code="33333333")).status_code == 200
+
+
+@pytest.mark.usefixtures("guard_clock")
+async def test_a_successful_pairing_neither_counts_nor_resets_the_failures(
+    client: httpx.AsyncClient, store: InMemoryDeviceStore
+) -> None:
+    await seed_code(store, code="11111111")
+    await seed_code(store, code="22222222")
+    await fail(client, 19)
+    assert (await pair(client, code="11111111")).status_code == 200
+    await fail(client, 1)  # 20 failures in all: the success was not one of them
+    await seed_code(store, code="33333333")
+    await fail(client, 1)  # 21: the success did not reset the count either
+    assert (await pair(client, code="22222222")).json() == BAD_CODE
+    assert (await pair(client, code="33333333")).json() == BAD_CODE
+
+
+async def test_failures_older_than_ten_minutes_no_longer_count(
+    client: httpx.AsyncClient, store: InMemoryDeviceStore, guard_clock: _Clock
+) -> None:
+    await seed_code(store, code="11111111")
+    await fail(client, 20)
+    guard_clock.now += 10 * 60 + 1
+    await fail(client, 1)
+    assert (await pair(client, code="11111111")).status_code == 200
+
+
+async def test_a_kind_mismatch_counts_as_a_failure(
+    client: httpx.AsyncClient, store: InMemoryDeviceStore, guard_clock: _Clock
+) -> None:
+    await seed_code(store, code="11111111")
+    for i in range(21):
+        await seed_code(store, "watch", code=f"5{i:07d}")
+        assert (await pair(client, code=f"5{i:07d}", kind="iphone")).status_code == 400
+    assert (await pair(client, code="11111111")).json() == BAD_CODE
+
+
+async def test_the_memory_store_expires_only_unused_codes() -> None:
+    now = datetime(2026, 11, 10, 9, 0, tzinfo=UTC)
+    store = InMemoryDeviceStore(clock=lambda: now)
+    await store.add_pairing_code("11111111", "web", now + timedelta(minutes=5))
+    await store.add_pairing_code("22222222", "web", now + timedelta(minutes=5))
+    assert await store.consume_pairing_code("11111111") is not None
+    assert await store.expire_pairing_codes() == 1
+    assert await store.consume_pairing_code("22222222") is None
+
+
+async def test_the_pg_store_expires_unused_codes_in_one_statement() -> None:
+    class Pool:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def execute(self, sql: str, *args: object) -> str:
+            self.calls.append(sql)
+            return "UPDATE 2"
+
+    pool = Pool()
+    assert await AsyncpgDeviceStore(pool).expire_pairing_codes() == 2  # type: ignore[arg-type]
+    [sql] = pool.calls
+    assert "UPDATE yawmi.pairing_codes" in sql
+    assert "used_at IS NULL" in sql
 
 
 async def test_pairing_code_kind_must_match_requested_kind(
@@ -537,6 +664,52 @@ async def test_refresh_with_body_rotates_token(
         json={"device_id": paired["device_id"], "refresh_token": body["refresh_token"]},
     )
     assert chained.status_code == 200
+
+
+@pytest.mark.parametrize("kind", ["iphone", "web"])
+async def test_refresh_token_older_than_the_ttl_is_refused_by_the_server(
+    client: httpx.AsyncClient, store: InMemoryDeviceStore, kind: str
+) -> None:
+    """The 90 days are enforced by the server, not only by the cookie's Max-Age (I-3)."""
+    started = datetime.now(UTC)
+    store.clock = lambda: started
+    await seed_code(store, kind)
+    paired = await pair(client, kind=kind)
+    assert paired.status_code == 200
+
+    def attempt() -> dict[str, object]:
+        if kind == "web":
+            return {"headers": {"Cookie": cookie_pair(paired)}}
+        body = paired.json()
+        return {"json": {"device_id": body["device_id"], "refresh_token": body["refresh_token"]}}
+
+    store.clock = lambda: started + timedelta(days=90, seconds=1)
+    expired = await client.post("/v1/auth/refresh", **attempt())  # type: ignore[arg-type]
+    assert expired.status_code == 401
+    assert expired.json() == UNAUTHORIZED
+
+
+async def test_refresh_just_inside_the_ttl_still_rotates_and_restarts_the_clock(
+    client: httpx.AsyncClient, store: InMemoryDeviceStore
+) -> None:
+    started = datetime.now(UTC)
+    store.clock = lambda: started
+    await seed_code(store, "iphone")
+    paired = (await pair(client)).json()
+
+    store.clock = lambda: started + timedelta(days=89, hours=23)
+    first = await client.post(
+        "/v1/auth/refresh",
+        json={"device_id": paired["device_id"], "refresh_token": paired["refresh_token"]},
+    )
+    assert first.status_code == 200
+    # the rotation restarted the 90 days: 150 days after pairing, 60 after the rotation, it works
+    store.clock = lambda: started + timedelta(days=150)
+    second = await client.post(
+        "/v1/auth/refresh",
+        json={"device_id": paired["device_id"], "refresh_token": first.json()["refresh_token"]},
+    )
+    assert second.status_code == 200
 
 
 async def test_refresh_without_credentials_is_unauthorized(client: httpx.AsyncClient) -> None:

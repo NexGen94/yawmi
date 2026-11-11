@@ -3,7 +3,8 @@
 The client sends the day's aggregates and the citable sources; the grounded `InsightService`
 (see `yawmi.ai.service`) produces at most two lines and cites only the sources it was given.
 
-* `day/close` is idempotent per day: the first closure is stored and every repeat returns it
+* `day/close` accepts today and the seven days before it (422 `day_out_of_window` otherwise)
+  and is idempotent per day: the first closure is stored and every repeat returns it
   without calling the provider again (a concurrent pair keeps one row).
 * `ask` answers one question and stores nothing.
 * `reviews` lists stored insights, newest first.
@@ -16,7 +17,7 @@ This module is discovered automatically (see `yawmi.routes`).
 """
 
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -47,6 +48,7 @@ from yawmi.db.pool import get_pool
 from yawmi.domain.days import day_key
 from yawmi.errors import ErrorDetail
 from yawmi.events import models as event_models
+from yawmi.events.project import MAX_BACKDATE_DAYS
 from yawmi.text import check_text
 
 router = APIRouter(prefix="/v1", tags=["insights"])
@@ -194,6 +196,15 @@ def _check_day(day: date, tz: str) -> None:
         )
 
 
+def _check_close_window(day: date, tz: str) -> None:
+    """`day/close` reaches back as far as an event may (`MAX_BACKDATE_DAYS`, D-065 §5)."""
+    oldest = day_key(event_models.server_now(), tz) - timedelta(days=MAX_BACKDATE_DAYS)
+    if day < oldest:
+        raise RequestValidationError(
+            [{"type": "day_out_of_window", "loc": ("body", "day"), "msg": "too old", "input": None}]
+        )
+
+
 def _problem(status: int, detail: str, code: str) -> JSONResponse:
     """The app's error shape; `code` is ours, never text from a provider."""
     body = {"detail": detail, "errors": [{"loc": ["body"], "type": code}]}
@@ -230,6 +241,7 @@ _ERRORS: dict[int | str, dict[str, Any]] = {
     summary="إغلاق اليوم بملخص من سطرين (متكرر الأثر)",
     description=(
         "يستلم ملخصات اليوم ومصادره، ويعيد ملخصاً من سطرين كحد أقصى لا يستشهد إلا بمصادر الطلب. "
+        "يُقبل اليوم الحالي والأيام السبعة قبله فقط (`day_out_of_window` لما قبلها). "
         "أول إغلاق لليوم يُحفظ، وكل تكرار لليوم نفسه يعيده دون استدعاء المزوّد. "
         "الملخصات والمصادر يرسلها العميل حالياً إلى أن يبنيها الخادم (المهمتان 8b و10b)."
     ),
@@ -239,6 +251,7 @@ async def close_day(
     body: DayCloseRequest, _: DeviceDep, store: StoreDep, service: ServiceDep, settings: SettingsDep
 ) -> InsightOut | JSONResponse:
     _check_day(body.day, settings.tz)
+    _check_close_window(body.day, settings.tz)
     existing = await store.get_closure(body.day)
     if existing is not None:
         return _out(existing)

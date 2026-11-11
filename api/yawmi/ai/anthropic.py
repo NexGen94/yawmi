@@ -2,6 +2,11 @@
 
 Structured output goes through `output_config.format` (`json_schema`). The schema carries no
 health values, so it is safe for Anthropic to cache it outside the health-data protections.
+
+Thinking is on by default for both models and its tokens count toward `max_tokens`, so the
+budget is 4096 (1024 let a weekly review stop at `max_tokens` before its two lines) and the
+effort is `low`: a two-line summary of given facts needs no deep reasoning, and low effort
+also cuts cost and latency. `eval/promptfooconfig.yaml` carries the same two values.
 """
 
 from typing import Any
@@ -19,6 +24,8 @@ from yawmi.ai.base import (
 
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
+MAX_TOKENS = 4096
+EFFORT = "low"
 
 
 class AnthropicProvider:
@@ -28,7 +35,7 @@ class AnthropicProvider:
         self,
         api_key: str | SecretStr,
         *,
-        max_tokens: int = 1024,
+        max_tokens: int = MAX_TOKENS,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._api_key = SecretStr(reveal_key(api_key))
@@ -49,7 +56,10 @@ class AnthropicProvider:
                 "max_tokens": self._max_tokens,
                 "system": system,
                 "messages": [{"role": "user", "content": user}],
-                "output_config": {"format": {"type": "json_schema", "schema": schema}},
+                "output_config": {
+                    "format": {"type": "json_schema", "schema": schema},
+                    "effort": EFFORT,
+                },
             },
         )
         if response.status_code != 200:

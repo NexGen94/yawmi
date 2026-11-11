@@ -143,6 +143,11 @@ KEYGEN = COMPOSE_DIR / "yawmi-vapid-keygen.yml"
 ALL_COMPOSE = [API_COMPOSE, LOADER_1, LOADER_2, KEYGEN]
 
 
+# D-7: left empty, these two would give an empty Host() rule and the default certificate.
+API_HOST = "${YAWMI_API_HOST:?YAWMI_API_HOST is required}"
+CERT_RESOLVER = "${TRAEFIK_CERT_RESOLVER:?TRAEFIK_CERT_RESOLVER is required}"
+
+
 def _yaml(path: Path) -> dict:
     yaml = pytest.importorskip("yaml")
     return yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -245,11 +250,11 @@ def test_api_compose_traefik_router_priority_tls_and_rate_limit() -> None:
     labels = _labels(_yaml(API_COMPOSE)["services"]["yawmi-api"])
     assert labels["traefik.enable"] == "true"
     assert labels["traefik.http.routers.yawmi-api.rule"] == (
-        "Host(`${YAWMI_API_HOST}`) && PathPrefix(`/v1`)"
+        f"Host(`{API_HOST}`) && PathPrefix(`/v1`)"
     )
     assert labels["traefik.http.routers.yawmi-api.priority"] == "100"
     assert labels["traefik.http.routers.yawmi-api.tls"] == "true"
-    assert labels["traefik.http.routers.yawmi-api.tls.certresolver"] == "${TRAEFIK_CERT_RESOLVER}"
+    assert labels["traefik.http.routers.yawmi-api.tls.certresolver"] == CERT_RESOLVER
     assert labels["traefik.http.services.yawmi-api.loadbalancer.server.port"] == "8000"
     assert labels["traefik.http.routers.yawmi-api.middlewares"] == "yawmi-rl"
     rl = "traefik.http.middlewares.yawmi-rl.ratelimit."
@@ -263,7 +268,7 @@ def test_api_compose_traefik_router_priority_tls_and_rate_limit() -> None:
 def test_api_compose_pairing_has_its_own_stricter_and_higher_priority_router() -> None:
     labels = _labels(_yaml(API_COMPOSE)["services"]["yawmi-api"])
     assert labels["traefik.http.routers.yawmi-pair.rule"] == (
-        "Host(`${YAWMI_API_HOST}`) && Path(`/v1/devices/pair`)"
+        f"Host(`{API_HOST}`) && Path(`/v1/devices/pair`)"
     )
     assert int(labels["traefik.http.routers.yawmi-pair.priority"]) > int(
         labels["traefik.http.routers.yawmi-api.priority"]
@@ -1019,3 +1024,170 @@ def test_web_workflow_only_publishes_tags_that_are_on_main_and_checks_the_runnin
     docker = (REPO / "web" / "Dockerfile").read_text(encoding="utf-8")
     assert "npm ci --ignore-scripts" in docker
     assert "127.0.0.1:8080/healthz" in docker
+
+
+def test_gitignore_keeps_env_variants_and_key_files_out() -> None:
+    """M-6: `.env.local`, `.env.production`, `vapid.key` and the like are never committed."""
+    lines = (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
+    for pattern in (".env", ".env.*", "*.pem", "*.key"):
+        assert pattern in lines
+
+
+# --- D-5, D-6, D-7: one tag, no pull, required host and resolver ----------------------------------
+
+
+def test_api_compose_never_pulls_either_image() -> None:
+    """D-6: the images are private and compose must not try to pull them after `docker logout`."""
+    services = _yaml(API_COMPOSE)["services"]
+    assert {name: s.get("pull_policy") for name, s in services.items()} == {
+        "yawmi-api": "never",
+        "yawmi-web": "never",
+    }
+
+
+def test_api_host_and_cert_resolver_are_required_wherever_they_are_used() -> None:
+    text = API_COMPOSE.read_text(encoding="utf-8")
+    for name, guarded in (("YAWMI_API_HOST", API_HOST), ("TRAEFIK_CERT_RESOLVER", CERT_RESOLVER)):
+        uses = re.findall(r"\$\{" + name + r"[^}]*\}", text)
+        assert len(uses) == 3, name
+        assert set(uses) == {guarded}, name
+    services = _yaml(API_COMPOSE)["services"]
+    for service, router in (
+        ("yawmi-api", "yawmi-api"),
+        ("yawmi-api", "yawmi-pair"),
+        ("yawmi-web", "yawmi-web"),
+    ):
+        labels = _labels(services[service])
+        assert labels[f"traefik.http.routers.{router}.tls.certresolver"] == CERT_RESOLVER
+        assert f"Host(`{API_HOST}`)" in labels[f"traefik.http.routers.{router}.rule"]
+
+
+def test_the_keygen_runs_the_same_api_image_tag_as_the_api_project() -> None:
+    """D-5: one image is built from main; a second tag would exist only if pushed again."""
+    api_image = _yaml(API_COMPOSE)["services"]["yawmi-api"]["image"]
+    keygen_image = _yaml(KEYGEN)["services"]["yawmi-vapid-keygen"]["image"]
+    assert keygen_image == api_image
+    tags = set(
+        re.findall(r"ghcr\.io/nexgen94/yawmi-api:(\S+)", API_COMPOSE.read_text(encoding="utf-8"))
+    )
+    tags |= set(
+        re.findall(r"ghcr\.io/nexgen94/yawmi-api:(\S+)", KEYGEN.read_text(encoding="utf-8"))
+    )
+    assert len(tags) == 1
+
+
+# --- the runbook lines of the final review (D-1 … D-10, I-13(b)) ----------------------------------
+
+_SECOND_PERSON = re.compile(
+    r"(?<![\u0621-\u064a])(أنت|انت|عليك|لديك|عندك|يمكنك|تأكد|تأكدي|اكتب|اكتبي|شغّل|شغل|افتح|"
+    r"افتحي|انتظر|انتظري|احذف|احذفي|أرسل|ارسل|أرسلي|نفّذ|نفذ|نفّذي|استخدم|استخدمي|انظر|انظري)(?![\u0621-\u064a])"
+)
+
+
+def test_runbook_role_check_expects_postgres_booleans_as_t_and_f() -> None:
+    """D-1: concat_ws prints booleans with their output function: `f`/`t`, not false/true."""
+    body = _runbook_steps()[4]
+    assert "yawmi-verify api_role=f,f,f,5,t" in body
+    assert "api_role=false" not in RUNBOOK
+
+
+def test_runbook_loader_1_lists_the_two_already_exists_notices() -> None:
+    """D-2: loader 1 creates the schema and ledger, then 0001 creates them again IF NOT EXISTS."""
+    body = _runbook_steps()[3]
+    assert 'NOTICE:  schema "yawmi" already exists, skipping' in body
+    assert 'NOTICE:  relation "schema_migrations" already exists, skipping' in body
+
+
+def test_runbook_has_a_curl_smoke_test_after_pairing_that_ends_with_the_cli_revoke() -> None:
+    """D-3 and C-1(c): the first real request is the operator's, with expected outputs."""
+    body = _runbook_steps()[9]
+    smoke = body.split("9أ", 1)[1]
+    for marker in (
+        "/v1/devices/pair",
+        "access_token",
+        "/v1/today",
+        "/v1/events",
+        '{"accepted":1,"duplicates":0}',
+        '{"accepted":0,"duplicates":1}',
+        "/v1/habits",
+        "yawmi-admin revoke --id",
+    ):
+        assert marker in smoke, marker
+    assert smoke.index("/v1/today") < smoke.index("/v1/events") < smoke.index("/v1/habits")
+    assert smoke.index("/v1/habits") < smoke.index("yawmi-admin revoke --id")
+    assert "يُدخل عبدالله الكود في التطبيق" not in RUNBOOK  # there is no pairing screen yet
+
+
+def test_runbook_issues_a_service_token_only_on_demand_for_one_hour() -> None:
+    """D-4: no standing year-long token; revocation goes through the CLI (I-2)."""
+    body = _runbook_steps()[10]
+    assert "--ttl-hours 1" in body
+    assert "--ttl-hours 8760" not in RUNBOOK
+    assert "عند الحاجة" in body
+    row_10 = next(line for line in RUNBOOK.splitlines() if line.startswith("| 10 |"))
+    assert "ولإبطال الأجهزة" not in row_10
+    assert "yawmi-admin revoke" in RUNBOOK.split("**11و", 1)[1]
+    assert "برمز الخدمة (الخطوة 10)" not in RUNBOOK
+
+
+def test_runbook_checks_the_web_container_and_reads_404_not_502_for_an_unhealthy_api() -> None:
+    """D-8."""
+    steps = _runbook_steps()
+    assert "docker ps --filter name=yawmi-web" in steps[7]
+    assert "yawmi-web Up … (healthy)" in steps[7]
+    failure = steps[8].split("**إن فشل:**", 1)[1]
+    assert "502` ← الحاوية ليست `healthy`" not in failure
+    assert "nginx" in failure and "404" in failure
+    assert "`main`" in RUNBOOK.split("**11أ", 1)[1].split("**11ب", 1)[0]
+    assert "`main`" in steps[5]
+
+
+def test_runbook_step_0_checks_the_raqib_network_volume_and_superuser() -> None:
+    """D-10."""
+    body = _runbook_steps()[0]
+    assert "docker network inspect raqib_internal" in body
+    assert "docker volume inspect raqib_secrets" in body
+    assert "rolsuper" in body and "raqib_admin" in body
+
+
+def test_runbook_proves_the_pairing_rate_limit_once() -> None:
+    """I-13(b): 20 quick wrong codes must meet 429 at Traefik."""
+    body = _runbook_steps()[8]
+    assert "/v1/devices/pair" in body
+    assert "seq 1 20" in body
+    assert "429" in body
+
+
+def test_runbook_step_3_rollback_removes_the_stopped_loader_project() -> None:
+    rollback = _runbook_steps()[3].split("**التراجع**", 1)[1]
+    assert "yawmi-loader" in rollback
+
+
+def test_runbook_names_one_api_tag_for_push_and_says_compose_never_pulls() -> None:
+    """D-5 and D-6."""
+    assert "api-v0.2.0" not in RUNBOOK
+    assert "yawmi-api:0.2.0" not in RUNBOOK
+    assert "pull_policy: never" in _runbook_steps()[6]
+
+
+def test_runbook_lines_added_by_the_final_review_address_no_one() -> None:
+    hits = _SECOND_PERSON.findall(RUNBOOK)
+    assert hits == []
+
+
+# --- ci (D-9, M-9) -------------------------------------------------------------------------------
+
+
+def test_api_image_workflow_only_publishes_tags_that_are_on_main() -> None:
+    """D-9: a tag on an unreviewed branch must never publish an API image."""
+    assert "fetch-depth: 0" in WORKFLOW
+    assert "merge-base --is-ancestor" in WORKFLOW and "origin/main" in WORKFLOW
+    assert WORKFLOW.index("merge-base --is-ancestor") < WORKFLOW.index("docker build")
+    assert WORKFLOW.index("merge-base --is-ancestor") < WORKFLOW.index("docker push")
+
+
+def test_web_tests_workflow_installs_without_running_package_scripts() -> None:
+    """M-9: like the Dockerfile, CI never runs install scripts of the app's dependencies."""
+    text = (REPO / ".github" / "workflows" / "web-tests.yml").read_text(encoding="utf-8")
+    installs = re.findall(r"run: (npm ci[^\n]*)", text)
+    assert installs and all(line == "npm ci --ignore-scripts" for line in installs), installs

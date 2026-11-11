@@ -63,7 +63,7 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def make_settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
         "database_url": "postgresql://yawmi_api@localhost:5432/raqib",
-        "jwt_secret": "test-secret",
+        "jwt_secret": "test-secret-for-unit-tests-only-0123456789",
         "anthropic_api_key": FAKE_KEY,
         "deepseek_api_key": FAKE_DEEPSEEK_KEY,
         **overrides,
@@ -235,11 +235,55 @@ async def test_anthropic_sends_structured_output_request() -> None:
     assert body["system"] == "نظام"
     assert body["messages"] == [{"role": "user", "content": "مستخدم"}]
     assert isinstance(body["max_tokens"], int) and body["max_tokens"] > 0
-    assert body["output_config"] == {"format": {"type": "json_schema", "schema": schema}}
+    assert body["output_config"] == {
+        "format": {"type": "json_schema", "schema": schema},
+        "effort": "low",
+    }
     assert "response_format" not in body
     # 30 s timeout on every phase, no retries (exactly one request was made).
     assert set(request.extensions["timeout"].values()) == {30.0}
     assert route.call_count == 1
+
+
+@respx.mock
+async def test_anthropic_request_leaves_room_for_thinking_and_asks_for_low_effort() -> None:
+    """I-19: thinking is on by default and counts toward max_tokens; 1024 was too little."""
+    route = respx.post(ANTHROPIC_URL).mock(return_value=anthropic_reply(GOOD))
+    await AnthropicProvider(FAKE_KEY).complete("s", "u", {"type": "object"}, "claude-sonnet-5-5")
+    body = json.loads(route.calls.last.request.content)
+    assert body["max_tokens"] == 4096
+    assert body["output_config"]["effort"] == "low"
+    assert body["output_config"]["format"] == {"type": "json_schema", "schema": {"type": "object"}}
+
+
+@respx.mock
+async def test_anthropic_reply_that_starts_with_a_thinking_block_is_parsed() -> None:
+    reply = httpx.Response(
+        200,
+        json={
+            "id": "msg_test",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "…", "signature": "sig"},
+                {"type": "text", "text": json.dumps(GOOD, ensure_ascii=False)},
+            ],
+            "stop_reason": "end_turn",
+        },
+    )
+    respx.post(ANTHROPIC_URL).mock(return_value=reply)
+    assert await AnthropicProvider(FAKE_KEY).complete("s", "u", {}, "m") == GOOD
+
+
+def test_promptfoo_config_uses_the_same_budget_and_effort_as_the_adapter() -> None:
+    import yaml
+
+    config = yaml.safe_load((EVAL_DIR / "promptfooconfig.yaml").read_text(encoding="utf-8"))
+    anthropic = [p for p in config["providers"] if p["id"].startswith("anthropic:")]
+    assert len(anthropic) == 2
+    for provider in anthropic:
+        assert provider["config"]["max_tokens"] == 4096
+        assert provider["config"]["output_config"] == {"effort": "low"}
 
 
 @respx.mock
