@@ -181,4 +181,20 @@ async def test_create_pool_default_sizes(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(pool_module.asyncpg, "create_pool", fake_create)
     await pool_module.create_pool(FAKE_DSN)
     _, kwargs = fake_create.await_args
-    assert (kwargs["min_size"], kwargs["max_size"]) == (1, 5)
+    assert (kwargs["min_size"], kwargs["max_size"]) == (1, 4)
+
+
+def test_default_pool_leaves_a_connection_for_the_cli_and_the_loader() -> None:
+    """The role's CONNECTION LIMIT (0002) must exceed the API pool, or `yawmi-admin` and a
+    re-run of loader 2 meet `TooManyConnectionsError` while the API is busy (I-4)."""
+    import inspect
+    import re
+
+    role_sql = (
+        Path(__file__).resolve().parents[1] / "db" / "migrations" / "0002_yawmi_role.sql"
+    ).read_text(encoding="utf-8")
+    limits = {int(n) for n in re.findall(r"CONNECTION LIMIT (\d+)", role_sql)}
+    assert len(limits) == 1
+    default = inspect.signature(pool_module.create_pool).parameters["max_size"].default
+    assert default == 4
+    assert default < limits.pop()
