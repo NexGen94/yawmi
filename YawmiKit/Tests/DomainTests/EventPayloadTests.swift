@@ -127,4 +127,75 @@ struct EventPayloadTests {
         #expect(throws: DecodingError.self) { try event.decodePayload(as: HabitVacationPayload.self) }
         #expect(try event.decodePayload(as: HabitSkippedPayload.self) == HabitSkippedPayload(habitCode: "read"))
     }
+
+    // MARK: Decimal scale (the server refuses more decimals with a 422 for the whole batch)
+
+    /// The payload as it goes on the wire, inside an envelope.
+    private static func wire<Payload: EventPayload>(_ payload: Payload) throws -> String {
+        let event = try EventEnvelope(id: id, payload: payload, occurredAt: instant)
+        return String(decoding: try JSONEncoder().encode(event), as: UTF8.self)
+    }
+
+    @Test
+    func habitValueIsRoundedToFourDecimals() throws {
+        // `Quantity` in project.py: decimal_places=4
+        let payload = HabitLoggedPayload(habitCode: "read", status: .done, value: 0.1 + 0.2)
+        #expect(payload.value == 0.3)
+        #expect(try Self.wire(payload).contains(#""value":0.3}"#) || Self.wire(payload).contains(#""value":0.3,"#))
+
+        var hours = HabitLoggedPayload(habitCode: "walk", status: .done)
+        hours.value = 20.0 / 60  // 20 minutes on an hour-unit habit
+        #expect(hours.value == 0.3333)
+        #expect(try hours.jsonObject()["value"] == .number(0.3333))
+    }
+
+    @Test
+    func focusMinutesAreRoundedToFourDecimals() throws {
+        // `Minutes` in project.py: decimal_places=4; a session of 1471 seconds
+        let payload = FocusEndedPayload(actualMinutes: 1471.0 / 60)
+        #expect(payload.actualMinutes == 24.5167)
+        #expect(try Self.wire(payload).contains(#""actual_minutes":24.5167"#))
+
+        var later = FocusEndedPayload()
+        later.actualMinutes = 1471.0 / 60
+        #expect(later.actualMinutes == 24.5167)
+    }
+
+    @Test
+    func breathRateIsRoundedToThreeDecimals() throws {
+        // `breaths_per_min` in project.py: decimal_places=3
+        let payload = BreathEndedPayload(pattern: "box", breathsPerMin: 60.0 / 11)
+        #expect(payload.breathsPerMin == 5.455)
+        #expect(try Self.wire(payload).contains(#""breaths_per_min":5.455"#))
+
+        var later = BreathEndedPayload(pattern: "box")
+        later.breathsPerMin = 60.0 / 11
+        #expect(later.breathsPerMin == 5.455)
+    }
+
+    @Test
+    func decodedDecimalsAreRoundedTooSoAPayloadEqualsItsRoundTrip() throws {
+        let logged = try HabitLoggedPayload(jsonObject: ["habit_code": .string("read"), "status": .string("done"), "value": .number(0.123456)])
+        #expect(logged.value == 0.1235)
+        let focus = try FocusEndedPayload(jsonObject: ["actual_minutes": .number(24.516666666666666)])
+        #expect(focus.actualMinutes == 24.5167)
+        let breath = try BreathEndedPayload(jsonObject: ["pattern": .string("box"), "breaths_per_min": .number(5.4545454545)])
+        #expect(breath.breathsPerMin == 5.455)
+
+        for payload in [HabitLoggedPayload(habitCode: "read", status: .done, value: 1.0 / 3)] {
+            #expect(try HabitLoggedPayload(jsonObject: payload.jsonObject()) == payload)
+        }
+        let minutes = FocusEndedPayload(actualMinutes: 2.0 / 3)
+        #expect(try FocusEndedPayload(jsonObject: minutes.jsonObject()) == minutes)
+        let rate = BreathEndedPayload(pattern: "box", breathsPerMin: 2.0 / 3)
+        #expect(try BreathEndedPayload(jsonObject: rate.jsonObject()) == rate)
+    }
+
+    @Test
+    func wholeAndAbsentValuesAreUnchanged() {
+        #expect(HabitLoggedPayload(habitCode: "read", status: .done, value: 30).value == 30)
+        #expect(HabitLoggedPayload(habitCode: "read", status: .skip).value == nil)
+        #expect(FocusEndedPayload().actualMinutes == nil)
+        #expect(BreathEndedPayload(pattern: "box", breathsPerMin: 6).breathsPerMin == 6)
+    }
 }
