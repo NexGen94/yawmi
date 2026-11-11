@@ -48,7 +48,7 @@ needs_db = pytest.mark.skipif(
 )
 
 STUB_SQL = Path(__file__).parent / "fixtures" / "raqib_stub.sql"
-EXPECTED_FILES = ["0001_yawmi_schema.sql", "0002_yawmi_role.sql"]
+EXPECTED_FILES = ["0001_yawmi_schema.sql", "0002_yawmi_role.sql", "0003_yawmi_web.sql"]
 YAWMI_TABLES = [
     "ai_insights",
     "breath_sessions",
@@ -63,8 +63,19 @@ YAWMI_TABLES = [
     "push_subscriptions",
     "reminder_sends",
     "sync_cursor",
+    # 0003 (desktop web round)
+    "user_settings",
+    "ai_consents",
+    "ai_memory",
+    "journal_entries",
+    "mood_logs",
+    "goal_tasks",
+    "goal_edits",
+    "indicators",
+    "focus_plans",
+    "notice_sends",
 ]
-DELETABLE = {"pairing_codes", "push_subscriptions"}
+DELETABLE = {"pairing_codes", "push_subscriptions", "ai_memory", "indicators"}
 # Read in full (table-level SELECT).
 RAQIB_WHOLE = ["notion_milestones", "goals", "cycles", "kpis", "v_journal_daily"]
 # Read column by column: every column except the one named here (personal free text).
@@ -149,6 +160,261 @@ def test_clean_params_rejects_bad_names_and_non_strings():
         clean_params({"ok": 1})  # type: ignore[dict-item]
 
 
+# ---------------------------------------------------------------------------
+# Database tests: migration 0003 (desktop web round)
+# ---------------------------------------------------------------------------
+
+
+@needs_db
+async def test_0003_adds_the_four_columns(migrated: asyncpg.Connection):
+    rows = await migrated.fetch(
+        "SELECT table_name, column_name FROM information_schema.columns "
+        "WHERE table_schema = 'yawmi' AND (table_name, column_name) IN "
+        "(('habits', 'polarity'), ('habits', 'identity_text'), "
+        "('breath_sessions', 'feeling'), ('ai_insights', 'cards'))"
+    )
+    assert {(r["table_name"], r["column_name"]) for r in rows} == {
+        ("habits", "polarity"),
+        ("habits", "identity_text"),
+        ("breath_sessions", "feeling"),
+        ("ai_insights", "cards"),
+    }
+    await insert_habit(migrated)
+    assert await migrated.fetchval("SELECT polarity FROM yawmi.habits WHERE code = 'h1'") == "build"
+
+
+@needs_db
+async def test_abstain_must_be_a_daily_boolean(migrated: asyncpg.Connection):
+    with pytest.raises(pgerr.CheckViolationError):
+        await insert_habit(migrated, polarity="abstain", kind="count")
+    with pytest.raises(pgerr.CheckViolationError):
+        await insert_habit(migrated, polarity="abstain", period="week")
+    with pytest.raises(pgerr.CheckViolationError):
+        await insert_habit(migrated, polarity="abstain", target_per_period=Decimal(2))
+    await insert_habit(
+        migrated,
+        polarity="abstain",
+        kind="boolean",
+        period="day",
+        target_per_period=Decimal(1),
+    )
+    with pytest.raises(pgerr.CheckViolationError):
+        await insert_habit(migrated, code="h2", polarity="sideways")
+
+
+@needs_db
+async def test_identity_text_and_feeling_and_cards_checks(migrated: asyncpg.Connection):
+    await insert_habit(migrated, identity_text="x" * 300)
+    with pytest.raises(pgerr.CheckViolationError):
+        await insert_habit(migrated, code="h2", identity_text="x" * 301)
+    for bad in ("calm", ""):
+        with pytest.raises(pgerr.CheckViolationError):
+            await migrated.execute(
+                "INSERT INTO yawmi.breath_sessions (id, day, started_at, pattern, feeling) "
+                "VALUES ($1, $2, $3, 'p', $4)",
+                uuid.uuid4(),
+                date(2026, 11, 9),
+                NOW,
+                bad,
+            )
+    with pytest.raises(pgerr.CheckViolationError):
+        await migrated.execute(
+            "INSERT INTO yawmi.ai_insights (id, kind, day, provider, model, request_hash, lines, "
+            "cards) VALUES ($1, 'ask', $2, 'p', 'm', 'h', '[]', '{}')",
+            uuid.uuid4(),
+            date(2026, 11, 9),
+        )
+
+
+async def _insert_edit(conn: asyncpg.Connection, status: str = "pending") -> uuid.UUID:
+    edit_id = uuid.uuid4()
+    await conn.execute(
+        "INSERT INTO yawmi.goal_edits (id, target_kind, page_id, field, new_value, note, status) "
+        "VALUES ($1, 'milestone', 'page-1', 'done', 'true', 'n', $2)",
+        edit_id,
+        status,
+    )
+    return edit_id
+
+
+@needs_db
+async def test_one_pending_edit_per_page_and_field(migrated: asyncpg.Connection):
+    first = await _insert_edit(migrated)
+    with pytest.raises(pgerr.UniqueViolationError):
+        await _insert_edit(migrated)
+    await migrated.execute("UPDATE yawmi.goal_edits SET status = 'superseded' WHERE id = $1", first)
+    await _insert_edit(migrated)
+    await _insert_edit(migrated, status="applied")  # only pending rows are unique
+
+
+@needs_db
+async def test_goal_edit_checks(migrated: asyncpg.Connection):
+    with pytest.raises(pgerr.CheckViolationError):
+        await _insert_edit(migrated, status="done")
+    with pytest.raises(pgerr.CheckViolationError):
+        await migrated.execute(
+            "INSERT INTO yawmi.goal_edits (id, target_kind, page_id, field, new_value, note) "
+            "VALUES ($1, 'outcome', 'p', 'f', '1', 'n')",
+            uuid.uuid4(),
+        )
+
+
+@needs_db
+@pytest.mark.parametrize("score", [0, 6])
+async def test_mood_score_is_one_to_five(migrated: asyncpg.Connection, score: int):
+    with pytest.raises(pgerr.CheckViolationError):
+        await migrated.execute(
+            "INSERT INTO yawmi.mood_logs (day, score, logged_at) VALUES ($1, $2, $3)",
+            date(2026, 11, 9),
+            score,
+            NOW,
+        )
+    await migrated.execute(
+        "INSERT INTO yawmi.mood_logs (day, score, logged_at) VALUES ($1, 5, $2)",
+        date(2026, 11, 9),
+        NOW,
+    )
+    with pytest.raises(pgerr.CheckViolationError):
+        await migrated.execute("UPDATE yawmi.mood_logs SET feelings = '{}'::jsonb")
+
+
+@needs_db
+async def test_notice_is_sent_once_per_kind_ref_and_day(migrated: asyncpg.Connection):
+    sql = "INSERT INTO yawmi.notice_sends (kind, ref, day) VALUES ($1, $2, $3)"
+    await migrated.execute(sql, "late", "all", date(2026, 11, 9))
+    with pytest.raises(pgerr.UniqueViolationError):
+        await migrated.execute(sql, "late", "all", date(2026, 11, 9))
+    await migrated.execute(sql, "late", "all", date(2026, 11, 10))
+
+
+@needs_db
+async def test_journal_and_memory_and_focus_plan_checks(migrated: asyncpg.Connection):
+    ins = (
+        "INSERT INTO yawmi.journal_entries (day, part, answers, logged_at) "
+        "VALUES ($1, $2, '{}', $3)"
+    )
+    await migrated.execute(ins, date(2026, 11, 9), "morning", NOW)
+    with pytest.raises(pgerr.UniqueViolationError):
+        await migrated.execute(ins, date(2026, 11, 9), "morning", NOW)
+    with pytest.raises(pgerr.CheckViolationError):
+        await migrated.execute(ins, date(2026, 11, 9), "noon", NOW)
+    mem = "INSERT INTO yawmi.ai_memory (id, kind, text) VALUES ($1, $2, $3)"
+    await migrated.execute(mem, uuid.uuid4(), "rule", "x" * 300)
+    for kind, text in (("rule", ""), ("rule", "x" * 301), ("fact", "a")):
+        with pytest.raises(pgerr.CheckViolationError):
+            await migrated.execute(mem, uuid.uuid4(), kind, text)
+    plan = (
+        "INSERT INTO yawmi.focus_plans (id, title_ar, minutes, weekday_mask, start_time) "
+        "VALUES ($1, 't', $2, $3, $4)"
+    )
+    await migrated.execute(plan, uuid.uuid4(), 5, None, None)
+    await migrated.execute(plan, uuid.uuid4(), 240, 127, time(7, 0))
+    bad_plans = ((4, None, None), (241, None, None), (25, 3, None), (25, None, time(7)))
+    for minutes, mask, at in bad_plans:
+        with pytest.raises(pgerr.CheckViolationError):
+            await migrated.execute(plan, uuid.uuid4(), minutes, mask, at)
+
+
+@needs_db
+async def test_indicator_checks(migrated: asyncpg.Connection):
+    cols = (
+        "INSERT INTO yawmi.indicators (id, subject_kind, subject_ref, source, measure, period, "
+        "display, target, reminder_time, reminder_mask) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
+    )
+    ok_goal = ("goal", "O1", "milestones", "completion", "all", "ring", None, None, None)
+    await migrated.execute(cols, uuid.uuid4(), *ok_goal)
+    with pytest.raises(pgerr.UniqueViolationError):
+        await migrated.execute(cols, uuid.uuid4(), *ok_goal)
+    habit = ("habit", "h1", "habit_logs", "avg_7d", "week", "bar", Decimal(3), None, None)
+    await migrated.execute(cols, uuid.uuid4(), *habit)
+    bad = [
+        ("goal", "O2", "habit_logs", "completion", "all", "ring", None, None, None),
+        ("goal", "O2", "tasks", "total", "all", "ring", None, None, None),
+        ("habit", "h2", "tasks", "completion", "all", "ring", None, None, None),
+        ("habit", "h2", "habit_logs", "completion", "year", "ring", None, None, None),
+        ("habit", "h2", "habit_logs", "completion", "all", "pie", None, None, None),
+        ("habit", "h2", "habit_logs", "completion", "all", "ring", Decimal(0), None, None),
+        ("habit", "h2", "habit_logs", "completion", "all", "ring", None, time(8), 127),
+        ("goal", "O2", "tasks", "completion", "all", "ring", None, time(8), None),
+        ("thing", "x", "tasks", "completion", "all", "ring", None, None, None),
+    ]
+    for values in bad:
+        with pytest.raises(pgerr.CheckViolationError):
+            await migrated.execute(cols, uuid.uuid4(), *values)
+    reminded = ("goal", "O3", "tasks", "completion", "all", "ring", None, time(8), 127)
+    await migrated.execute(cols, uuid.uuid4(), *reminded)
+
+
+@needs_db
+async def test_card_fields_view_exposes_three_named_columns(migrated: asyncpg.Connection):
+    cols = await migrated.fetch(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema = 'yawmi_ro' AND table_name = 'notion_card_fields' "
+        "ORDER BY ordinal_position"
+    )
+    assert [r["column_name"] for r in cols] == ["page_id", "target_date", "next_step"]
+    await migrated.execute("DELETE FROM raqib.notion_cards")
+    props_object = {
+        "المستهدف": {"start": "2026-12-31", "end": None},
+        "الخطوة التالية": "حجز الاختبار",
+        "السبب العميق (لماذا؟)": "نص شخصي",
+    }
+    props_text = {"المستهدف": "2026-12-31"}
+    for page_id, props in (("c1", props_object), ("c2", props_text), ("c3", {})):
+        await migrated.execute(
+            "INSERT INTO raqib.notion_cards (page_id, title, props) VALUES ($1, 't', $2::jsonb)",
+            page_id,
+            json.dumps(props, ensure_ascii=False),
+        )
+    try:
+        await migrated.execute("SET ROLE yawmi_api")
+        rows = {
+            r["page_id"]: r
+            for r in await migrated.fetch(
+                "SELECT page_id, target_date, next_step FROM yawmi_ro.notion_card_fields"
+            )
+        }
+        assert rows["c1"]["target_date"] == "2026-12-31"
+        assert rows["c1"]["next_step"] == "حجز الاختبار"
+        assert rows["c2"]["target_date"] == "2026-12-31"
+        assert rows["c2"]["next_step"] is None
+        assert rows["c3"]["target_date"] is None
+        assert all("نص شخصي" not in str(tuple(r.values())) for r in rows.values())
+        with pytest.raises(pgerr.InsufficientPrivilegeError):
+            await migrated.fetch("SELECT props FROM raqib.notion_cards")
+        for denied in (
+            "INSERT INTO yawmi_ro.notion_card_fields (page_id) VALUES ('x')",
+            "DELETE FROM yawmi_ro.notion_card_fields",
+        ):
+            with pytest.raises(pgerr.InsufficientPrivilegeError):
+                await migrated.execute(denied)
+    finally:
+        await migrated.execute("RESET ROLE")
+        await migrated.execute("DELETE FROM raqib.notion_cards")
+
+
+@needs_db
+async def test_0003_is_recorded_once(conn: asyncpg.Connection, api_pw: str):
+    assert DSN
+    await migrate(DSN, {"yawmi_api_pw": api_pw})
+    assert await migrate(DSN) == []
+    count = await conn.fetchval(
+        "SELECT count(*) FROM yawmi.schema_migrations WHERE filename = '0003_yawmi_web.sql'"
+    )
+    assert count == 1
+
+
+@needs_db
+async def test_0003_grants_nothing_new_on_raqib(migrated: asyncpg.Connection):
+    assert not await migrated.fetchval(
+        "SELECT has_column_privilege('yawmi_api', 'raqib.notion_cards', 'props', 'SELECT')"
+    )
+    assert await _has(migrated, "yawmi_ro.notion_card_fields", "SELECT")
+    for privilege in ("INSERT", "UPDATE", "DELETE"):
+        assert not await _has(migrated, "yawmi_ro.notion_card_fields", privilege)
+
+
 def test_ci_provides_a_database_url():
     if IN_CI:
         assert DSN, "CI is set but TEST_DATABASE_URL is not: the database tests cannot run"
@@ -199,7 +465,7 @@ def test_scram_helper_reproduces_the_rfc_7677_example():
     assert not scram_matches(verifier, "pencil\n")
 
 
-def test_migration_files_are_the_expected_pair_in_order():
+def test_migration_files_are_the_expected_set_in_order():
     assert sorted(p.name for p in MIGRATIONS_DIR.glob("*.sql")) == EXPECTED_FILES
 
 
@@ -238,6 +504,7 @@ def test_role_migration_documents_the_password_mechanism():
 
 async def _reset(conn: asyncpg.Connection) -> None:
     await conn.execute("DROP SCHEMA IF EXISTS yawmi CASCADE")
+    await conn.execute("DROP SCHEMA IF EXISTS yawmi_ro CASCADE")
     if await conn.fetchval("SELECT 1 FROM pg_roles WHERE rolname = 'yawmi_api'"):
         await conn.execute("DROP OWNED BY yawmi_api")
         await conn.execute("DROP ROLE yawmi_api")
@@ -359,14 +626,14 @@ async def test_failed_migration_rolls_back_and_is_not_recorded(
 
 
 @needs_db
-async def test_thirteen_tables_exist(migrated: asyncpg.Connection):
+async def test_twenty_three_tables_exist(migrated: asyncpg.Connection):
     rows = await migrated.fetch(
         "SELECT table_name FROM information_schema.tables "
         "WHERE table_schema = 'yawmi' AND table_type = 'BASE TABLE'"
     )
     names = {r["table_name"] for r in rows}
     assert names == set(YAWMI_TABLES) | {"schema_migrations"}
-    assert len(set(YAWMI_TABLES)) == 13
+    assert len(set(YAWMI_TABLES)) == 23
 
 
 @needs_db
@@ -1127,3 +1394,70 @@ async def test_yawmi_api_can_plan_every_store_statement(migrated: asyncpg.Connec
         await migrated.execute("RESET search_path")
         await migrated.execute("RESET ROLE")
     assert problems == []
+
+
+GRANTS_SECTION = re.compile(r"^REVOKE ALL ON SCHEMA yawmi_ro.*", re.MULTILINE | re.DOTALL)
+
+
+async def _reapply_0002(conn: asyncpg.Connection) -> None:
+    assert DSN
+    await conn.execute("DELETE FROM yawmi.schema_migrations WHERE filename = '0002_yawmi_role.sql'")
+    assert await migrate(DSN) == ["0002_yawmi_role.sql"]
+
+
+async def _as_api(conn: asyncpg.Connection, sql: str) -> None:
+    await conn.execute("SET ROLE yawmi_api")
+    try:
+        await conn.execute(sql)
+    finally:
+        await conn.execute("RESET ROLE")
+
+
+@needs_db
+async def test_card_fields_view_is_never_writable_even_after_0002_is_reapplied(
+    migrated: asyncpg.Connection,
+):
+    await migrated.execute(
+        "INSERT INTO raqib.notion_cards (page_id, title) VALUES ('w1', 't') ON CONFLICT DO NOTHING"
+    )
+    try:
+        await _reapply_0002(migrated)  # 0002 -> 0003 -> 0002, without re-running 0003
+        for write in (
+            "UPDATE yawmi_ro.notion_card_fields SET page_id = 'hijack'",
+            "INSERT INTO yawmi_ro.notion_card_fields (page_id) VALUES ('x')",
+            "DELETE FROM yawmi_ro.notion_card_fields",
+        ):
+            with pytest.raises(pgerr.InsufficientPrivilegeError):
+                await _as_api(migrated, write)
+        await _as_api(migrated, "SELECT * FROM yawmi_ro.notion_card_fields")
+        with pytest.raises(pgerr.InsufficientPrivilegeError):
+            await _as_api(migrated, "SELECT props FROM raqib.notion_cards")
+        assert (
+            await migrated.fetchval("SELECT count(*) FROM raqib.notion_cards WHERE page_id = 'w1'")
+            == 1
+        )
+    finally:
+        await migrated.execute("DELETE FROM raqib.notion_cards WHERE page_id = 'w1'")
+
+
+@needs_db
+async def test_reapplying_0002_strips_0003_grants_and_the_grants_section_restores_them(
+    migrated: asyncpg.Connection,
+):
+    await _reapply_0002(migrated)
+    # the state right after 0002 -> 0003 -> 0002, loader 3 not yet re-run
+    assert not await _has(migrated, "yawmi.ai_memory", "DELETE")
+    assert not await _has(migrated, "yawmi.indicators", "DELETE")
+    text = (MIGRATIONS_DIR / "0003_yawmi_web.sql").read_text(encoding="utf-8")
+    section = GRANTS_SECTION.search(text)
+    assert section
+    await migrated.execute(section.group(0).replace("COMMIT;", ""))
+    assert await _has(migrated, "yawmi.ai_memory", "DELETE")
+    assert await _has(migrated, "yawmi.indicators", "DELETE")
+    await _as_api(migrated, "DELETE FROM yawmi.ai_memory WHERE false")
+    await _as_api(migrated, "DELETE FROM yawmi.indicators WHERE false")
+    await _as_api(migrated, "SELECT * FROM yawmi_ro.notion_card_fields")
+    for table in YAWMI_TABLES:
+        for privilege in ("SELECT", "INSERT", "UPDATE"):
+            assert await _has(migrated, f"yawmi.{table}", privilege), (table, privilege)
+    assert not await _has(migrated, "yawmi_ro.notion_card_fields", "UPDATE")

@@ -139,8 +139,9 @@ def test_checker_reports_every_problem_not_just_the_first(
 API_COMPOSE = COMPOSE_DIR / "yawmi-api.api.yml"
 LOADER_1 = COMPOSE_DIR / "yawmi-db-1-schema.yml"
 LOADER_2 = COMPOSE_DIR / "yawmi-db-2-role.yml"
+LOADER_3 = COMPOSE_DIR / "yawmi-db-3-web.yml"
 KEYGEN = COMPOSE_DIR / "yawmi-vapid-keygen.yml"
-ALL_COMPOSE = [API_COMPOSE, LOADER_1, LOADER_2, KEYGEN]
+ALL_COMPOSE = [API_COMPOSE, LOADER_1, LOADER_2, LOADER_3, KEYGEN]
 
 
 # D-7: left empty, these two would give an empty Host() rule and the default certificate.
@@ -285,7 +286,7 @@ def test_pairing_route_in_the_app_is_the_one_the_router_matches() -> None:
     assert '"/devices/pair"' in source
 
 
-@pytest.mark.parametrize("path", [LOADER_1, LOADER_2], ids=lambda p: p.name)
+@pytest.mark.parametrize("path", [LOADER_1, LOADER_2, LOADER_3], ids=lambda p: p.name)
 def test_loaders_are_one_shot_on_the_raqib_network_only(path: Path) -> None:
     data = _yaml(path)
     assert data["name"] == "yawmi-loader"
@@ -302,15 +303,16 @@ def test_loaders_are_one_shot_on_the_raqib_network_only(path: Path) -> None:
 
 def test_the_secrets_volume_is_external_everywhere_so_compose_never_recreates_it() -> None:
     """It is created by hand (RUNBOOK step 3): a compose change or `down -v` cannot lose the password."""
-    first, second = _yaml(LOADER_1), _yaml(LOADER_2)
+    first, second, third = _yaml(LOADER_1), _yaml(LOADER_2), _yaml(LOADER_3)
     # loader 1 writes the secret, loader 2 only reads it
     assert "yawmi_secrets:/run/yawmi" in first["services"]["yawmi-loader"]["volumes"]
     assert "yawmi_secrets:/run/yawmi:ro" in second["services"]["yawmi-loader"]["volumes"]
-    for data in (first, second, _yaml(API_COMPOSE)):
+    assert "yawmi_secrets:/run/yawmi:ro" in third["services"]["yawmi-loader"]["volumes"]
+    for data in (first, second, third, _yaml(API_COMPOSE)):
         assert data["volumes"]["yawmi_secrets"] == {"name": "yawmi_secrets", "external": True}
 
 
-@pytest.mark.parametrize("path", [LOADER_1, LOADER_2], ids=lambda p: p.name)
+@pytest.mark.parametrize("path", [LOADER_1, LOADER_2, LOADER_3], ids=lambda p: p.name)
 def test_loader_scripts_have_valid_shell_syntax(path: Path, tmp_path: Path) -> None:
     sh = shutil.which("sh")
     if sh is None:
@@ -321,7 +323,7 @@ def test_loader_scripts_have_valid_shell_syntax(path: Path, tmp_path: Path) -> N
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize("path", [LOADER_1, LOADER_2], ids=lambda p: p.name)
+@pytest.mark.parametrize("path", [LOADER_1, LOADER_2, LOADER_3], ids=lambda p: p.name)
 def test_loader_payloads_match_the_hash_their_script_demands(path: Path) -> None:
     hashes = build_loaders.embedded_hashes(path.read_text(encoding="utf-8"))
     assert hashes
@@ -334,13 +336,14 @@ def test_loader_payloads_still_match_their_sql_sources_when_those_exist() -> Non
     sources = {
         "0001": REPO / "api" / "db" / "migrations" / build_loaders.SCHEMA_FILE,
         "0002": REPO / "api" / "db" / "migrations" / build_loaders.ROLE_FILE,
+        "0003": REPO / "api" / "db" / "migrations" / build_loaders.WEB_FILE,
         "seed": REPO / "api" / "db" / "seed" / "habits.sql",
     }
     present = {key: path for key, path in sources.items() if path.is_file()}
     if not present:
         pytest.skip("the SQL sources are not in this tree yet (tasks 3 and 4)")
     embedded = {}
-    for path in (LOADER_1, LOADER_2):
+    for path in (LOADER_1, LOADER_2, LOADER_3):
         embedded.update(build_loaders.embedded_hashes(path.read_text(encoding="utf-8")))
     for key, path in present.items():
         expected = build_loaders.sha256(
@@ -383,11 +386,13 @@ def test_rendered_loaders_fit_and_escape_dollars_for_compose() -> None:
     schema = b"CREATE TABLE yawmi.t (x int);\n"
     role = b"DO $$ BEGIN NULL; END $$;\n"
     seed = b"INSERT INTO yawmi.t VALUES (1);\n"
+    web = b"CREATE TABLE yawmi.u (x int);\n"
     yaml = pytest.importorskip("yaml")
     for text in (
         build_loaders.render_loader_1(schema),
         build_loaders.render_loader_2(role, seed),
         build_loaders.render_loader_2(role, None),
+        build_loaders.render_loader_3(web),
     ):
         assert len(text) <= 8192
         script = yaml.safe_load(text)["configs"]["load"]["content"]
@@ -400,6 +405,7 @@ def test_check_mode_flags_a_stale_loader(tmp_path: Path) -> None:
     migrations.mkdir()
     (migrations / build_loaders.SCHEMA_FILE).write_bytes(b"SELECT 1;\n")
     (migrations / build_loaders.ROLE_FILE).write_bytes(b"SELECT 2;\n")
+    (migrations / build_loaders.WEB_FILE).write_bytes(b"SELECT 4;\n")
     seed = tmp_path / "seed.sql"
     seed.write_bytes(b"SELECT 3;\n")
     out = tmp_path / "out"
@@ -418,6 +424,7 @@ def generated(tmp_path: Path) -> tuple[list[str], Path]:
     migrations.mkdir()
     (migrations / build_loaders.SCHEMA_FILE).write_bytes(b"CREATE TABLE yawmi.t (x int);\n")
     (migrations / build_loaders.ROLE_FILE).write_bytes(b"SELECT 2;\n")
+    (migrations / build_loaders.WEB_FILE).write_bytes(b"SELECT 4;\n")
     seed = tmp_path / "seed.sql"
     seed.write_bytes(b"SELECT 3;\n")
     out = tmp_path / "out"
@@ -453,7 +460,7 @@ def test_check_mode_flags_a_change_to_a_script_template(
     generated, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     args, _ = generated
-    for name in ("_LOADER_1", "_LOADER_2", "_COMPOSE"):
+    for name in ("_LOADER_1", "_LOADER_2", "_LOADER_3", "_COMPOSE"):
         original = getattr(build_loaders, name)
         marker = original.splitlines()[1]  # a line that exists in each template
         with monkeypatch.context() as patch:
@@ -1193,3 +1200,52 @@ def test_web_tests_workflow_installs_without_running_package_scripts() -> None:
     text = (REPO / ".github" / "workflows" / "web-tests.yml").read_text(encoding="utf-8")
     installs = re.findall(r"run: (npm ci[^\n]*)", text)
     assert installs and all(line == "npm ci --ignore-scripts" for line in installs), installs
+
+
+# --- loader 3 and the frozen loaders 1 and 2 (desktop web round, task 2) -----------------------
+
+
+def test_loader_3_fits_the_manager_limit_and_is_lf() -> None:
+    raw = LOADER_3.read_bytes()
+    assert b"\r" not in raw
+    assert len(raw.decode("utf-8")) <= 8192
+
+
+def test_build_loaders_check_matches_all_three_committed_loaders() -> None:
+    assert build_loaders.main(["--check"]) == 0
+    assert set(
+        build_loaders.build(build_loaders.DEFAULT_MIGRATIONS, build_loaders.DEFAULT_SEED)
+    ) == {
+        build_loaders.LOADER_1,
+        build_loaders.LOADER_2,
+        build_loaders.LOADER_3,
+    }
+
+
+def test_loader_3_requires_0002_and_applies_0003_with_its_ledger_row() -> None:
+    script = _script(LOADER_3)
+    assert "0002_yawmi_role.sql is not applied" in script
+    assert "0003_yawmi_web.sql" in script
+    assert "yawmi_api_pw" not in script  # it never generates or reads the password
+
+
+@pytest.mark.parametrize("path", [LOADER_1, LOADER_2], ids=lambda p: p.name)
+def test_loaders_1_and_2_are_byte_identical_to_main(path: Path) -> None:
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("no git on this machine")
+    ref = subprocess.run(
+        [git, "-C", str(REPO), "rev-parse", "--verify", "-q", "origin/main"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if ref.returncode != 0:
+        pytest.skip("origin/main is not available (shallow or detached checkout)")
+    result = subprocess.run(
+        [git, "-C", str(REPO), "diff", "--exit-code", "origin/main", "--", str(path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout[:300]
