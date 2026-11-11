@@ -456,3 +456,11 @@ def test_upsert_writes_every_column_and_replaces_all_but_the_key() -> None:
     for column in COLUMNS[1:]:
         assert f"{column} = excluded.{column}" in _UPSERT
     assert "computed_at = excluded.computed_at" in _UPSERT
+
+
+def test_the_watch_field_is_described_without_addressing_anyone() -> None:
+    """M-1: a passive «لُبست», not a second-person verb."""
+    from yawmi.routes.health import DailyMetricsIn
+
+    description = DailyMetricsIn.model_fields["has_watch_night"].description
+    assert description == "هل لُبست الساعة في النوم المنسوب إلى اليوم"

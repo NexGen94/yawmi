@@ -1019,3 +1019,10 @@ def test_web_workflow_only_publishes_tags_that_are_on_main_and_checks_the_runnin
     docker = (REPO / "web" / "Dockerfile").read_text(encoding="utf-8")
     assert "npm ci --ignore-scripts" in docker
     assert "127.0.0.1:8080/healthz" in docker
+
+
+def test_gitignore_keeps_env_variants_and_key_files_out() -> None:
+    """M-6: `.env.local`, `.env.production`, `vapid.key` and the like are never committed."""
+    lines = (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
+    for pattern in (".env", ".env.*", "*.pem", "*.key"):
+        assert pattern in lines

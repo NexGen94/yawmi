@@ -253,13 +253,16 @@ class ReminderLoop:
 
         `asyncio.wait` waits for the task without raising its (expected) cancellation, so nothing
         is caught and swallowed here: if the caller of `stop()` is itself cancelled, that
-        `CancelledError` propagates as it should.
+        `CancelledError` propagates as it should, and `on_stop` (closing the HTTP session) still
+        runs, in the `finally`.
         """
-        if self.task is not None and not self.task.done():
-            self.task.cancel()
-            await asyncio.wait([self.task])
-        if self._on_stop is not None:
-            await self._on_stop()
+        try:
+            if self.task is not None and not self.task.done():
+                self.task.cancel()
+                await asyncio.wait([self.task])
+        finally:
+            if self._on_stop is not None:
+                await self._on_stop()
 
 
 def start_reminders(pool: Any, config: Any) -> ReminderLoop:

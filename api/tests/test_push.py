@@ -1548,3 +1548,32 @@ async def test_stop_awaits_the_cancelled_task_and_lets_its_own_cancellation_thro
     with pytest.raises(asyncio.CancelledError):
         await stopper
     second.task.cancel()  # type: ignore[union-attr]
+
+
+async def test_stop_closes_the_session_even_when_its_caller_is_cancelled() -> None:
+    """M-10: `on_stop` (closing the HTTP session) runs in a `finally`."""
+    started = asyncio.Event()
+    closed: list[bool] = []
+
+    async def stubborn(now: datetime) -> int:
+        started.set()
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            await asyncio.sleep(0.05)  # winds down slowly, so stop() is still waiting
+            raise
+        return 0
+
+    async def on_stop() -> None:
+        closed.append(True)
+
+    loop = ReminderLoop(stubborn, interval=0.0, on_stop=on_stop)
+    loop.start()
+    await started.wait()
+    stopper = asyncio.create_task(loop.stop())
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    stopper.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await stopper
+    assert closed == [True]

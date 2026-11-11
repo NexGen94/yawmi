@@ -460,7 +460,7 @@ export interface components {
             exertion?: components["schemas"]["ExertionSegment"][];
             /**
              * Has Watch Night
-             * @description هل لبست الساعة في النوم المنسوب إلى اليوم
+             * @description هل لُبست الساعة في النوم المنسوب إلى اليوم
              */
             has_watch_night: boolean;
             /**

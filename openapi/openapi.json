@@ -267,7 +267,7 @@
             "type": "array"
           },
           "has_watch_night": {
-            "description": "هل لبست الساعة في النوم المنسوب إلى اليوم",
+            "description": "هل لُبست الساعة في النوم المنسوب إلى اليوم",
             "title": "Has Watch Night",
             "type": "boolean"
           },

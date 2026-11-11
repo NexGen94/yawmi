@@ -72,7 +72,7 @@ class DailyMetricsIn(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
 
     day: date
-    has_watch_night: StrictBool = Field(description="هل لبست الساعة في النوم المنسوب إلى اليوم")
+    has_watch_night: StrictBool = Field(description="هل لُبست الساعة في النوم المنسوب إلى اليوم")
     # required: a default of 0 would turn every worn night into `low`, outside every baseline
     hrv_samples: Annotated[StrictInt, Field(ge=0, le=10_000, description="عدد عيّنات HRV في الليلة")]
 

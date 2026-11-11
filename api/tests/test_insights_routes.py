@@ -4,6 +4,7 @@ idempotent closure. Providers are `respx` mocks; no network, no real key."""
 import json
 import logging
 import os
+import re
 from collections.abc import AsyncIterator
 from datetime import date, timedelta
 from typing import Any
@@ -473,6 +474,50 @@ def test_route_messages_are_gender_neutral():
     )
     for message, result in zip(messages, json.loads(run.stdout), strict=True):
         assert result["pass"], (message, result)
+
+
+def _gendered_words() -> list[str]:
+    """`GENDERED_WORDS` of the eval support module, read from its source."""
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "eval" / "promptfoo_support.js").read_text(
+        encoding="utf-8"
+    )
+    block = re.search(r"const GENDERED_WORDS = \[(.*?)\];", source, re.DOTALL)
+    assert block is not None
+    return re.findall(r"'([^']+)'", block.group(1))
+
+
+_LETTER = "ء-ي"
+_DIACRITICS = re.compile("[ً-ِْ-ٰٟـ]")  # shadda kept, as in JS
+
+
+def _gendered_hit(text: str, words: list[str]) -> str | None:
+    """A Python port of `findWord` (same marks, same glued prefixes, whole words only)."""
+    plain = _DIACRITICS.sub("", text)
+    for word in words:
+        bare = _DIACRITICS.sub("", word)
+        letters = len(re.sub(f"[^{_LETTER}]", "", bare))
+        prefix = "[وف]?" if letters <= 3 else "[وفبلك]?"
+        if re.search(f"(?<![{_LETTER}]){prefix}{re.escape(bare)}(?![{_LETTER}])", plain):
+            return word
+    return None
+
+
+def test_route_messages_are_gender_neutral_without_node():
+    """Runs everywhere, so the check never depends on `node` being installed (M-5(d))."""
+    from yawmi.routes.insights import USER_MESSAGES
+
+    words = _gendered_words()
+    assert len(words) > 50
+    # the port is not vacuous: it finds what the JS check finds
+    assert _gendered_hit("تذكّر شرب الماء", words) == "تذكّر"
+    assert _gendered_hit("وعليك المتابعة", words) == "عليك"
+    assert _gendered_hit("لكن اليوم انتهى", words) is None
+    messages = sorted(USER_MESSAGES)
+    assert len(messages) >= 5
+    for message in messages:
+        assert _gendered_hit(message, words) is None, message
 
 
 async def test_oversized_inputs_are_422(client, anthropic):
