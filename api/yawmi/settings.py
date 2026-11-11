@@ -20,7 +20,8 @@ _MALFORMED = "?"  # stands for a non-string entry of push_hosts; never a valid h
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="YAWMI_", env_file=None)
+    # hide_input_in_errors: a rejected value (a short secret, a DSN) never reaches the log
+    model_config = SettingsConfigDict(env_prefix="YAWMI_", env_file=None, hide_input_in_errors=True)
 
     # The DSN may embed the role password, so it is kept out of repr/str like the other secrets.
     database_url: str = Field(repr=False)

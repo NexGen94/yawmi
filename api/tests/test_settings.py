@@ -250,3 +250,16 @@ def test_a_jwt_secret_shorter_than_32_characters_is_refused(length: int) -> None
 def test_a_jwt_secret_of_32_characters_is_accepted() -> None:
     s = Settings(database_url=FAKE_DSN, jwt_secret=SecretStr("k" * 32))  # type: ignore[arg-type]
     assert len(s.jwt_secret.get_secret_value()) == 32
+
+
+def test_a_short_jwt_secret_from_the_environment_is_never_echoed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The env value is a plain string before validation: pydantic would print it in the error."""
+    short = "short-secret-from-the-env"
+    monkeypatch.setenv("YAWMI_DATABASE_URL", FAKE_DSN)
+    monkeypatch.setenv("YAWMI_JWT_SECRET", short)
+    with pytest.raises(ValidationError, match="jwt_secret") as exc:
+        Settings()  # type: ignore[call-arg]
+    assert short not in str(exc.value)
+    assert short not in repr(exc.value)
