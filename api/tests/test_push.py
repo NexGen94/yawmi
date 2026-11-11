@@ -670,6 +670,46 @@ async def test_a_day_set_aside_gets_no_reminder_and_is_not_counted_in_the_badge(
     assert (notification["body"], notification["app_badge"]) == ("القراءة", 1)
 
 
+async def test_a_weekly_boolean_habit_done_today_gets_no_reminder_and_no_badge(
+    backend: Backend, service: PushService, sender: WebPushSender
+) -> None:
+    # I-8: «تأمّل» 5 a week, done this morning (1 of 5): the period is open, the day is done
+    await backend.habit("meditate", "تأمّل", kind="boolean", target=5, period="week")
+    await backend.reminder("meditate", 7, 0)
+    await backend.log("meditate", DAY)
+    await backend.habit("read", "القراءة")
+    await backend.reminder("read", 7, 1)
+    receiver = Receiver()
+    await backend.subscribe(service.endpoint("a"), receiver)
+    assert await run_tick(backend, sender, at(7, 5)) == 1
+    [hit] = service.hits
+    notification = receiver.decrypt(hit.body)["notification"]
+    assert (notification["body"], notification["app_badge"]) == ("القراءة", 1)
+
+
+async def test_a_weekly_boolean_habit_done_yesterday_is_still_reminded_today(
+    backend: Backend, service: PushService, sender: WebPushSender
+) -> None:
+    await backend.habit("meditate", "تأمّل", kind="boolean", target=5, period="week")
+    await backend.reminder("meditate", 7, 0)
+    await backend.log("meditate", DAY - timedelta(days=1))
+    await backend.subscribe(service.endpoint("a"), Receiver())
+    assert await run_tick(backend, sender, at(7, 5)) == 1
+
+
+async def test_a_weekly_duration_habit_with_a_partial_log_today_is_still_reminded(
+    backend: Backend, service: PushService, sender: WebPushSender
+) -> None:
+    await backend.habit("read", "القراءة", kind="duration", unit="min", target=150, period="week")
+    await backend.reminder("read", 7, 0)
+    await backend.log("read", DAY, value="20")
+    receiver = Receiver()
+    await backend.subscribe(service.endpoint("a"), receiver)
+    assert await run_tick(backend, sender, at(7, 5)) == 1
+    [hit] = service.hits
+    assert receiver.decrypt(hit.body)["notification"]["app_badge"] == 1
+
+
 async def test_weekday_mask_inactive_reminder_inactive_and_unscheduled_habits_send_nothing(
     backend: Backend, service: PushService, sender: WebPushSender
 ) -> None:

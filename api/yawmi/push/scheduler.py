@@ -8,7 +8,10 @@ A reminder is due at `now` when, in the plan's zone (`settings.tz`, Asia/Riyadh)
 * the habit's current period is not reached yet (`period_progress(...).reached` is false), with
   the week start passed explicitly (`settings.week_start`);
 * that day is not marked `skip` or `vacation` for the habit (owner's ruling: no nagging on a day
-  set aside). Such a habit is not counted in the badge either.
+  set aside). Such a habit is not counted in the badge either;
+* a yes/no (`boolean`) habit of any period has no `done` log on that day: «لا يُرسل إن تحقق هدف
+  اليوم». A weekly yes/no habit done this morning is not reminded tonight, though its week is
+  still open; it leaves the badge too. Count and duration habits keep the period rule.
 
 For a due reminder with at least one subscription that is not backing off, the tick inserts
 `(reminder_id, day)` into `reminder_sends ... ON CONFLICT DO NOTHING`, and sends only if that row
@@ -113,11 +116,14 @@ async def _open_habits(
     first = min(period_bounds(day, spec.period, week_start)[0] for spec in specs.values())
     rows_logs = await store.habit_logs(first, day)
     set_aside = {r.habit_code for r in rows_logs if r.day == day and r.status in _SET_ASIDE}
+    done_today = {r.habit_code for r in rows_logs if r.day == day and r.status == "done"}
     logs = _logs_by_code(rows_logs)
     open_: dict[str, str] = {}
     for code, spec in specs.items():
         if code in set_aside:
             continue
+        if spec.kind == "boolean" and code in done_today:
+            continue  # a yes/no habit is done for the day once it is done
         try:
             reached = period_progress(spec, logs.get(code, []), day, week_start).reached
         except Exception as exc:  # noqa: BLE001  # same: isolate the habit
