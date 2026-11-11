@@ -32,10 +32,10 @@ EXPORTER = API_DIR / "tools" / "export_seed_sql.py"
 
 # code, title_ar, outcome, ac_ref, kind, unit, target_per_period, period, anchor
 EXPECTED_ROWS = [
-    ("meditation", "تأمّل 10 دقائق", "O2", "AC2.7", "boolean", None, 5, "week", "after_wake"),
+    ("meditation", "جلسة تأمّل 10 دقائق", "O2", "AC2.7", "boolean", None, 5, "week", "after_wake"),
     (
         "visualization",
-        "تخيّل خطوات اليوم 5 دقائق",
+        "جلسة تخيّل خطوات اليوم 5 دقائق",
         "O2",
         "AC2.7",
         "boolean",
@@ -296,7 +296,7 @@ def test_render_seed_sql_renders_values_as_sql_literals(habits: list[dict[str, A
     assert "285" in sql
     assert "TRUE" in sql
     assert "NULL" in sql
-    assert "تأمّل 10 دقائق" in sql
+    assert "'جلسة تأمّل 10 دقائق'" in sql
 
 
 def test_render_seed_sql_is_deterministic(habits: list[dict[str, Any]]) -> None:

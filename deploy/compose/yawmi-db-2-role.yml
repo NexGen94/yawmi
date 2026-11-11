@@ -41,7 +41,7 @@ configs:
       sha256sum /tmp/0002.sql
       sed -i -e '/^[[:space:]]*BEGIN;[[:space:]]*$$/d' -e '/^[[:space:]]*COMMIT;[[:space:]]*$$/d' /tmp/0002.sql
       base64 -d /yawmi/in/seed.b64 | gunzip -c > /tmp/seed.sql
-      printf '%s  %s\n' 08842d984811df32452a13042d0d3f9c95ddd5af23c6ecff00eeab00a4567e6f /tmp/seed.sql | sha256sum -c -
+      printf '%s  %s\n' 4825b5164ebd22e7ffc3b00d74cb40f92bb2187adba2c624317f7d66955cf3e9 /tmp/seed.sql | sha256sum -c -
       sha256sum /tmp/seed.sql
       sed -i -e '/^[[:space:]]*BEGIN;[[:space:]]*$$/d' -e '/^[[:space:]]*COMMIT;[[:space:]]*$$/d' /tmp/seed.sql
       [ -s /run/yawmi/yawmi_api_pw ] || { echo "yawmi-loader: yawmi_api_pw is missing: run loader 1 first"; exit 1; }
@@ -128,19 +128,19 @@ configs:
       O5jikh8bfwBHi0+xNwcAAA==
   pseed:
     content: |
-      H4sIAAAAAAAC/9WWz0/bMBTH7/0rfGsrVR0tQ0xMO1Qlkyp17QRlh10iN3Fbr2mCEgfW3YaAIW78CQhtDMYPMYbQ/hP7v9mznXQu
-      FMQ2NrRDE9fv+fl9/Bz7W2ssWgstVGu0mmiIVwe02MNtyiKUyyDkBC4pIEaZR2wcFlA3wJ4dkk4BBTFzggEYsaM7+tR3Cyj2KYMB
-      OOwSZi+TUP5oAIbkDTEjp0fcGALqEauE9F08tAc46hcQWSHh0PYhrO/0gtAGS9ouoAjiMt1FfFc3omHEyEDGdUKCGXHtthzhMLpC
-      MvnMq0p9yVrMSJbsgLiUYUYDP1tAWX7I98SG2BHrqDSF+KlY4/v8k1gDW2OpXgePZln6Varl4qxstIPAI9gf2WegTyYvbTptSCgr
-      M9F285nFHQaLsYr7BNxzfrCay6NKC7VqLyz0utmwYJ6I4kcLdIjdXjY/N+cCSzq6tbBkQYyIEFfFl/8z+YKmWqFRjD36zgQ7EdsK
-      jJ/wS7EFXIeI74t16N0SG2jmz2jlpAbvfdMmfCPecdo3QRz6sAcHQehTvysz1VRimx8oSH7BPwPbsUE2rcmmi4//AzJI4AYyscHP
-      gWz375C1SScIiR15hCzfNxvxux6NevaA+jEjkdqloy2oq/ZRbPIjuUX5VwlsMM5qxlnN6MbhaKdDOHiVn/wKp37+1hcog99GFy0T
-      3E9KJ1mgWgcIinYMnKf8i6ziXSmdIPZZVq1mFGnaspp/woFzX5C3l7CDB9Qb2j3sdZJps8ById6j5FRRVdwD5rMxrlJJg5VKxdKk
-      PVp62NpFgUPho6NwbVEs7wwFtqGOkFOJAlz8iB9C1z7/fqVmBlv5xqo9KB4LMWV20IHz0mc9zaZQztTmlPVLj81v4gM/M+GmErip
-      yYeLLFx64f17sLa87Hvpx3YoNsV7scPPERTuEqq0e+VeS9oTCjTCmABx5Sq/x0s8gck0G6jabDyv16otlJNiK4/mm2jp5XylZaFF
-      qwUZpOILPUPkrePFLnGLI0EG9lSSmfaRTAN7ItRMc6rdwKrVm2lM9BzYpD4zLUqvQb/UeGa/0nwy06uqbyzla5IQRlx3u0Emmi7j
-      +hE8TQVpOo4pS/BLtKXpkspNuRIjwTm2Gj9lqMxJic2xZCbIT9NuiFI5PhWw4FJtVurWYtXKmaK7aEjcu26wvKrJsqvmwbIyauDT
-      zA8o/cQH2gsAAA==
+      H4sIAAAAAAAC/82Wy07bQBSG93mK2TmRopSEIiqqLqLgSkhpUkHoohtrYk+SaRwb2WNouisCitjxCAi1tCkXUYpQ32TmbXrGY7sT
+      CAgQiC6SOHMucz6fufwLjSVzsYUWGq0mGuK1AS31cJuyEOVzCNm+Q4qIUeYSCwdF1PWxawWkU0R+xGx/AEZsq4E+9ZwiijzKIAAH
+      XcKsFRLID/XBkPxCztDuESeChCpijZC+g4fWAIf9IiKrJBhaHqT17J4fWGBJn4sohLxMDRHPUQ/hMGRkIPPaAcGMOFZbRtiMrpJc
+      IfeuWl82l3KSxRgQhzLMqO8ZRWTwQ7HBz/gPxEd8X2yKXbGBylOIn4h1fsC/iXVwaizX6+DarMiAaq1SmpUPbd93CfYy+wyMSQpD
+      VmEoAqgts+vfBu4weCtruE/Anvf8tXwBVVuotfDGRO+bDRPmCSl+tkiH2OkZhbk5B6CSaEjfWlw2IUtIiAPx8l+uUFR4qzSMsEs/
+      TSQ8FjsxIT/mF2IbAEeIH4gNGN0Wm2jmfthyVgX+SNgwgYq/AfuDHwUerMqBH3jU68paFJXYkegAyc/5d2A70simFdl06fl/3NCU
+      DAq4hkxsQn8P+N7jkLVJxw+IFbqErDw0G/G6Lg171oB6ESNhvFyzJai69lVsyRUMsL8ksMY4qxhnFaMTBdmSh3TwU3lxF071fUc6
+      xSaT30QXrhDcT1qX7UZo2hFwnvCfsou3pbT9yGNG/DbDUNFW7rAB7wV5cws7eEDdodXDbieZ1gCWc/EZJadK3MV9YD4d4yqXFVi5
+      XCpPWqPlp+1d6NsUNh2Fi4xieYvEYJvxEXIiUYCLH/IRDB3wP5d6prFVru3ak+KxAFNm+R04Lz3WU2wxyqm6KqB/6bH5W3zhpzrc
+      VAI3NflwkY2LSZ4ErC2v/1662UZiS3wWu/wMQeMuoEt7l+615HlCgzKMCRDZhfQAh//EvZVrNlCt2XhdX6i1UF7KrwKab6Llt/PV
+      lomWzBZUkMox9AqRj7YbOcQpZRIN7KlI0+2ZcAN7It10c6rmwKr0nG5MFB7YpGLTLbGCg3Gp+vTxWAXKSi/rwLGSr4hEiLjqdo1w
+      1F3GFSV46ppSdxzTmuCXqE3dJRWg8k1kEnTsbfwTprKmWH6OFTNBkOp2TabK+FTSgkutWa2bSzUzr8vwkiZ6b7vACnFPVpx4Hiw7
+      Ewe+zP0FscCze+wLAAA=
 volumes:
   raqib_secrets:
     name: raqib_secrets

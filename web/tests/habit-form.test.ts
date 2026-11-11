@@ -19,7 +19,7 @@ const form = (patch: Partial<HabitForm> = {}): HabitForm => ({ ...emptyForm(TODA
 
 const systemHabit: HabitOut = {
   code: 'meditation',
-  title_ar: 'تأمّل 10 دقائق',
+  title_ar: 'جلسة تأمّل 10 دقائق',
   goal_ref: null,
   outcome: 'O2',
   ac_ref: 'O2-AC1',
