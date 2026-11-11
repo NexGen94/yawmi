@@ -1,18 +1,34 @@
 """Pairing, refresh-token rotation and revocation.
 
+Pairing fails closed: `PairingGuard` counts failed pairings in memory, per process; when more
+than `MAX_PAIRING_FAILURES` fail within `PAIRING_FAILURE_WINDOW`, every unused code is expired and
+the owner issues a new one with `yawmi-admin pair-code`. A success neither counts nor resets the
+count. This backs up the Traefik rate limit, which guards the public host only.
+
 Native devices (`iphone`, `watch`) keep the refresh token themselves. A `web` device never sees
 it: it lives in the `yawmi_rt` cookie (HttpOnly, Strict, scoped to `/v1/auth`) and the response
 body carries `refresh_token: null`.
 """
 
+import logging
+import time
+from collections import deque
+from collections.abc import Callable
 from datetime import timedelta
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, StringConstraints
 
-from yawmi.auth.deps import DevicesDep, SettingsDep, forbidden, require_kind, unauthorized
+from yawmi.auth.deps import (
+    DevicesDep,
+    DeviceStore,
+    SettingsDep,
+    forbidden,
+    require_kind,
+    unauthorized,
+)
 from yawmi.auth.tokens import hash_refresh, issue_access, new_refresh
 from yawmi.errors import INVALID, ErrorDetail
 from yawmi.settings import Settings
@@ -23,7 +39,54 @@ COOKIE_PATH = "/v1/auth"
 BAD_PAIRING_CODE = "الكود غير صالح أو منتهٍ"
 DEVICE_NOT_FOUND = "الجهاز غير موجود"
 
+MAX_PAIRING_FAILURES = 20
+PAIRING_FAILURE_WINDOW = 600.0  # seconds
+
+log = logging.getLogger("yawmi.auth")
+
 router = APIRouter(prefix="/v1", tags=["devices"])
+
+
+class PairingGuard:
+    """Failed pairings of the last `window` seconds, in memory (one process, one count)."""
+
+    def __init__(
+        self,
+        *,
+        limit: int = MAX_PAIRING_FAILURES,
+        window: float = PAIRING_FAILURE_WINDOW,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.limit = limit
+        self.window = window
+        self.clock = clock
+        self._failures: deque[float] = deque()
+
+    def record_failure(self) -> bool:
+        """Count one failure; `True` when the failures in the window now exceed the limit."""
+        now = self.clock()
+        self._failures.append(now)
+        while self._failures and self._failures[0] <= now - self.window:
+            self._failures.popleft()
+        return len(self._failures) > self.limit
+
+
+def get_pairing_guard(request: Request) -> PairingGuard:
+    guard: PairingGuard | None = getattr(request.app.state, "pairing_guard", None)
+    if guard is None:
+        guard = request.app.state.pairing_guard = PairingGuard()
+    return guard
+
+
+PairingGuardDep = Annotated[PairingGuard, Depends(get_pairing_guard)]
+
+
+async def _pairing_failed(devices: DeviceStore, guard: PairingGuard) -> HTTPException:
+    if guard.record_failure():
+        expired = await devices.expire_pairing_codes()
+        # counts only: never a code or a client address
+        log.warning("pairing failed too often: %d unused code(s) expired", expired)
+    return HTTPException(status_code=400, detail=BAD_PAIRING_CODE)
 
 
 class PairRequest(BaseModel):
@@ -102,14 +165,18 @@ def _credentials(body: RefreshRequest | None, cookie: str | None) -> tuple[UUID,
     },
 )
 async def pair_device(
-    body: PairRequest, response: Response, devices: DevicesDep, settings: SettingsDep
+    body: PairRequest,
+    response: Response,
+    devices: DevicesDep,
+    settings: SettingsDep,
+    guard: PairingGuardDep,
 ) -> TokenPair:
     if body.kind == "service":
         raise forbidden()
     pairing = await devices.consume_pairing_code(body.code)
     # A code is bound to the kind it was issued for. A mismatch still burns it (one-time code).
     if pairing is None or pairing.kind != body.kind:
-        raise HTTPException(status_code=400, detail=BAD_PAIRING_CODE)
+        raise await _pairing_failed(devices, guard)
     raw, digest = new_refresh()
     device_id = await devices.create_device(body.name, body.kind, digest)
     return _token_pair(response, settings, device_id, body.kind, raw)

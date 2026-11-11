@@ -30,6 +30,13 @@ WHERE code = $1 AND used_at IS NULL AND expires_at > now()
 RETURNING code, kind, expires_at
 """
 
+# Fail closed after repeated wrong codes (see `PairingGuard` in `yawmi.routes.devices`).
+_EXPIRE_PAIRING_CODES = """
+UPDATE yawmi.pairing_codes
+SET expires_at = now()
+WHERE used_at IS NULL AND expires_at > now()
+"""
+
 _CREATE_DEVICE = """
 INSERT INTO yawmi.devices (id, name, kind, refresh_hash, paired_at, refresh_rotated_at)
 VALUES ($1, $2, $3, $4, now(), now())
@@ -95,6 +102,9 @@ class AsyncpgDeviceStore:
         if row is None:
             return None
         return PairingCode(code=row["code"], kind=row["kind"], expires_at=row["expires_at"])
+
+    async def expire_pairing_codes(self) -> int:
+        return affected_rows(await self._pool.execute(_EXPIRE_PAIRING_CODES))
 
     async def create_device(self, name: str, kind: str, refresh_hash: str) -> UUID:
         device_id = uuid4()

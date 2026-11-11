@@ -64,6 +64,10 @@ class DeviceStore(Protocol):
         """Insert a paired device holding the hash of its first refresh token."""
         ...
 
+    async def expire_pairing_codes(self) -> int:
+        """Expire every unused code that is still valid; how many were expired."""
+        ...
+
     async def get_device(self, device_id: UUID) -> Device | None: ...
 
     async def rotate_refresh(

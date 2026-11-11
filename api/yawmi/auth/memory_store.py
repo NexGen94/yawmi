@@ -99,3 +99,12 @@ class InMemoryDeviceStore:
             )
             for d in self._devices.values()
         ]
+
+    async def expire_pairing_codes(self) -> int:
+        now = self.clock()
+        expired = 0
+        for code, (row, used) in list(self._codes.items()):
+            if not used and row.expires_at > now:
+                self._codes[code] = (replace(row, expires_at=now), False)
+                expired += 1
+        return expired
