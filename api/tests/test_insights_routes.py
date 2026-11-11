@@ -203,6 +203,38 @@ async def test_close_validation_errors_use_the_contract(client):
     assert missing.json()["errors"] == [{"loc": ["body", "day"], "type": "missing"}]
 
 
+async def test_close_refuses_a_day_older_than_seven_days_without_calling_the_provider(
+    client, app, anthropic
+):
+    route = anthropic.mock(return_value=anthropic_reply(GOOD))
+    old = (date(2026, 11, 10) - timedelta(days=8)).isoformat()
+    response = await client.post("/v1/day/close", json=close_body(day=old), headers=auth())
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "طلب غير صالح",
+        "errors": [{"loc": ["body", "day"], "type": "day_out_of_window"}],
+    }
+    assert route.call_count == 0
+    assert app.state.insights_store.rows == []
+
+
+async def test_close_accepts_a_day_exactly_seven_days_back(client, app, anthropic):
+    anthropic.mock(return_value=anthropic_reply(GOOD))
+    oldest = (date(2026, 11, 10) - timedelta(days=7)).isoformat()
+    response = await client.post("/v1/day/close", json=close_body(day=oldest), headers=auth())
+    assert response.status_code == 200
+    assert response.json()["day"] == oldest
+    assert len(app.state.insights_store.rows) == 1
+
+
+async def test_close_in_the_future_is_still_refused_without_calling_the_provider(client, anthropic):
+    route = anthropic.mock(return_value=anthropic_reply(GOOD))
+    future = (date(2026, 11, 10) + timedelta(days=1)).isoformat()
+    response = await client.post("/v1/day/close", json=close_body(day=future), headers=auth())
+    assert response.status_code == 422
+    assert route.call_count == 0
+
+
 async def test_close_strips_raw_samples_before_the_provider(client, anthropic):
     route = anthropic.mock(return_value=anthropic_reply(GOOD))
     ctx = {"habits_done": 5, "raw_samples": [{"hr": 61, "t": "2026-11-10T01:00:00Z"}]}
