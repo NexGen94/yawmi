@@ -30,6 +30,7 @@ import asyncpg
 import pytest
 from asyncpg import exceptions as pgerr
 
+from yawmi import admin
 from yawmi.auth.pg_store import AsyncpgDeviceStore
 from yawmi.db.migrate import (
     MIGRATIONS_DIR,
@@ -575,6 +576,36 @@ async def test_pg_rotation_sets_the_timestamp_and_refuses_an_expired_token(
     device = await device_store.get_device(device_id)
     assert device is not None
     assert device.refresh_hash == "h1"
+
+
+@needs_db
+async def test_pg_admin_lists_devices_and_revokes_one_with_its_subscriptions(
+    migrated: asyncpg.Connection, device_store: AsyncpgDeviceStore
+):
+    phone = await device_store.create_device("هاتف", "iphone", "a" * 64)
+    web = await device_store.create_device("Safari", "web", "b" * 64)
+    await migrated.execute(
+        "INSERT INTO yawmi.push_subscriptions (endpoint, device_id, p256dh, auth) "
+        "VALUES ('https://web.push.apple.com/x', $1, 'k', 'a')",
+        web,
+    )
+    listed = await device_store.list_devices()
+    assert {d.id for d in listed} == {phone, web}
+    assert all(not hasattr(d, "refresh_hash") for d in listed)
+
+    assert await admin.revoke_device(device_store, web) is True
+    assert (
+        await migrated.fetchval(
+            "SELECT count(*) FROM yawmi.push_subscriptions WHERE device_id = $1", web
+        )
+        == 0
+    )
+    revoked = await migrated.fetchrow(
+        "SELECT revoked_at, refresh_hash FROM yawmi.devices WHERE id = $1", web
+    )
+    assert revoked["revoked_at"] is not None
+    assert revoked["refresh_hash"] is None
+    assert await admin.revoke_device(device_store, uuid.uuid4()) is False
 
 
 @needs_db

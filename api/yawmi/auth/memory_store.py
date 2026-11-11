@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from yawmi.auth.deps import Device, PairingCode
+from yawmi.auth.deps import Device, DeviceInfo, PairingCode
 
 
 def _utc_now() -> datetime:
@@ -91,3 +91,11 @@ class InMemoryDeviceStore:
         if self.on_revoke is not None:
             self.on_revoke(device_id)
         return True
+
+    async def list_devices(self) -> list[DeviceInfo]:
+        return [
+            DeviceInfo(
+                id=d.id, name=d.name, kind=d.kind, paired_at=d.paired_at, revoked_at=d.revoked_at
+            )
+            for d in self._devices.values()
+        ]

@@ -38,6 +38,17 @@ class Device:
     revoked_at: datetime | None
 
 
+@dataclass(frozen=True)
+class DeviceInfo:
+    """What an operator may see of a device: never its refresh hash."""
+
+    id: UUID
+    name: str
+    kind: str
+    paired_at: datetime | None
+    revoked_at: datetime | None
+
+
 class DeviceStore(Protocol):
     """Devices and one-time pairing codes."""
 
@@ -64,6 +75,10 @@ class DeviceStore(Protocol):
 
     async def revoke(self, device_id: UUID) -> bool:
         """Revoke the device and drop its refresh hash; `False` only if it does not exist."""
+        ...
+
+    async def list_devices(self) -> list[DeviceInfo]:
+        """Every device, oldest pairing first, for `yawmi-admin devices`."""
         ...
 
 

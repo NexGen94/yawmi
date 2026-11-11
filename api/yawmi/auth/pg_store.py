@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 
 import asyncpg
 
-from yawmi.auth.deps import Device, PairingCode
+from yawmi.auth.deps import Device, DeviceInfo, PairingCode
 
 _ADD_PAIRING_CODE = """
 INSERT INTO yawmi.pairing_codes (code, kind, expires_at)
@@ -53,6 +53,13 @@ _REVOKE = """
 UPDATE yawmi.devices
 SET revoked_at = COALESCE(revoked_at, now()), refresh_hash = NULL
 WHERE id = $1
+"""
+
+# For the operator: no refresh hash, ever.
+_LIST_DEVICES = """
+SELECT id, name, kind, paired_at, revoked_at
+FROM yawmi.devices
+ORDER BY paired_at NULLS LAST, id
 """
 
 # Same transaction as _REVOKE: a revoked device keeps no Web Push subscription.
@@ -109,3 +116,16 @@ class AsyncpgDeviceStore:
             tag = await conn.execute(_REVOKE, device_id)
             await conn.execute(_DROP_PUSH, device_id)
         return affected_rows(tag) == 1
+
+    async def list_devices(self) -> list[DeviceInfo]:
+        rows = await self._pool.fetch(_LIST_DEVICES)
+        return [
+            DeviceInfo(
+                id=r["id"],
+                name=r["name"],
+                kind=r["kind"],
+                paired_at=r["paired_at"],
+                revoked_at=r["revoked_at"],
+            )
+            for r in rows
+        ]
