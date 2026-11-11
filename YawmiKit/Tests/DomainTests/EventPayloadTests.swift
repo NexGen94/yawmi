@@ -141,7 +141,9 @@ struct EventPayloadTests {
         // `Quantity` in project.py: decimal_places=4
         let payload = HabitLoggedPayload(habitCode: "read", status: .done, value: 0.1 + 0.2)
         #expect(payload.value == 0.3)
-        #expect(try Self.wire(payload).contains(#""value":0.3}"#) || Self.wire(payload).contains(#""value":0.3,"#))
+        // encode once: two encodings may order the payload's keys differently
+        let wire = try Self.wire(payload)
+        #expect(wire.contains(#""value":0.3}"#) || wire.contains(#""value":0.3,"#))
 
         var hours = HabitLoggedPayload(habitCode: "walk", status: .done)
         hours.value = 20.0 / 60  // 20 minutes on an hour-unit habit
