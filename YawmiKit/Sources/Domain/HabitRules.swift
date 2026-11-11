@@ -48,8 +48,29 @@ public enum HabitRules {
     public static func periodProgress(
         _ spec: HabitSpec, logs: [HabitLog], today: DayKey, weekStart: WeekStart
     ) throws(HabitRuleError) -> PeriodProgress {
-        // 21b red stage: no body yet
-        return PeriodProgress(done: -1, target: -1, completion: -1, reached: false, expected: -1, onTrack: false, needPerDay: -1)
+        let schedule = try Schedule(spec)
+        let now = today.epochDay
+        let days = aggregate(spec, schedule, logs, now)
+        let (start, end) = periodBounds(now, spec.period, weekStart)
+        let target = effectiveTarget(spec, schedule, start, end)
+        let done = periodDone(days, start, end)
+        let scheduled = schedule.days(from: start, to: end)
+        var elapsed = 0
+        var remaining = 0
+        for day in scheduled {
+            if (day < now || (day == now && days[now] != nil)) && !isSkipped(days[day]) { elapsed += 1 }
+            if day >= now { remaining += 1 }
+        }
+        let expected = scheduled.isEmpty ? 0 : target * Double(elapsed) / Double(scheduled.count)
+        return PeriodProgress(
+            done: done,
+            target: target,
+            completion: min(1, done / target),
+            reached: atLeast(done, target),
+            expected: expected,
+            onTrack: atLeast(done, expected),
+            needPerDay: remaining > 0 ? max(0, target - done) / Double(remaining) : 0
+        )
     }
 
     // MARK: Strength
@@ -68,8 +89,23 @@ public enum HabitRules {
     public static func strength(
         _ spec: HabitSpec, logs: [HabitLog], today: DayKey, weekStart: WeekStart
     ) throws(HabitRuleError) -> Double {
-        // 21b red stage: no body yet
-        return -1
+        _ = weekStart
+        let schedule = try Schedule(spec)
+        let now = today.epochDay
+        let days = aggregate(spec, schedule, logs, now)
+        let last = min(days[now] != nil ? now : now - 1, schedule.last)
+        let target = spec.targetPerPeriod
+        let window = rollingWindowDays(spec.period)
+        let frequency = spec.period == .day || spec.kind == .duration ? 1 : min(1, target / Double(window))
+        let keep = pow(0.5, frequency.squareRoot() / strengthScale)
+        var score = 0.0
+        if schedule.start <= last {
+            for day in schedule.start...last where schedule.contains(day) && !isSkipped(days[day]) {
+                let value = spec.period == .day ? days[day]?.done ?? 0 : periodDone(days, day - window + 1, day)
+                score = score * keep + min(1, value / target) * (1 - keep)
+            }
+        }
+        return min(1, max(0, score))
     }
 
     // MARK: Streak
@@ -84,8 +120,27 @@ public enum HabitRules {
     public static func streak(
         _ spec: HabitSpec, logs: [HabitLog], today: DayKey, weekStart: WeekStart
     ) throws(HabitRuleError) -> Int {
-        // 21b red stage: no body yet
-        return -1
+        let schedule = try Schedule(spec)
+        let now = today.epochDay
+        if now < schedule.start { return 0 }
+        let days = aggregate(spec, schedule, logs, now)
+        let inProgress = now <= schedule.last
+        let firstStart = periodBounds(schedule.start, spec.period, weekStart).start
+        var (start, end) = periodBounds(inProgress ? now : schedule.last, spec.period, weekStart)
+        var count = 0
+        var current = inProgress
+        while true {
+            let state = periodState(spec, schedule, days, start, end)
+            if state == .reached {
+                count += 1
+            } else if state == .missed && !current {
+                break
+            }
+            if start <= firstStart { break }
+            (start, end) = periodBounds(start - 1, spec.period, weekStart)
+            current = false
+        }
+        return count
     }
 
     // MARK: Challenge progress
@@ -98,8 +153,33 @@ public enum HabitRules {
     public static func challengeProgress(
         _ spec: HabitSpec, logs: [HabitLog], today: DayKey, weekStart: WeekStart = .sun
     ) throws(HabitRuleError) -> ChallengeProgress? {
-        // 21b red stage: no body yet
-        return nil
+        let schedule = try Schedule(spec)
+        guard let last = schedule.end else { return nil }
+        let now = today.epochDay
+        let days = aggregate(spec, schedule, logs, now)
+        var achieved = 0
+        var total = 0
+        if spec.period == .day {
+            for day in schedule.days(from: schedule.start, to: last) {
+                total += 1
+                if let value = days[day], atLeast(value.done, spec.targetPerPeriod) { achieved += 1 }
+            }
+        } else {
+            var (start, end) = periodBounds(schedule.start, spec.period, weekStart)
+            while start <= last {
+                total += 1
+                if atLeast(periodDone(days, start, end), effectiveTarget(spec, schedule, start, end)) {
+                    achieved += 1
+                }
+                (start, end) = periodBounds(end + 1, spec.period, weekStart)
+            }
+        }
+        return ChallengeProgress(
+            achieved: achieved,
+            total: total,
+            completion: total > 0 ? Double(achieved) / Double(total) : 0,
+            remainingDays: max(0, last - max(now, schedule.start) + 1)
+        )
     }
 
     // MARK: Adherence
@@ -109,8 +189,19 @@ public enum HabitRules {
     public static func adherence(
         _ spec: HabitSpec, logs: [HabitLog], today: DayKey, weekStart: WeekStart
     ) throws(HabitRuleError) -> Double? {
-        // 21b red stage: no body yet
-        return -1
+        let schedule = try Schedule(spec)
+        let now = today.epochDay
+        let days = aggregate(spec, schedule, logs, now)
+        var (start, end) = periodBounds(schedule.start, spec.period, weekStart)
+        var reached = 0
+        var counted = 0
+        while start <= schedule.last && min(end, schedule.last) < now {
+            let state = periodState(spec, schedule, days, start, end)
+            if state == .reached { reached += 1 }
+            if state != .neutral { counted += 1 }
+            (start, end) = periodBounds(end + 1, spec.period, weekStart)
+        }
+        return counted > 0 ? Double(reached) / Double(counted) : nil
     }
 
     // MARK: Goal prefill
@@ -126,8 +217,23 @@ public enum HabitRules {
         goalTarget: Double, current: Double, today: DayKey, deadline: DayKey,
         period: HabitPeriod, weekStart: WeekStart
     ) throws(HabitRuleError) -> Int {
-        // 21b red stage: no body yet
-        return -1
+        let first = periodBounds(today.epochDay, period, weekStart).start
+        let last = periodBounds(deadline.epochDay, period, weekStart).start
+        let periods: Int
+        switch period {
+        case .day:
+            periods = last - first + 1
+        case .week:
+            periods = floorDivide(last - first, 7) + 1
+        case .month:
+            let from = DayKey(epochDay: first)
+            let to = DayKey(epochDay: last)
+            periods = (to.year - from.year) * 12 + to.month - from.month + 1
+        }
+        let perPeriod = (goalTarget - current) / Double(max(1, periods)) - epsilon
+        // the bound keeps `Int(_:)` from trapping; no real goal comes near it
+        guard perPeriod.isFinite, abs(perPeriod) < 9e15 else { throw .nonFiniteGoal }
+        return max(1, Int(perPeriod.rounded(.up)))
     }
 
     // MARK: Internals

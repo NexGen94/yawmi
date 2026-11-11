@@ -67,8 +67,8 @@ extension HabitRules {
     /// - `.week`: seven days from the latest day matching `weekStart`.
     /// - `.month`: the Gregorian month (a leap February has 29 days).
     public static func periodBounds(containing day: DayKey, period: HabitPeriod, weekStart: WeekStart) -> PeriodBounds {
-        // 21b red stage: no body yet
-        return PeriodBounds(start: DayKey(epochDay: 0), end: DayKey(epochDay: 0))
+        let bounds = periodBounds(day.epochDay, period, weekStart)
+        return PeriodBounds(start: DayKey(epochDay: bounds.start), end: DayKey(epochDay: bounds.end))
     }
 
     /// Whether `day` is scheduled for the habit. Days outside `[startDay, endDay]` never are.
@@ -76,14 +76,13 @@ extension HabitRules {
     /// (bit 0 = Sunday ... bit 6 = Saturday); `.everyNDays` when `(day − anchorDay) mod everyN == 0`,
     /// the anchor lying before or after the start.
     public static func isScheduled(_ day: DayKey, for spec: HabitSpec) throws(HabitRuleError) -> Bool {
-        // 21b red stage: no body yet
-        return false
+        try Schedule(spec).contains(day.epochDay)
     }
 
     /// The last day of a challenge lasting `durationDays` days from `start`: start + duration − 1.
     public static func endDay(start: DayKey, durationDays: Int) throws(HabitRuleError) -> DayKey {
-        // 21b red stage: no body yet
-        return DayKey(epochDay: 0)
+        guard durationDays >= 1 else { throw .invalidDuration(durationDays) }
+        return DayKey(epochDay: start.epochDay + durationDays - 1)
     }
 
     /// Inclusive bounds, as epoch-day ordinals, of the period that contains the ordinal `day`.
