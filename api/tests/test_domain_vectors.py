@@ -9,6 +9,7 @@
 `gen_domain_vectors` يُستورد استيراداً عادياً: `pythonpath = ["tools"]` في `pyproject.toml`.
 """
 
+import hashlib
 import json
 import math
 import re
@@ -22,6 +23,7 @@ import pytest
 API_DIR = Path(__file__).resolve().parents[1]
 REPO_DIR = API_DIR.parent
 VECTORS_DIR = REPO_DIR / "contracts" / "domain-vectors" / "v1"
+V1_EXPECT = API_DIR / "tests" / "fixtures" / "vectors_v1_expect.json"
 
 FUNCTIONS: tuple[str, ...] = gen.FUNCTIONS
 RULES_VERSION: int = gen.RULES_VERSION
@@ -426,3 +428,36 @@ def test_main_has_no_output_path_option():
     """مجلد الإخراج ثابت من موقع السكربت، لا من سطر الأوامر."""
     with pytest.raises(SystemExit):
         gen.main(["--out", "x"])
+
+
+# ---------------------------------------------------------------- rulesVersion 2 (المهمة 5)
+
+
+def _expect_fingerprint(case: dict) -> str:
+    """SHA-256 للصيغة القانونية لـ`expect` و`tol` بعد فكّهما (مفاتيح مرتبة وفواصل ثابتة وASCII)."""
+    canonical = json.dumps(
+        {"expect": case["expect"], "tol": case.get("tol")},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+    return hashlib.sha256(canonical.encode("ascii")).hexdigest()
+
+
+def test_rules_v2_keeps_every_v1_expectation():
+    """كل توقع من الـ312 الملتزَمة في `rulesVersion` 1 باقٍ كما هو بعد رفع الإصدار.
+
+    حارس المولّد يسكت عن تغيّر `expect` بعد رفع `rulesVersion`، فهذا الاختبار هو الدليل أن
+    قاعدة الامتناع لم تغيّر ناتجاً قائماً. البصمة وُلّدت من ملفات `main` (88b29cb) قبل أي تعديل،
+    بالدالة `_expect_fingerprint` نفسها.
+    """
+    v1 = json.loads(V1_EXPECT.read_text(encoding="utf-8"))
+    assert len(v1) == 312
+    current = {case["id"]: _expect_fingerprint(case) for _, case in _all_cases()}
+    missing = sorted(set(v1) - set(current))
+    changed = sorted(
+        case_id for case_id in v1 if case_id in current and current[case_id] != v1[case_id]
+    )
+    assert missing == []
+    assert changed == []
