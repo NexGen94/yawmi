@@ -69,7 +69,7 @@ public enum UUIDv7 {
     /// them despite floating-point error) and clamps to the 48-bit field.
     private static func clampedMilliseconds(_ date: Date) -> UInt64 {
         let milliseconds = (date.timeIntervalSince1970 * 1000).rounded()
-        if !(milliseconds > 0) { return 0 }  // also catches NaN
+        if milliseconds.isNaN || milliseconds <= 0 { return 0 }
         if milliseconds >= Double(maxMilliseconds) { return maxMilliseconds }
         return UInt64(milliseconds)
     }

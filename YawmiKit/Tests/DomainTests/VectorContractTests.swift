@@ -87,7 +87,7 @@ struct VectorContractTests {
         }
     }
 
-    private func decode<T: Decodable>(_ type: T.Type, _ value: JSONValue, _ id: String) throws -> T {
+    private func decode<T: Decodable>(_: T.Type, _ value: JSONValue, _ id: String) throws -> T {
         do {
             return try JSONDecoder().decode(T.self, from: JSONEncoder().encode(value))
         } catch {

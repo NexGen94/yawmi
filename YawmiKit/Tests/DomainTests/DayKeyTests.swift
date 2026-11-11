@@ -91,7 +91,9 @@ struct DayKeyTests {
         #expect(a < DayKey(year: 2026, month: 12, day: 1))
         #expect(a < DayKey(year: 2027, month: 1, day: 1))
         #expect(DayKey(year: 2026, month: 11, day: 10) > a)
-        #expect(!(a < a))
+        let same = DayKey(year: 2026, month: 11, day: 9)
+        #expect((a < same) == false)  // irreflexive: equal keys are not less than each other
+        #expect((same < a) == false)
         #expect(a <= DayKey(year: 2026, month: 11, day: 9))
         let unsorted = [DayKey(year: 2027, month: 1, day: 1), a, DayKey(year: 2026, month: 2, day: 28)]
         #expect(unsorted.sorted() == [DayKey(year: 2026, month: 2, day: 28), a, DayKey(year: 2027, month: 1, day: 1)])
