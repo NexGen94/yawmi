@@ -1453,3 +1453,97 @@ def test_build_habits_are_unchanged_by_polarity_default():
     assert period_progress(explicit, logs, d(4), "sun") == period_progress(
         spec(), logs, d(4), "sun"
     )
+
+
+# ---------------------------------------------------------------- الامتناع: أحكام التنفيذ (جولة الإصلاح 1)
+
+_SKIP_TODAY = {
+    "done": 0.0,
+    "target": 1.0,
+    "completion": 0.0,
+    "reached": False,
+    "expected": 0.0,
+    "on_track": True,
+    "need_per_day": 1.0,
+}
+_CLEAN_TODAY = {
+    "done": 1.0,
+    "target": 1.0,
+    "completion": 1.0,
+    "reached": True,
+    "expected": 1.0,
+    "on_track": True,
+    "need_per_day": 0.0,
+}
+_MON_WED_FRI = mask(MON, WED, FRI)  # 42؛ اليوم 2026-11-10 ثلاثاء غير مجدول
+_UNSCHEDULED_TODAY = {
+    "done": 0.0,
+    "target": 1.0,
+    "completion": 0.0,
+    "reached": False,
+    "expected": 0.0,
+    "on_track": True,
+    "need_per_day": 0.0,
+}
+
+# (المواصفة، السجلات، تقدّم اليوم، streak، adherence، strength بهامش 1e-6)
+ABSTAIN_DECIDED = {
+    # skip أو vacation اليوم محايد كما في عادة البناء: لا محفوظ ولا انزلاق (حكم المتحكم، جولة 1)
+    "skip-today": ({}, [status(ABSTAIN_TODAY, "skip")], _SKIP_TODAY, 9, 1.0, 0.381137),
+    "vacation-today": ({}, [status(ABSTAIN_TODAY, "vacation")], _SKIP_TODAY, 9, 1.0, 0.381137),
+    # سجل missed ليس انزلاقاً: اليوم محفوظ ما لم يُسجَّل `done`
+    "missed-today": ({}, [status(ABSTAIN_TODAY, "missed")], _CLEAN_TODAY, 10, 1.0, 0.413270),
+    # انزلاق وتخطٍّ في اليوم نفسه: التخطي يجعله محايداً (التصحيح بتخطي اليوم)
+    "slip-and-skip-today": (
+        {},
+        [slip(ABSTAIN_TODAY), status(ABSTAIN_TODAY, "skip")],
+        _SKIP_TODAY,
+        9,
+        1.0,
+        0.381137,
+    ),
+    # الأيام غير المجدولة لا تُحسب محفوظة، والانزلاق فيها لا أثر له
+    "weekdays-no-logs": (
+        {"schedule_kind": "weekdays", "weekday_mask": _MON_WED_FRI},
+        [],
+        _UNSCHEDULED_TODAY,
+        4,
+        1.0,
+        0.192067,
+    ),
+    "weekdays-slip-saturday": (
+        {"schedule_kind": "weekdays", "weekday_mask": _MON_WED_FRI},
+        [slip(date(2026, 11, 7))],
+        _UNSCHEDULED_TODAY,
+        4,
+        1.0,
+        0.192067,
+    ),
+    "weekdays-slip-today-unscheduled": (
+        {"schedule_kind": "weekdays", "weekday_mask": _MON_WED_FRI},
+        [slip(ABSTAIN_TODAY)],
+        _UNSCHEDULED_TODAY,
+        4,
+        1.0,
+        0.192067,
+    ),
+}
+
+
+@pytest.mark.parametrize("name", list(ABSTAIN_DECIDED))
+def test_abstain_decided_behaviours(name):
+    kw, logs, today_progress, stk, adh, stren = ABSTAIN_DECIDED[name]
+    habit = abstain(**kw)
+    progress = period_progress(habit, logs, ABSTAIN_TODAY, "sun")
+    assert {
+        "done": progress.done,
+        "target": progress.target,
+        "completion": progress.completion,
+        "reached": progress.reached,
+        "expected": progress.expected,
+        "on_track": progress.on_track,
+        "need_per_day": progress.need_per_day,
+    } == today_progress
+    assert streak(habit, logs, ABSTAIN_TODAY, "sun") == stk
+    assert adherence(habit, logs, ABSTAIN_TODAY, "sun") == pytest.approx(adh, abs=1e-12)
+    assert strength(habit, logs, ABSTAIN_TODAY, "sun") == pytest.approx(stren, abs=1e-6)
