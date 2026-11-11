@@ -555,13 +555,15 @@ class Sandbox:
 
     def install(self, compose_text: str, script: str, keys: tuple[str, ...]) -> Path:
         posix = self.root.as_posix()
-        for old, new in (
-            ("/run/raqib", f"{posix}/raqib"),
-            ("/run/yawmi", f"{posix}/yawmi"),
-            ("/yawmi/in", f"{posix}/in"),
-            ("/tmp/", f"{posix}/tmp/"),
-        ):
-            script = script.replace(old, new)
+        mapping = {
+            "/run/raqib": f"{posix}/raqib",
+            "/run/yawmi": f"{posix}/yawmi",
+            "/yawmi/in": f"{posix}/in",
+            "/tmp/": f"{posix}/tmp/",
+        }
+        # One pass: on Linux the sandbox itself lives under /tmp/, so sequential replaces would rewrite
+        # the paths they had just inserted (first CI run, 2026-11-11).
+        script = re.sub("|".join(map(re.escape, mapping)), lambda m: mapping[m.group(0)], script)
         for key in keys:
             (self.root / "in" / f"{key}.b64").write_text(
                 _payload_text(compose_text, key), encoding="utf-8", newline="\n"
