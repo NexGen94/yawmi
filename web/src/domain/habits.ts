@@ -7,7 +7,9 @@
 //   with null as −1, then status) before they are summed, so the input order cannot change even
 //   the last digit of a result.
 // - A day's value is the sum of its `done` values. For a boolean habit one or more `done` logs mean
-//   1 (capped at 1 a day); for the others a `done` without a value counts 0.
+//   1 (capped at 1 a day); for the others a `done` without a value counts 0. The server keeps one
+//   log per habit and day whatever the device (the newest wins, I-10), so stored data gives a day
+//   one log; the sum only keeps the rule total for a caller that passes several.
 // - A day is "skipped" when it has a `skip` or `vacation` log and no positive progress. Skipped and
 //   unscheduled days are neutral: they never lower strength, break a streak or raise what is due.
 // - A weekly or monthly period clipped by startDay or endDay has the proportional target
@@ -316,6 +318,8 @@ export function adherence(
  * Suggested per-period target for a habit serving a numeric goal:
  * max(1, ceil((goalTarget − current) / periods − 1e-9)), periods counted from the current one to
  * the deadline's, both included (at least one, even past the deadline).
+ * Only for a KPI that is cumulative over the horizon (owner decision 5); which KPI gets which
+ * prefill is decided by the server (`kpi_prefill_kind` in the reference), never by the web form.
  */
 export function goalPrefill(
   goalTarget: number,

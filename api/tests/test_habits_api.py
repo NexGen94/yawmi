@@ -7,7 +7,8 @@ by `test_migrations.py`, and the SQL here is checked statically never to name `p
 
 `TEST_DATABASE_URL` must point at a throwaway database: these tests write and delete rows in
 `yawmi.habits` (titles starting with `t10b-`), the seeded system habits, the Notion mirror
-(`t10b-` page ids), `raqib.goals` (`O9`) and `raqib.kpis`/`raqib.kpi_readings` (`t10b-` codes).
+(`t10b-` page ids), `raqib.goals` (`O9`) and `raqib.kpis`/`raqib.kpi_readings` (`t10b-` codes,
+and the seeded codes of `REAL_KPIS`, whose prefill rule is keyed by code).
 """
 
 import os
@@ -31,7 +32,7 @@ from yawmi.auth.tokens import issue_access
 from yawmi.db.pool import create_pool, set_pool
 from yawmi.db.seed import load_habits, seed_habits
 from yawmi.habits.memory import InMemoryHabitStore, InMemoryMirrorReader
-from yawmi.habits.store import ALL_SQL, CardRef, MilestoneRef, StoredHabit
+from yawmi.habits.store import ALL_SQL, CardRef, KpiRef, MilestoneRef, StoredHabit
 from yawmi.main import create_app
 from yawmi.settings import Settings
 from yawmi.today.reader import LogRow
@@ -41,6 +42,19 @@ DAY = date(2026, 11, 10)  # 2026-11-10T12:00Z (conftest) is 15:00 in Riyadh, a T
 TITLE = "t10b-"
 PAGE = "t10b-"
 KPI = "t10b-kpi"
+# real KPI codes: the prefill rule of owner decision 5 is keyed by them (`kpi_prefill_kind`)
+BOOKS = "books_done"  # cumulative: 12 books over the whole horizon, `monthly` in the mirror
+REAL_KPIS = (
+    "books_done",
+    "english_minutes",
+    "steps_avg",
+    "consumer_debt_sar",
+    "weight_kg",
+    "strength_sessions",
+    "sleep_7h_nights",
+    "emergency_months",
+    "side_income_sar",
+)
 SYSTEM_START = date(2026, 11, 1)
 SYSTEM_LOCKED = "عادة نظامية: يُعدَّل المرسى والتذكيرات فقط"
 
@@ -80,7 +94,14 @@ class Backend(Protocol):
     async def add_card(self, ref: CardRef, page_id: str) -> None: ...
     async def add_goal(self, code: str, target_date: date) -> None: ...
     async def add_kpi(
-        self, code: str, target: str | None, readings: list[tuple[date, str]]
+        self,
+        code: str,
+        target: str | None,
+        readings: list[tuple[date, str]],
+        *,
+        direction: str = "up",
+        unit: str = "صفحة",
+        frequency: str = "weekly",
     ) -> None: ...
     async def reminder_rows(self, code: str) -> list[tuple[UUID, time, int, bool]]: ...
 
@@ -138,9 +159,17 @@ class MemoryBackend:
         self.mirror.deadlines[code] = target_date
 
     async def add_kpi(
-        self, code: str, target: str | None, readings: list[tuple[date, str]]
+        self,
+        code: str,
+        target: str | None,
+        readings: list[tuple[date, str]],
+        *,
+        direction: str = "up",
+        unit: str = "صفحة",
+        frequency: str = "weekly",
     ) -> None:
-        self.mirror.kpi_targets[code] = None if target is None else Decimal(target)
+        value = None if target is None else Decimal(target)
+        self.mirror.kpis[code] = KpiRef(value, direction, unit, frequency)
         self.mirror.readings[code] = [(d, Decimal(v)) for d, v in readings]
 
     async def reminder_rows(self, code: str) -> list[tuple[UUID, time, int, bool]]:
@@ -201,13 +230,23 @@ class PostgresBackend:
         )
 
     async def add_kpi(
-        self, code: str, target: str | None, readings: list[tuple[date, str]]
+        self,
+        code: str,
+        target: str | None,
+        readings: list[tuple[date, str]],
+        *,
+        direction: str = "up",
+        unit: str = "صفحة",
+        frequency: str = "weekly",
     ) -> None:
         await self.pool.execute(
             "INSERT INTO raqib.kpis (code, name, unit, direction, target, frequency)"
-            " VALUES ($1, 'مؤشر', 'صفحة', 'up', $2, 'weekly')",
+            " VALUES ($1, 'مؤشر', $3, $4, $2, $5)",
             code,
             None if target is None else Decimal(target),
+            unit,
+            direction,
+            frequency,
         )
         for day, value in readings:
             await self.pool.execute(
@@ -244,8 +283,14 @@ class PostgresBackend:
             "UPDATE yawmi.habits SET anchor = NULL, start_day = $1 WHERE code = 'english_minutes'",
             SYSTEM_START,
         )
-        await self.pool.execute("DELETE FROM raqib.kpi_readings WHERE kpi_code LIKE $1", like)
-        await self.pool.execute("DELETE FROM raqib.kpis WHERE code LIKE $1", like)
+        await self.pool.execute(
+            "DELETE FROM raqib.kpi_readings WHERE kpi_code LIKE $1 OR kpi_code = ANY($2)",
+            like,
+            list(REAL_KPIS),
+        )
+        await self.pool.execute(
+            "DELETE FROM raqib.kpis WHERE code LIKE $1 OR code = ANY($2)", like, list(REAL_KPIS)
+        )
         await self.pool.execute("DELETE FROM raqib.notion_milestones WHERE page_id LIKE $1", like)
         await self.pool.execute("DELETE FROM raqib.notion_cards WHERE page_id LIKE $1", like)
         await self.pool.execute("DELETE FROM raqib.goals WHERE code = 'O9'")
@@ -705,19 +750,21 @@ async def test_progress_today_is_validated(client: httpx.AsyncClient) -> None:
 # --- goal to habit -----------------------------------------------------------------------------
 
 
-async def test_milestone_with_a_kpi_prefills_a_count_habit(
+async def test_milestone_with_a_cumulative_kpi_prefills_a_count_habit(
     client: httpx.AsyncClient, backend: Backend
 ) -> None:
     await backend.add_milestone(
         MilestoneRef("قراءة 100 كتاب", "O9", date(2026, 12, 31)), PAGE + "m1"
     )
     await backend.add_kpi(
-        KPI,
+        BOOKS,
         "100",
         [(date(2026, 10, 1), "10"), (date(2026, 11, 9), "40"), (date(2026, 12, 1), "90")],
+        unit="كتاب",
+        frequency="monthly",
     )
     response = await client.post(
-        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": KPI, "period": "week"}, headers=auth()
+        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": BOOKS, "period": "week"}, headers=auth()
     )
     assert response.status_code == 200, response.text
     # (100 − 40) over the 8 weeks from 2026-11-08 to the week of 2026-12-31: ceil(7.5) = 8
@@ -740,11 +787,11 @@ async def test_milestone_with_a_kpi_prefills_a_count_habit(
         "reminders": [],
     }
     daily = await client.post(
-        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": KPI, "period": "day"}, headers=auth()
+        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": BOOKS, "period": "day"}, headers=auth()
     )
     assert daily.json()["target_per_period"] == 2.0  # ceil(60 / 52 days)
     default = await client.post(
-        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": KPI}, headers=auth()
+        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": BOOKS}, headers=auth()
     )
     assert (default.json()["period"], default.json()["target_per_period"]) == ("week", 8.0)
 
@@ -754,9 +801,11 @@ async def test_milestone_without_a_due_date_uses_the_outcome_deadline(
 ) -> None:
     await backend.add_goal("O9", date(2027, 1, 31))
     await backend.add_milestone(MilestoneRef("محطة", "O9", None), PAGE + "m2")
-    await backend.add_kpi(KPI, "30", [])
+    await backend.add_kpi(BOOKS, "30", [], unit="كتاب", frequency="monthly")
     response = await client.post(
-        f"/v1/goals/{PAGE}m2/to-habit", json={"kpi_code": KPI, "period": "month"}, headers=auth()
+        f"/v1/goals/{PAGE}m2/to-habit",
+        json={"kpi_code": BOOKS, "period": "month"},
+        headers=auth(),
     )
     assert response.status_code == 200, response.text
     assert response.json()["target_per_period"] == 10.0  # 30 over Nov, Dec, Jan
@@ -782,6 +831,147 @@ async def test_without_a_usable_kpi_the_draft_is_a_daily_yes_no_habit(
             "day",
             1.0,
         )
+
+
+YES_NO = ("boolean", "day", 1.0)
+
+
+def kind_period_target(response: httpx.Response) -> tuple[str, str, float]:
+    assert response.status_code == 200, response.text
+    draft = response.json()
+    return draft["kind"], draft["period"], draft["target_per_period"]
+
+
+async def test_a_per_period_kpi_prefills_its_own_target_when_the_periods_match(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    """english_minutes: 285 a week. A weekly habit gets 285; the reading and deadline do not count."""
+    await backend.add_milestone(MilestoneRef("إنجليزية", "O7", date(2026, 12, 31)), PAGE + "m1")
+    await backend.add_card(CardRef("بطاقة اللغة", ()), PAGE + "card")  # no deadline at all
+    await backend.add_kpi(
+        "english_minutes", "285", [(date(2026, 11, 9), "1000")], unit="دقيقة", frequency="weekly"
+    )
+    for ref in ("m1", "card"):
+        for payload in (
+            {"kpi_code": "english_minutes", "period": "week"},
+            {"kpi_code": "english_minutes"},
+        ):
+            response = await client.post(
+                f"/v1/goals/{PAGE}{ref}/to-habit", json=payload, headers=auth()
+            )
+            assert kind_period_target(response) == ("duration", "week", 285.0), (ref, payload)
+            assert response.json()["unit"] == "min"
+    saved = await client.post(
+        "/v1/habits", json={**response.json(), "title_ar": TITLE + "إنجليزية"}, headers=auth()
+    )
+    assert saved.status_code == 201, saved.text
+
+
+@pytest.mark.parametrize(
+    ("code", "unit", "target", "habit_unit"),
+    [
+        ("strength_sessions", "جلسة", "2", "session"),
+        ("sleep_7h_nights", "ليلة", "5", ""),
+    ],
+)
+async def test_a_per_period_count_maps_the_kpi_unit_when_the_habit_has_one(
+    client: httpx.AsyncClient,
+    backend: Backend,
+    code: str,
+    unit: str,
+    target: str,
+    habit_unit: str,
+) -> None:
+    await backend.add_card(CardRef("بطاقة", ()), PAGE + "card")
+    await backend.add_kpi(code, target, [], unit=unit, frequency="weekly")
+    response = await client.post(
+        f"/v1/goals/{PAGE}card/to-habit", json={"kpi_code": code, "period": "week"}, headers=auth()
+    )
+    assert kind_period_target(response) == ("count", "week", float(target))
+    assert response.json()["unit"] == habit_unit
+    saved = await client.post(
+        "/v1/habits",
+        json={**response.json(), "title_ar": TITLE + "مسودة"},
+        headers=auth(),
+    )
+    assert saved.status_code == 201, saved.text
+
+
+@pytest.mark.parametrize("period", ["month", "day"])
+async def test_a_per_period_kpi_has_no_numeric_prefill_for_another_period(
+    client: httpx.AsyncClient, backend: Backend, period: str
+) -> None:
+    """english_minutes is weekly: a monthly (or daily) habit gets the daily yes/no draft."""
+    await backend.add_milestone(MilestoneRef("إنجليزية", "O7", date(2026, 12, 31)), PAGE + "m1")
+    await backend.add_kpi("english_minutes", "285", [], unit="دقيقة", frequency="weekly")
+    response = await client.post(
+        f"/v1/goals/{PAGE}m1/to-habit",
+        json={"kpi_code": "english_minutes", "period": period},
+        headers=auth(),
+    )
+    assert kind_period_target(response) == YES_NO
+
+
+@pytest.mark.parametrize(
+    ("code", "target", "direction", "unit", "frequency", "period"),
+    [
+        ("steps_avg", "8000", "up", "خطوة", "weekly", "week"),  # an average
+        ("consumer_debt_sar", "0", "down", "ريال", "monthly", "month"),  # going down
+        ("weight_kg", None, "band", "كجم", "weekly", "week"),  # a band
+        ("emergency_months", "6", "up", "شهر", "monthly", "month"),  # a level
+        ("side_income_sar", "6000", "up", "ريال", "monthly", "month"),  # money, not an act
+    ],
+)
+async def test_rates_averages_and_non_up_kpis_have_no_numeric_prefill(
+    client: httpx.AsyncClient,
+    backend: Backend,
+    code: str,
+    target: str | None,
+    direction: str,
+    unit: str,
+    frequency: str,
+    period: str,
+) -> None:
+    await backend.add_milestone(MilestoneRef("محطة", "O9", date(2026, 12, 31)), PAGE + "m1")
+    await backend.add_kpi(
+        code,
+        target,
+        [(date(2026, 11, 1), "3")],
+        direction=direction,
+        unit=unit,
+        frequency=frequency,
+    )
+    response = await client.post(
+        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": code, "period": period}, headers=auth()
+    )
+    assert kind_period_target(response) == YES_NO
+
+
+async def test_a_cumulative_kpi_without_a_deadline_has_no_numeric_prefill(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    await backend.add_card(CardRef("بطاقة القراءة", ()), PAGE + "card")
+    await backend.add_kpi(BOOKS, "12", [], unit="كتاب", frequency="monthly")
+    response = await client.post(
+        f"/v1/goals/{PAGE}card/to-habit",
+        json={"kpi_code": BOOKS, "period": "month"},
+        headers=auth(),
+    )
+    assert kind_period_target(response) == YES_NO
+
+
+@pytest.mark.parametrize("target", ["NaN", "1e9"])
+async def test_a_per_period_target_the_server_would_refuse_falls_back_to_yes_no(
+    client: httpx.AsyncClient, backend: Backend, target: str
+) -> None:
+    await backend.add_card(CardRef("بطاقة", ()), PAGE + "card")
+    await backend.add_kpi("english_minutes", target, [], unit="دقيقة", frequency="weekly")
+    response = await client.post(
+        f"/v1/goals/{PAGE}card/to-habit",
+        json={"kpi_code": "english_minutes", "period": "week"},
+        headers=auth(),
+    )
+    assert kind_period_target(response) == YES_NO
 
 
 async def test_draft_is_not_saved(client: httpx.AsyncClient, backend: Backend) -> None:
@@ -1069,9 +1259,9 @@ async def test_a_kpi_draft_the_server_would_refuse_falls_back_to_yes_no(
     client: httpx.AsyncClient, backend: Backend, target: str
 ) -> None:
     await backend.add_milestone(MilestoneRef("محطة", "O9", date(2026, 12, 31)), PAGE + "m1")
-    await backend.add_kpi(KPI, target, [])
+    await backend.add_kpi(BOOKS, target, [], unit="كتاب", frequency="monthly")
     response = await client.post(
-        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": KPI, "period": "day"}, headers=auth()
+        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": BOOKS, "period": "day"}, headers=auth()
     )
     assert response.status_code == 200, response.text
     draft = response.json()
@@ -1083,9 +1273,9 @@ async def test_every_draft_can_be_posted_back(
     client: httpx.AsyncClient, backend: Backend, title: str, expected: str
 ) -> None:
     await backend.add_milestone(MilestoneRef(title, "O9", date(2026, 12, 31)), PAGE + "m1")
-    await backend.add_kpi(KPI, "100", [])
+    await backend.add_kpi(BOOKS, "100", [], unit="كتاب", frequency="monthly")
     draft = await client.post(
-        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": KPI}, headers=auth()
+        f"/v1/goals/{PAGE}m1/to-habit", json={"kpi_code": BOOKS}, headers=auth()
     )
     assert draft.status_code == 200, draft.text
     assert draft.json()["title_ar"] == expected

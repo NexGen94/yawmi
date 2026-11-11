@@ -12,14 +12,14 @@ INSERT INTO yawmi.habits (
 )
 VALUES
 (
-  'meditation', 'تأمّل 10 دقائق', NULL, 'O2', 'AC2.7', 'boolean', NULL, 5, 'week', 'every_day',
-  NULL, NULL, NULL, 'after_wake', (now() AT TIME ZONE 'Asia/Riyadh')::date, NULL, TRUE, 'seed',
-  TRUE
-),
-(
-  'visualization', 'تخيّل خطوات اليوم 5 دقائق', NULL, 'O2', 'AC2.7', 'boolean', NULL, 5, 'week',
+  'meditation', 'جلسة تأمّل 10 دقائق', NULL, 'O2', 'AC2.7', 'boolean', NULL, 5, 'week',
   'every_day', NULL, NULL, NULL, 'after_wake', (now() AT TIME ZONE 'Asia/Riyadh')::date, NULL,
   TRUE, 'seed', TRUE
+),
+(
+  'visualization', 'جلسة تخيّل خطوات اليوم 5 دقائق', NULL, 'O2', 'AC2.7', 'boolean', NULL, 5,
+  'week', 'every_day', NULL, NULL, NULL, 'after_wake', (now() AT TIME ZONE 'Asia/Riyadh')::date,
+  NULL, TRUE, 'seed', TRUE
 ),
 (
   'journal_morning', 'يومية الصباح', NULL, 'O3', 'AC3.4', 'boolean', NULL, 5, 'week',

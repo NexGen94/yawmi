@@ -17,6 +17,9 @@ from yawmi.domain.habits import (
     adherence,
     challenge_progress,
     goal_prefill,
+    kpi_habit_shape,
+    kpi_prefill_kind,
+    per_period_prefill,
     period_progress,
     streak,
     strength,
@@ -836,6 +839,143 @@ def test_goal_prefill_deadline_today_or_past_is_one_period():
 def test_goal_prefill_float_noise_does_not_round_up():
     # 2.2 − 1.2 = 1.0000000000000002 في الفاصلة العائمة، والمطلوب 1
     assert goal_prefill(2.2, 1.2, date(2026, 11, 9), date(2026, 11, 9), "day", "sun") == 1
+
+
+# ---------------------------------------------------------------- تعبئة الهدف بحسب نوع المؤشر
+# مؤشرات البذرة كما في `raqib/memory-seed.json`:
+# (code, unit, direction, target, frequency)
+SEED_KPIS = [
+    ("weight_kg", "كجم", "band", None, "weekly"),
+    ("steps_avg", "خطوة", "up", 8000, "weekly"),
+    ("strength_sessions", "جلسة", "up", 2, "weekly"),
+    ("sleep_7h_nights", "ليلة", "up", 5, "weekly"),
+    ("who5_raw", "نقطة", "up", 13, "monthly"),
+    ("clarity_score", "1–10", "up", 8, "monthly"),
+    ("reply_rate_pct", "%", "up", 80, "weekly"),
+    ("plan_adherence_pct", "%", "up", 80, "weekly"),
+    ("measured_projects", "مشروع", "up", 5, "cycle"),
+    ("english_minutes", "دقيقة", "up", 285, "weekly"),
+    ("english_speaking", "جلسة", "up", 2, "weekly"),
+    ("journal_morning_days", "يوم", "up", 5, "weekly"),
+    ("journal_evening_days", "يوم", "up", 5, "weekly"),
+    ("top3_done_pct", "%", "up", 70, "weekly"),
+    ("meditation_days", "يوم", "up", 5, "weekly"),
+    ("visualization_days", "يوم", "up", 5, "weekly"),
+    ("consumer_debt_sar", "ريال", "down", 0, "monthly"),
+    ("emergency_months", "شهر", "up", 6, "monthly"),
+    ("savings_rate_pct", "%", "up", 20, "monthly"),
+    ("side_income_sar", "ريال", "up", 6000, "monthly"),
+    ("social_initiations", "مبادرة", "up", 2, "weekly"),
+    ("family_halfday", "نعم/لا", "up", 1, "weekly"),
+    ("workshops_count", "ورشة", "up", 20, "cycle"),
+    ("books_done", "كتاب", "up", 12, "monthly"),
+]
+EXPECTED_KIND = {
+    "weight_kg": "none",  # نطاق
+    "steps_avg": "none",  # متوسط
+    "strength_sessions": "per_period",
+    "sleep_7h_nights": "per_period",
+    "who5_raw": "none",  # مستوى
+    "clarity_score": "none",  # مستوى
+    "reply_rate_pct": "none",  # نسبة
+    "plan_adherence_pct": "none",
+    "measured_projects": "cumulative",
+    "english_minutes": "per_period",
+    "english_speaking": "per_period",
+    "journal_morning_days": "per_period",
+    "journal_evening_days": "per_period",
+    "top3_done_pct": "none",
+    "meditation_days": "per_period",
+    "visualization_days": "per_period",
+    "consumer_debt_sar": "none",  # اتجاه نازل
+    "emergency_months": "none",  # مستوى: أشهر مدّخرة
+    "savings_rate_pct": "none",
+    "side_income_sar": "none",  # مال لا فعل يتكرر
+    "social_initiations": "per_period",
+    "family_halfday": "per_period",
+    "workshops_count": "cumulative",
+    "books_done": "cumulative",
+}
+
+
+@pytest.mark.parametrize(("code", "unit", "direction", "target", "frequency"), SEED_KPIS)
+def test_every_seeded_kpi_has_its_prefill_kind(code, unit, direction, target, frequency):
+    assert kpi_prefill_kind(code, direction, unit, target, frequency) == EXPECTED_KIND[code]
+
+
+def test_the_cumulative_set_is_explicit_and_beats_its_frequency():
+    # books_done is monthly in the mirror, yet its 12 is a total by the deadline, not 12 a month
+    assert kpi_prefill_kind("books_done", "up", "كتاب", 12, "monthly") == "cumulative"
+    assert kpi_prefill_kind("measured_projects", "up", "مشروع", 5, "cycle") == "cumulative"
+    # an unknown code with the same shape is a per-period count, not cumulative
+    assert kpi_prefill_kind("books_read", "up", "كتاب", 12, "monthly") == "per_period"
+
+
+def test_a_cumulative_kpi_without_a_single_target_has_no_prefill():
+    assert kpi_prefill_kind("books_done", "up", "كتاب", None, "monthly") == "none"
+
+
+@pytest.mark.parametrize(
+    ("code", "unit", "direction", "target", "frequency"),
+    [
+        ("x_count", "مرة", "down", 3, "weekly"),  # نازل
+        ("x_count", "مرة", "band", 3, "weekly"),  # نطاق
+        ("x_count", "مرة", "up", None, "weekly"),  # بلا هدف واحد
+        ("x_count", "مرة", "up", 3, "cycle"),  # تواتر الدورة ليس فترة عادة
+        ("x_count", "%", "up", 3, "weekly"),  # وحدة النسبة
+        ("x_count", " % ", "up", 3, "weekly"),
+        ("x_pct", "مرة", "up", 3, "weekly"),  # رمز نسبة
+        ("steps_avg", "مرة", "up", 3, "weekly"),
+        ("weight_kg", "كجم", "up", 80, "weekly"),
+        ("who5_raw", "نقطة", "up", 13, "monthly"),
+        ("clarity_score", "1–10", "up", 8, "monthly"),
+        ("emergency_months", "شهر", "up", 6, "monthly"),  # مستوى
+        ("side_income_sar", "ريال", "up", 6000, "monthly"),  # مال
+    ],
+)
+def test_rates_averages_levels_and_non_up_kpis_have_no_prefill(
+    code, unit, direction, target, frequency
+):
+    assert kpi_prefill_kind(code, direction, unit, target, frequency) == "none"
+
+
+@pytest.mark.parametrize(
+    ("frequency", "period"), [("daily", "day"), ("weekly", "week"), ("monthly", "month")]
+)
+def test_a_per_period_kpi_prefills_its_own_target_when_the_periods_match(frequency, period):
+    assert per_period_prefill(285, frequency, period) == 285.0
+
+
+@pytest.mark.parametrize(
+    ("unit", "shape"),
+    [
+        ("دقيقة", ("duration", "min")),  # english_minutes: 285 دقيقة في الأسبوع
+        (" دقيقة ", ("duration", "min")),
+        ("جلسة", ("count", "session")),  # strength_sessions, english_speaking
+        ("ليلة", ("count", "")),  # لا وحدة عادة تقابلها
+        ("يوم", ("count", "")),
+        ("مبادرة", ("count", "")),
+        ("نعم/لا", ("count", "")),
+        ("", ("count", "")),
+        (None, ("count", "")),
+    ],
+)
+def test_a_per_period_draft_takes_its_kind_and_unit_from_the_kpi_unit(unit, shape):
+    assert kpi_habit_shape(unit) == shape
+
+
+@pytest.mark.parametrize(
+    ("frequency", "period"),
+    [
+        ("weekly", "month"),  # english_minutes weekly vs a monthly habit
+        ("weekly", "day"),
+        ("monthly", "week"),
+        ("daily", "week"),
+        ("cycle", "month"),
+    ],
+)
+def test_a_per_period_kpi_has_no_prefill_when_the_periods_differ(frequency, period):
+    assert per_period_prefill(285, frequency, period) is None
 
 
 # ---------------------------------------------------------------- نقاء الدوال

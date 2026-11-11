@@ -53,7 +53,9 @@ EventStoreDep = Annotated[EventStore, Depends(get_event_store)]
     description=(
         f"حتى {MAX_BATCH} حدثاً في الدفعة. معرّف الحدث هو مفتاح التكرار: إعادة إرسال الدفعة نفسها "
         "لا تضاعف شيئاً ولا تُرفض. `habit_logged` و`habit_skipped` و`habit_vacation` و`focus_ended` "
-        "و`breath_ended` تُسقَط أيضاً إلى جداولها؛ بقية الأنواع تُحفظ في الأحداث فقط."
+        "و`breath_ended` تُسقَط أيضاً إلى جداولها؛ بقية الأنواع تُحفظ في الأحداث فقط. للعادة سجل "
+        "واحد في اليوم أياً كان الجهاز: الحدث الأحدث (`occurred_at`) يحلّ محل قيمة اليوم ولا تُجمع "
+        "قيم الأجهزة، والحدث الأقدم الواصل متأخراً لا يغيّر شيئاً."
     ),
     responses={
         401: {"model": ErrorDetail, "description": "غير مصرّح"},

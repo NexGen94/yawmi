@@ -1,7 +1,7 @@
 [
   {
     "code": "meditation",
-    "title_ar": "تأمّل 10 دقائق",
+    "title_ar": "جلسة تأمّل 10 دقائق",
     "goal_ref": null,
     "outcome": "O2",
     "ac_ref": "AC2.7",
@@ -22,7 +22,7 @@
   },
   {
     "code": "visualization",
-    "title_ar": "تخيّل خطوات اليوم 5 دقائق",
+    "title_ar": "جلسة تخيّل خطوات اليوم 5 دقائق",
     "goal_ref": null,
     "outcome": "O2",
     "ac_ref": "AC2.7",

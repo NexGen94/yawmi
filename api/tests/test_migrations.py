@@ -668,40 +668,50 @@ async def test_reminder_is_sent_once_per_day(migrated: asyncpg.Connection):
 
 UPSERT = (
     "INSERT INTO yawmi.habit_logs (id, habit_code, day, value, status, source, logged_at) "
-    "VALUES ($1, 'h1', $2, $3, 'done', 'web', $4) "
-    "ON CONFLICT (habit_code, day, source) DO UPDATE "
-    "SET value = excluded.value, logged_at = excluded.logged_at "
+    "VALUES ($1, 'h1', $2, $3, 'done', $5, $4) "
+    "ON CONFLICT (habit_code, day) DO UPDATE "
+    "SET value = excluded.value, source = excluded.source, logged_at = excluded.logged_at "
     "WHERE excluded.logged_at >= yawmi.habit_logs.logged_at"
 )
 
 
 @needs_db
-async def test_habit_log_is_unique_per_habit_day_source_and_latest_write_wins(
+async def test_habit_log_is_unique_per_habit_and_day_and_latest_write_wins(
     migrated: asyncpg.Connection,
 ):
+    """One row per habit and day whatever the device kind (I-10); `source` is the last writer."""
     await insert_habit(migrated)
     day = date(2026, 11, 9)
     newer, older = NOW, NOW - timedelta(minutes=5)
-    # The newer edit arrives first, the older one afterwards: the newer value must stay.
-    await migrated.execute(UPSERT, uuid.uuid4(), day, Decimal(5), newer)
-    await migrated.execute(UPSERT, uuid.uuid4(), day, Decimal(1), older)
-    rows = await migrated.fetch("SELECT value, logged_at FROM yawmi.habit_logs")
-    assert [(r["value"], r["logged_at"]) for r in rows] == [(Decimal(5), newer)]
-    # Without ON CONFLICT the same key is a hard error.
-    with pytest.raises(pgerr.UniqueViolationError):
-        await migrated.execute(
-            "INSERT INTO yawmi.habit_logs (id, habit_code, day, status, source, logged_at) "
-            "VALUES ($1, 'h1', $2, 'skip', 'web', $3)",
-            uuid.uuid4(),
-            day,
-            NOW,
-        )
-    # Another source for the same day is a separate row.
+    # The newer edit (phone) arrives first, the older one (web) afterwards: the newer stays.
+    await migrated.execute(UPSERT, uuid.uuid4(), day, Decimal(45), newer, "iphone")
+    await migrated.execute(UPSERT, uuid.uuid4(), day, Decimal(30), older, "web")
+    rows = await migrated.fetch("SELECT value, source, logged_at FROM yawmi.habit_logs")
+    assert [(r["value"], r["source"], r["logged_at"]) for r in rows] == [
+        (Decimal(45), "iphone", newer)
+    ]
+    # A later edit from another kind replaces the value and becomes the source.
+    later = NOW + timedelta(minutes=5)
+    await migrated.execute(UPSERT, uuid.uuid4(), day, Decimal(50), later, "watch")
+    rows = await migrated.fetch("SELECT value, source FROM yawmi.habit_logs")
+    assert [(r["value"], r["source"]) for r in rows] == [(Decimal(50), "watch")]
+    # Without ON CONFLICT the same habit and day is a hard error, from any source.
+    for source in ("watch", "web"):
+        with pytest.raises(pgerr.UniqueViolationError):
+            await migrated.execute(
+                "INSERT INTO yawmi.habit_logs (id, habit_code, day, status, source, logged_at) "
+                "VALUES ($1, 'h1', $2, 'skip', $3, $4)",
+                uuid.uuid4(),
+                day,
+                source,
+                NOW,
+            )
+    # Another day is a separate row.
     await migrated.execute(
         "INSERT INTO yawmi.habit_logs (id, habit_code, day, status, source, logged_at) "
         "VALUES ($1, 'h1', $2, 'done', 'watch', $3)",
         uuid.uuid4(),
-        day,
+        day + timedelta(days=1),
         NOW,
     )
 

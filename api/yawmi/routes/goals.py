@@ -2,12 +2,23 @@
 
 `ref` is the Notion page id of a milestone or of a card in the Raqib mirror (milestones are
 looked up first). The draft takes the mirror's title, `goal_ref = ref`, and the outcome of the
-milestone (or the first outcome of the card). With a `kpi_code` whose KPI has a single `target`
-in `raqib.kpis` and a deadline (the milestone's `due_date`, else the outcome's `target_date` in
-`raqib.goals`), it is a `count` habit whose target per period spreads what is left (the target
-minus the newest reading on or before today, or 0) over the periods up to the deadline
-(`goal_prefill`). Otherwise it is a daily yes/no habit with target 1. Nothing is written: the
-Notion completion of the goal never changes because of a habit.
+milestone (or the first outcome of the card). With a `kpi_code`, the KPI's type in `raqib.kpis`
+(`kpi_prefill_kind`, owner decision 5) decides the target:
+
+* cumulative over the horizon (`CUMULATIVE_KPIS`: a total reached by the deadline): with a
+  deadline (the milestone's `due_date`, else the outcome's `target_date` in `raqib.goals`), a
+  `count` habit whose target per period spreads what is left (the target minus the newest
+  reading on or before today, or 0) over the periods up to the deadline (`goal_prefill`);
+* a count per period (direction `up`, one target, daily/weekly/monthly, not a rate, average,
+  level or sum of money): a habit whose target is the KPI's own `target` when the requested
+  `period` matches the KPI's frequency (`per_period_prefill`); the reading and the deadline play
+  no part. A KPI in minutes gives a `duration` habit in `min`, one in sessions a `count` in
+  `session`, any other a `count` with no unit (`kpi_habit_shape`);
+* anything else (down, band, rates, averages, levels, money), or a period that does not match:
+  no numeric target.
+
+Without a numeric target the draft is a daily yes/no habit with target 1. Nothing is written:
+the Notion completion of the goal never changes because of a habit.
 
 An unknown `kpi_code` is a 422 on `["body", "kpi_code"]` (an unknown `ref` stays a 404). A
 draft is always one that `POST /v1/habits` accepts: a blank mirror title becomes «عادة جديدة»
@@ -26,12 +37,18 @@ from pydantic import BaseModel, ConfigDict, Field
 from yawmi.auth.deps import SettingsDep, require_kind
 from yawmi.db.pool import get_pool
 from yawmi.domain.days import DEFAULT_TZ, day_key
-from yawmi.domain.habits import goal_prefill
-from yawmi.domain.periods import Period
+from yawmi.domain.habits import (
+    HabitKind,
+    goal_prefill,
+    kpi_habit_shape,
+    kpi_prefill_kind,
+    per_period_prefill,
+)
+from yawmi.domain.periods import Period, WeekStart
 from yawmi.errors import FORBIDDEN, INVALID, UNAUTHORIZED, ErrorDetail
 from yawmi.events import models as event_models
 from yawmi.habits.models import HabitDraft
-from yawmi.habits.store import AsyncpgMirrorReader, MirrorReader
+from yawmi.habits.store import AsyncpgMirrorReader, KpiRef, MirrorReader
 from yawmi.text import StorableText, is_storable
 
 USER_KINDS = ("iphone", "watch", "web")
@@ -80,13 +97,54 @@ def _outcome(code: str | None) -> str | None:
     return code if code in _OUTCOMES else None
 
 
+async def _kpi_target(
+    mirror: MirrorReader,
+    code: str,
+    kpi: KpiRef,
+    period: Period,
+    today: date,
+    deadline: date | None,
+    week_start: WeekStart,
+) -> tuple[HabitKind, str, float] | None:
+    """The habit's kind, unit and numeric target for the KPI, or `None` for the yes/no draft.
+
+    A target that is not a finite number above zero and at most `MAX_TARGET` is `None` too, so a
+    draft is always one that `POST /v1/habits` accepts.
+    """
+    goal = math.nan if kpi.target is None else float(kpi.target)  # Decimal NaN -> nan
+    if not math.isfinite(goal):
+        return None
+    value: float | None = None
+    kind, unit = "count", ""
+    match kpi_prefill_kind(code, kpi.direction, kpi.unit, goal, kpi.frequency):
+        case "cumulative":
+            if deadline is None:
+                return None
+            current = await mirror.latest_reading(code, today)
+            reading = 0.0 if current is None else float(current)
+            if not math.isfinite(reading):
+                reading = 0.0
+            if not math.isfinite(goal - reading):
+                return None
+            value = float(goal_prefill(goal, reading, today, deadline, period, week_start))
+        case "per_period":  # the reading and the deadline play no part
+            value = per_period_prefill(goal, kpi.frequency, period)
+            kind, unit = kpi_habit_shape(kpi.unit)
+    if value is None or not 0 < value <= MAX_TARGET:
+        return None
+    return kind, unit, value
+
+
 @router.post(
     "/{ref}/to-habit",
     summary="اقتراح عادة لهدف (لا تُحفظ)",
     description=(
-        "`ref` معرّف صفحة محطة أو بطاقة في المرآة. مع مؤشر له هدف واحد وموعد: عادة عدّ هدفها "
-        "في الفترة = ⌈(الهدف − آخر قراءة) ÷ عدد الفترات حتى الموعد⌉، وإلا عادة يومية بنعم أو لا "
-        "هدفها 1. لا تغيّر نسبة إنجاز Notion."
+        "`ref` معرّف صفحة محطة أو بطاقة في المرآة. مع مؤشر تراكمي (مجموع يُبلغ بالموعد) وموعد: "
+        "عادة عدّ هدفها في الفترة = ⌈(الهدف − آخر قراءة) ÷ عدد الفترات حتى الموعد⌉. ومع مؤشر عدّ "
+        "في الفترة (صاعد بهدف واحد، يومي أو أسبوعي أو شهري، وليس نسبة ولا متوسطاً ولا مستوى ولا "
+        "مالاً): عادة هدفها هدف المؤشر نفسه إن طابقت الفترة تواتره، مدةً بالدقائق لمؤشر بالدقائق "
+        "وعدّاً لغيره. وغير ذلك (نازل، نطاق، نسبة، متوسط، مستوى، مال، أو فترة لا تطابق): عادة "
+        "يومية بنعم أو لا هدفها 1. لا تغيّر نسبة إنجاز Notion."
     ),
     responses={**NOT_FOUND, **INVALID},
 )
@@ -111,36 +169,27 @@ async def to_habit(
     if deadline is None and outcome is not None:
         deadline = await mirror.outcome_deadline(outcome)
 
-    goal_target = None
+    today: date = day_key(event_models.server_now(), DEFAULT_TZ)
+    kind, unit, period, target = "boolean", "", "day", 1.0
     if request.kpi_code is not None:
         kpi = await mirror.kpi(request.kpi_code)
         if kpi is None:
             raise RequestValidationError(
                 [{"loc": ("body", "kpi_code"), "type": "kpi_unknown", "msg": KPI_UNKNOWN_MESSAGE}]
             )
-        goal_target = kpi.target
-
-    today: date = day_key(event_models.server_now(), DEFAULT_TZ)
-    kind, period, target = "boolean", "day", 1.0
-    goal = math.nan if goal_target is None else float(goal_target)  # Decimal NaN -> nan
-    if math.isfinite(goal) and deadline is not None:
-        current = await mirror.latest_reading(request.kpi_code or "", today)
-        reading = 0.0 if current is None else float(current)
-        if not math.isfinite(reading):
-            reading = 0.0
-        if math.isfinite(goal - reading):
-            prefill = goal_prefill(
-                goal, reading, today, deadline, request.period, settings.week_start
-            )
-            if prefill <= MAX_TARGET:
-                kind, period, target = "count", request.period, float(prefill)
+        prefill = await _kpi_target(
+            mirror, request.kpi_code, kpi, request.period, today, deadline, settings.week_start
+        )
+        if prefill is not None:
+            kind, unit, target = prefill
+            period = request.period
     return HabitDraft(
         title_ar=title.strip()[:MAX_TITLE].strip() or DEFAULT_TITLE,
         goal_ref=ref,
         outcome=outcome,
         ac_ref=None,
         kind=kind,  # type: ignore[arg-type]
-        unit="",
+        unit=unit,  # type: ignore[arg-type]
         target_per_period=target,
         period=period,  # type: ignore[arg-type]
         schedule_kind="every_day",
