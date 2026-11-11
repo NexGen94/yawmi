@@ -2,6 +2,7 @@
 
 import logging
 import re
+import sys
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -23,6 +24,44 @@ from yawmi.settings import Settings
 from yawmi.settings import settings as load_settings
 
 access_log = logging.getLogger("yawmi.access")
+
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
+
+
+class _StderrHandler(logging.StreamHandler):  # type: ignore[type-arg]
+    """A stream handler bound to whatever `sys.stderr` is when a record is written.
+
+    uvicorn and pytest may replace `sys.stderr` after the app is built; a plain `StreamHandler`
+    would keep writing to the stream it saw first.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(sys.stderr)
+
+    @property  # type: ignore[override]
+    def stream(self) -> object:
+        return sys.stderr
+
+    @stream.setter
+    def stream(self, _value: object) -> None:
+        pass
+
+
+def configure_logging() -> None:
+    """Switch the `yawmi` loggers on: INFO, one stderr handler, time and level in each line.
+
+    uvicorn's logging config sets up only the `uvicorn*` loggers, so without this the access
+    line (`yawmi.access`), `yawmi.ai` and `yawmi.push` inherit the root level WARNING and every
+    INFO line is dropped. Idempotent: building several apps adds one handler, not several.
+    Records still propagate to the root logger, which has no handler in production.
+    """
+    logger = logging.getLogger("yawmi")
+    logger.setLevel(logging.INFO)
+    if not any(isinstance(h, _StderrHandler) for h in logger.handlers):
+        handler = _StderrHandler()
+        handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        logger.addHandler(handler)
+
 
 _REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
@@ -129,6 +168,7 @@ def create_app(*, settings: Settings | None = None, devices: DeviceStore | None 
     lifespan opens the Postgres pool. Tests pass `settings` and an in-memory `devices` store,
     which also switches `app.state.use_db` off so no database is ever touched.
     """
+    configure_logging()
     app = FastAPI(title="yawmi-api", version=__version__, lifespan=_lifespan)
     app.state.settings = settings
     app.state.devices = devices

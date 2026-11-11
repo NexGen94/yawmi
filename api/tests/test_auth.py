@@ -6,6 +6,7 @@ Unit tests only: the app is built with the in-memory `DeviceStore`, so no databa
 import hashlib
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -267,6 +268,32 @@ async def test_access_log_keeps_normal_paths_readable(
         await client.get("/v1/health/live")
     line = next(r.getMessage() for r in caplog.records if r.name == "yawmi.access")
     assert line.startswith("GET /v1/health/live -> 200 ")
+
+
+@pytest.mark.parametrize("name", ["yawmi.access", "yawmi.ai", "yawmi.push"])
+def test_app_loggers_are_enabled_for_info_without_any_test_help(name: str) -> None:
+    """uvicorn configures only its own loggers: the app must switch its own on (I-1)."""
+    create_app(settings=make_settings(), devices=InMemoryDeviceStore())
+    assert logging.getLogger(name).isEnabledFor(logging.INFO)
+
+
+def test_logging_is_configured_once_however_many_apps_are_built() -> None:
+    for _ in range(3):
+        create_app(settings=make_settings(), devices=InMemoryDeviceStore())
+    assert len(logging.getLogger("yawmi").handlers) == 1
+
+
+async def test_one_request_writes_one_access_line_to_stderr(
+    client: httpx.AsyncClient, capsys: pytest.CaptureFixture[str]
+) -> None:
+    capsys.readouterr()  # drop anything written while the app was built
+    await client.get("/v1/health/live")
+    lines = [line for line in capsys.readouterr().err.splitlines() if "yawmi.access" in line]
+    assert len(lines) == 1
+    line = lines[0]
+    assert "INFO" in line
+    assert "GET /v1/health/live -> 200 " in line
+    assert re.match(r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}", line)  # time first
 
 
 # --- current_device / require_kind -------------------------------------------------------------
