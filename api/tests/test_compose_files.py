@@ -1173,3 +1173,21 @@ def test_runbook_names_one_api_tag_for_push_and_says_compose_never_pulls() -> No
 def test_runbook_lines_added_by_the_final_review_address_no_one() -> None:
     hits = _SECOND_PERSON.findall(RUNBOOK)
     assert hits == []
+
+
+# --- ci (D-9, M-9) -------------------------------------------------------------------------------
+
+
+def test_api_image_workflow_only_publishes_tags_that_are_on_main() -> None:
+    """D-9: a tag on an unreviewed branch must never publish an API image."""
+    assert "fetch-depth: 0" in WORKFLOW
+    assert "merge-base --is-ancestor" in WORKFLOW and "origin/main" in WORKFLOW
+    assert WORKFLOW.index("merge-base --is-ancestor") < WORKFLOW.index("docker build")
+    assert WORKFLOW.index("merge-base --is-ancestor") < WORKFLOW.index("docker push")
+
+
+def test_web_tests_workflow_installs_without_running_package_scripts() -> None:
+    """M-9: like the Dockerfile, CI never runs install scripts of the app's dependencies."""
+    text = (REPO / ".github" / "workflows" / "web-tests.yml").read_text(encoding="utf-8")
+    installs = re.findall(r"run: (npm ci[^\n]*)", text)
+    assert installs and all(line == "npm ci --ignore-scripts" for line in installs), installs

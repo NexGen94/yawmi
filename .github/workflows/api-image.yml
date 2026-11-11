@@ -29,7 +29,18 @@ jobs:
       IMAGE: ghcr.io/nexgen94/yawmi-api
 
     steps:
+      # Full history, so the next step can tell whether the tag is on main.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      # A tag on an unreviewed branch must never publish an image.
+      - name: Tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::${GITHUB_REF_NAME} does not point at a commit that is on main"
+            exit 1
+          fi
 
       - name: Version from the tag
         run: |
