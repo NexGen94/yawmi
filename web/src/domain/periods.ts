@@ -67,11 +67,13 @@ export interface Schedule {
 const KINDS: ReadonlySet<string> = new Set(['boolean', 'count', 'duration']);
 const PERIODS: ReadonlySet<string> = new Set(['day', 'week', 'month']);
 const SCHEDULE_KINDS: ReadonlySet<string> = new Set(['every_day', 'weekdays', 'every_n_days']);
+const POLARITIES: ReadonlySet<string> = new Set(['build', 'abstain']);
 
 /**
  * Throws `RangeError` for a spec the reference `HabitSpec` would refuse to construct: unknown
  * enums, a weekly or monthly habit not scheduled every day, a target not above zero, a missing or
- * out-of-range weekday mask, `everyN < 2` or no anchor, an end before the start, or a bad day.
+ * out-of-range weekday mask, `everyN < 2` or no anchor, an end before the start, a bad day, an
+ * unknown polarity, or an abstain habit that is not a daily boolean with target 1.
  */
 export function checkHabitSpec(spec: HabitSpec): void {
   if (!KINDS.has(spec.kind)) throw new RangeError(`unknown habit kind: ${JSON.stringify(spec.kind)}`);
@@ -101,6 +103,11 @@ export function checkHabitSpec(spec: HabitSpec): void {
   if (spec.anchorDay !== null) toOrdinal(spec.anchorDay);
   if (spec.endDay !== null && toOrdinal(spec.endDay) < start) {
     throw new RangeError('the end day is before the start day');
+  }
+  const polarity = spec.polarity ?? 'build';
+  if (!POLARITIES.has(polarity)) throw new RangeError(`unknown polarity: ${JSON.stringify(polarity)}`);
+  if (polarity === 'abstain' && (spec.kind !== 'boolean' || spec.period !== 'day' || spec.targetPerPeriod !== 1)) {
+    throw new RangeError('an abstain habit is a daily boolean with target 1');
   }
 }
 

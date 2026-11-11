@@ -153,6 +153,13 @@ describe('habit specs the reference refuses', () => {
     ['fractional n', { scheduleKind: 'every_n_days', everyN: 2.5, anchorDay: '2026-11-09' }],
     ['bad anchor day on a schedule that does not use it', { anchorDay: '2026-02-30' }],
     ['bad end day', { endDay: '2026-11-31' }],
+    ['unknown polarity', { polarity: 'quit' as HabitSpec['polarity'] }],
+    ['abstain count habit', { polarity: 'abstain', kind: 'count', unit: 'session' }],
+    ['abstain duration habit', { polarity: 'abstain', kind: 'duration', unit: 'min' }],
+    ['abstain weekly habit', { polarity: 'abstain', period: 'week' }],
+    ['abstain monthly habit', { polarity: 'abstain', period: 'month' }],
+    ['abstain target 2', { polarity: 'abstain', targetPerPeriod: 2 }],
+    ['abstain target 0.5', { polarity: 'abstain', targetPerPeriod: 0.5 }],
   ];
 
   it.for(invalid)('%s', ([, change]) => {
@@ -235,5 +242,68 @@ describe('habit rules', () => {
     const copy = structuredClone(logs);
     for (const rule of habitRules) rule(daily, logs, 'sun');
     expect(logs).toEqual(copy);
+  });
+});
+
+describe('abstain habits (rulesVersion 2, design 9.6)', () => {
+  const abstain: HabitSpec = { ...daily, startDay: '2026-11-01', polarity: 'abstain' };
+  const twin: HabitSpec = { ...daily, startDay: '2026-11-01' };
+  const addDays = (day: string, n: number): string =>
+    new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const slip = (day: string): HabitLog => ({ day, value: 1, status: 'done' });
+
+  /** The build twin: `done` on every kept day up to `today`, `skip`/`vacation` as they are. */
+  function keptAsBuild(spec: HabitSpec, logs: HabitLog[], today: string): HabitLog[] {
+    const last = spec.endDay !== null && spec.endDay < today ? spec.endDay : today;
+    const marked = new Set(logs.filter((l) => l.status !== 'missed').map((l) => l.day));
+    const kept: HabitLog[] = [];
+    for (let day = spec.startDay; day <= last; day = addDays(day, 1)) {
+      if (!marked.has(day)) kept.push({ day, value: 1, status: 'done' });
+    }
+    return [...kept, ...logs.filter((l) => l.status === 'skip' || l.status === 'vacation')];
+  }
+
+  it('an omitted polarity is build', () => {
+    const logs = [slip('2026-11-09'), slip('2026-11-10')];
+    expect(strength({ ...daily, polarity: 'build' }, logs, '2026-11-11', 'sun')).toBe(strength(daily, logs, '2026-11-11', 'sun'));
+  });
+
+  it('today is kept until a slip is logged', () => {
+    expect(periodProgress(abstain, [], '2026-11-10', 'sun')).toEqual({
+      done: 1, target: 1, completion: 1, reached: true, expected: 1, onTrack: true, needPerDay: 0,
+    });
+    expect(periodProgress(abstain, [slip('2026-11-10')], '2026-11-10', 'sun')).toEqual({
+      done: 0, target: 1, completion: 0, reached: false, expected: 1, onTrack: false, needPerDay: 1,
+    });
+  });
+
+  const slipSets: [string, HabitLog[]][] = [
+    ['first day', [slip('2026-11-01')]],
+    ['last day', [slip('2026-11-30')]],
+    ['three slips', [slip('2026-11-03'), slip('2026-11-15'), slip('2026-11-28')]],
+    [
+      'slips and neutral days',
+      [slip('2026-11-07'), { day: '2026-11-12', value: null, status: 'skip' }, { day: '2026-11-25', value: null, status: 'vacation' }],
+    ],
+  ];
+  const weekStarts: WeekStart[] = ['sat', 'sun', 'mon'];
+
+  it.for(slipSets)('at T equals the build twin on kept days at T + 1: %s', ([, logs]) => {
+    for (const endDay of ['2026-11-30', null]) {
+      const spec = { ...abstain, endDay };
+      const build = { ...twin, endDay };
+      for (let offset = -2; offset < 34; offset += 1) {
+        const today = addDays('2026-11-01', offset);
+        const tomorrow = addDays(today, 1);
+        const twinLogs = keptAsBuild(spec, logs, today);
+        for (const ws of weekStarts) {
+          const at = `${today} ${ws} ${String(endDay)}`;
+          expect(strength(spec, logs, today, ws), at).toBe(strength(build, twinLogs, tomorrow, ws));
+          expect(streak(spec, logs, today, ws), at).toBe(streak(build, twinLogs, tomorrow, ws));
+          expect(adherence(spec, logs, today, ws), at).toBe(adherence(build, twinLogs, tomorrow, ws));
+          expect(challengeProgress(spec, logs, today, ws), at).toEqual(challengeProgress(build, twinLogs, tomorrow, ws));
+        }
+      }
+    }
   });
 });
