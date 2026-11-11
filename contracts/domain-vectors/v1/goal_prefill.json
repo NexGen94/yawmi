@@ -362,5 +362,5 @@
     }
   ],
   "function": "goal_prefill",
-  "rulesVersion": 1
+  "rulesVersion": 2
 }

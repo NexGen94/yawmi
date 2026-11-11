@@ -79,6 +79,7 @@ def _spec(raw: dict[str, Any]) -> HabitSpec:
         anchor_day=_date(raw["anchor_day"]),
         start_day=date.fromisoformat(raw["start_day"]),
         end_day=_date(raw["end_day"]),
+        polarity=raw.get("polarity", "build"),
     )
 
 

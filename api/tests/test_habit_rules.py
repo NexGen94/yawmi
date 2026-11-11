@@ -1294,3 +1294,162 @@ def test_every_n_days_needs_n_of_two_or_more(n):
     with pytest.raises(ValueError):
         spec(schedule_kind="every_n_days", every_n=n, anchor_day=START)
     assert spec(schedule_kind="every_n_days", every_n=2, anchor_day=START).every_n == 2
+
+
+# ---------------------------------------------------------------- عادة الامتناع (rulesVersion 2، التصميم §9.6)
+
+ABSTAIN_START = date(2026, 11, 1)
+ABSTAIN_TODAY = date(2026, 11, 10)
+ABSTAIN_END = date(2026, 11, 30)
+
+
+def abstain(**kw) -> HabitSpec:
+    return spec(polarity="abstain", start_day=ABSTAIN_START, **kw)
+
+
+def slip(day: date) -> HabitLog:
+    """في عادة الامتناع سجل `done` المخزَّن معناه انزلاق."""
+    return done(day)
+
+
+# P1..P4 من جدول التصميم §9.6: (السجلات، adherence، streak، strength، تقدّم اليوم done/reached)
+ABSTAIN_EXAMPLES = {
+    "abstain-clean": ([], 1.0, 10, 0.413270, 1.0, True),
+    "abstain-slip-mid": ([slip(date(2026, 11, 5))], 0.9, 5, 0.373498, 1.0, True),
+    "abstain-slip-today": ([slip(ABSTAIN_TODAY)], 0.9, 0, 0.361347, 0.0, False),
+    "abstain-skip-neutral": ([status(date(2026, 11, 5), "skip")], 1.0, 9, 0.381137, 1.0, True),
+}
+
+
+def test_habit_spec_polarity_defaults_to_build():
+    assert spec().polarity == "build"
+    assert abstain().polarity == "abstain"
+
+
+@pytest.mark.parametrize("name", list(ABSTAIN_EXAMPLES))
+def test_abstain_design_examples(name):
+    logs, adh, stk, stren, today_done, today_reached = ABSTAIN_EXAMPLES[name]
+    habit = abstain()
+    assert adherence(habit, logs, ABSTAIN_TODAY, "sun") == pytest.approx(adh, abs=1e-12)
+    assert streak(habit, logs, ABSTAIN_TODAY, "sun") == stk
+    assert strength(habit, logs, ABSTAIN_TODAY, "sun") == pytest.approx(stren, abs=1e-6)
+    progress = period_progress(habit, logs, ABSTAIN_TODAY, "sun")
+    assert progress.done == today_done
+    assert progress.reached is today_reached
+    assert progress.target == 1.0
+    assert progress.expected == 1.0
+
+
+def test_abstain_today_is_kept_until_a_slip_is_logged():
+    """اليوم لا يقف «معلّقاً»: بلا انزلاق محفوظ، وبانزلاق فائت، و`expected = 1` في الحالين."""
+    clean = period_progress(abstain(), [], ABSTAIN_TODAY, "sun")
+    assert (clean.done, clean.reached, clean.on_track, clean.need_per_day) == (1.0, True, True, 0.0)
+    slipped = period_progress(abstain(), [slip(ABSTAIN_TODAY)], ABSTAIN_TODAY, "sun")
+    assert (slipped.done, slipped.reached, slipped.on_track) == (0.0, False, False)
+    assert slipped.completion == 0.0
+    assert slipped.need_per_day == 1.0
+
+
+def test_abstain_challenge_counts_kept_days_and_remaining_after_today():
+    habit = abstain(end_day=ABSTAIN_END)
+    clean = challenge_progress(habit, [], ABSTAIN_TODAY, "sun")
+    assert clean is not None
+    assert (clean.achieved, clean.total, clean.remaining_days) == (10, 30, 20)
+    assert clean.completion == pytest.approx(10 / 30)
+    mid = challenge_progress(habit, [slip(date(2026, 11, 5))], ABSTAIN_TODAY, "sun")
+    assert mid is not None
+    assert mid.achieved == 9
+
+
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"kind": "count", "unit": "session"},
+        {"kind": "duration", "unit": "min"},
+        {"target_per_period": 2.0},
+        {"target_per_period": 0.5},
+        {"period": "week"},
+        {"period": "month"},
+    ],
+)
+def test_abstain_must_be_a_daily_boolean_with_target_one(kw):
+    with pytest.raises(ValueError):
+        abstain(**kw)
+
+
+@pytest.mark.parametrize("bad", ["", "ABSTAIN", "quit", None])
+def test_unknown_polarity_is_rejected(bad):
+    with pytest.raises(ValueError):
+        spec(polarity=bad)
+
+
+def _kept_days_as_build(habit: HabitSpec, logs: list[HabitLog], today: date) -> list[HabitLog]:
+    """عادة البناء المكافئة: `done` في كل يوم مجدول محفوظ حتى `today`، و`skip`/`vacation` كما هي."""
+    last = today if habit.end_day is None else min(today, habit.end_day)
+    slips = {log.day for log in logs if log.status == "done"}
+    neutral = [log for log in logs if log.status in ("skip", "vacation")]
+    neutral_days = {log.day for log in neutral}
+    kept = [
+        done(day)
+        for day in (
+            habit.start_day + timedelta(days=i) for i in range((last - habit.start_day).days + 1)
+        )
+        if is_scheduled(day, habit) and day not in slips and day not in neutral_days
+    ]
+    return kept + neutral
+
+
+_SLIP_SETS = {
+    "first-day": [date(2026, 11, 1)],
+    "middle": [date(2026, 11, 15)],
+    "last-day": [date(2026, 11, 30)],
+    "three-slips": [date(2026, 11, 3), date(2026, 11, 15), date(2026, 11, 28)],
+    "slips-and-skips": [date(2026, 11, 7), date(2026, 11, 20), date(2026, 11, 21)],
+}
+
+
+@pytest.mark.parametrize("end", [ABSTAIN_END, None], ids=["challenge", "open"])
+@pytest.mark.parametrize("slips", list(_SLIP_SETS))
+@pytest.mark.parametrize("week_start", ["sat", "sun", "mon"])
+def test_abstain_at_t_equals_build_on_kept_days_at_t_plus_one(end, slips, week_start):
+    """الصيغة المكافئة في §9.6: لكل `T` من قبل البداية إلى ما بعد النهاية، الدوال الأربع لعادة
+    امتناع عند `T` تساوي ناتج عادة بناء لها `done` في الأيام المحفوظة، محسوبةً عند `T + 1`."""
+    habit = abstain(end_day=end)
+    twin = spec(start_day=ABSTAIN_START, end_day=end)
+    logs = [slip(day) for day in _SLIP_SETS[slips]]
+    if slips == "slips-and-skips":
+        logs += [status(date(2026, 11, 12), "skip"), status(date(2026, 11, 25), "vacation")]
+    for offset in range(-2, 34):
+        today = ABSTAIN_START + timedelta(days=offset)
+        build_logs = _kept_days_as_build(habit, logs, today)
+        tomorrow = today + timedelta(days=1)
+        assert strength(habit, logs, today, week_start) == strength(
+            twin, build_logs, tomorrow, week_start
+        ), today
+        assert streak(habit, logs, today, week_start) == streak(
+            twin, build_logs, tomorrow, week_start
+        ), today
+        assert adherence(habit, logs, today, week_start) == adherence(
+            twin, build_logs, tomorrow, week_start
+        ), today
+        assert challenge_progress(habit, logs, today, week_start) == challenge_progress(
+            twin, build_logs, tomorrow, week_start
+        ), today
+
+
+def test_abstain_on_a_weekday_schedule_keeps_only_scheduled_days():
+    """الجدولة لا يقيّدها الامتناع: الأيام غير المجدولة محايدة كما في البناء."""
+    habit = abstain(schedule_kind="weekdays", weekday_mask=mask(SUN, TUE, THU))
+    # 11-01 الأحد .. 11-10 الثلاثاء: المجدولة 11-01 و11-03 و11-05 و11-08 و11-10
+    assert streak(habit, [], ABSTAIN_TODAY, "sun") == 5
+    assert adherence(habit, [slip(date(2026, 11, 4))], ABSTAIN_TODAY, "sun") == 1.0  # الأربعاء
+    assert adherence(habit, [slip(date(2026, 11, 5))], ABSTAIN_TODAY, "sun") == pytest.approx(0.8)
+
+
+def test_build_habits_are_unchanged_by_polarity_default():
+    logs = daily_done(START, 5)
+    explicit = spec(polarity="build")
+    assert strength(explicit, logs, d(5), "sun") == strength(spec(), logs, d(5), "sun")
+    assert period_progress(explicit, logs, d(4), "sun") == period_progress(
+        spec(), logs, d(4), "sun"
+    )

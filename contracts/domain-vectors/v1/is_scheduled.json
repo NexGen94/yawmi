@@ -618,5 +618,5 @@
     }
   ],
   "function": "is_scheduled",
-  "rulesVersion": 1
+  "rulesVersion": 2
 }

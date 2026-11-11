@@ -29,7 +29,12 @@ FUNCTIONS: tuple[str, ...] = gen.FUNCTIONS
 RULES_VERSION: int = gen.RULES_VERSION
 close = gen.close  # قاعدة المقارنة الواحدة في الاتفاق، من المولّد نفسه
 
-_ID = re.compile(r"^(?P<fn>[a-z_]+)-(?P<n>\d{3})$")
+# `<fn>-NNN`، وحالات الامتناع الأربع لكل دالة من الخمس (`rulesVersion` 2، التصميم §9.6).
+ABSTAIN_SUFFIXES = ("clean", "slip-mid", "slip-today", "skip-neutral")
+ABSTAIN_FUNCTIONS = ("period_progress", "strength", "streak", "challenge_progress", "adherence")
+_ID = re.compile(
+    r"^(?P<fn>[a-z_]+)-(?:(?P<n>\d{3})|abstain-(?P<abstain>" + "|".join(ABSTAIN_SUFFIXES) + r"))$"
+)
 WEEK_START_FUNCTIONS = (
     "period_bounds",
     "period_progress",
@@ -461,3 +466,25 @@ def test_rules_v2_keeps_every_v1_expectation():
     )
     assert missing == []
     assert changed == []
+
+
+def test_rules_version_two_adds_exactly_twenty_abstain_cases():
+    """332 حالة: الـ312 الملتزَمة وأربع حالات امتناع لكل دالة من الخمس، و`polarity` فيها وحدها."""
+    cases = _all_cases()
+    assert RULES_VERSION == 2
+    assert len(cases) == 332
+    abstain = sorted(case["id"] for _, case in cases if _ID.match(case["id"]).group("abstain"))
+    assert abstain == sorted(
+        f"{fn}-abstain-{suffix}" for fn in ABSTAIN_FUNCTIONS for suffix in ABSTAIN_SUFFIXES
+    )
+    for _, case in cases:
+        habit = case["input"].get("habit")
+        if case["id"] in abstain:
+            assert habit["polarity"] == "abstain", case["id"]
+            assert (habit["kind"], habit["period"], habit["target_per_period"]) == (
+                "boolean",
+                "day",
+                1.0,
+            )
+        elif habit is not None:
+            assert "polarity" not in habit, case["id"]

@@ -347,5 +347,5 @@
     }
   ],
   "function": "period_bounds",
-  "rulesVersion": 1
+  "rulesVersion": 2
 }
