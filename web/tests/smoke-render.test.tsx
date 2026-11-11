@@ -36,3 +36,36 @@ describe('component test infrastructure', () => {
     expect(screen.getByRole('button', { name: 'عدّ 1 / 1' })).toBeTruthy();
   });
 });
+
+// Preact 11 defers the cleanup of a useEffect on unmount. If the per-test cleanup does not run
+// inside act(), an effect of one test is still alive in the next (a leaked document listener
+// is exactly what the page tasks would hit with online/offline, shortcuts and timers).
+describe('effects do not leak into the next test', () => {
+  const log = { keydowns: 0, cleanups: 0 };
+
+  function Listener() {
+    useEffect(() => {
+      const onKey = (): void => {
+        log.keydowns += 1;
+      };
+      document.addEventListener('keydown', onKey);
+      return () => {
+        document.removeEventListener('keydown', onKey);
+        log.cleanups += 1;
+      };
+    }, []);
+    return <p>مستمع</p>;
+  }
+
+  it('test A mounts a component whose effect listens on document', () => {
+    render(<Listener />);
+    document.dispatchEvent(new KeyboardEvent('keydown'));
+    expect(log).toEqual({ keydowns: 1, cleanups: 0 });
+  });
+
+  it('test B sees the effect of test A already cleaned up', () => {
+    expect(log.cleanups).toBe(1);
+    document.dispatchEvent(new KeyboardEvent('keydown'));
+    expect(log.keydowns).toBe(1);
+  });
+});

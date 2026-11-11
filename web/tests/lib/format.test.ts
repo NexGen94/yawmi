@@ -12,11 +12,25 @@ describe('fmt.count: number and counted noun in Arabic grammar', () => {
     [10, 'day', '10 أيام'],
     [11, 'day', '11 يوماً'],
     [12, 'day', '12 يوماً'],
-    [100, 'day', '100 يوماً'],
-    [102, 'day', '102 يوماً'],
+    [99, 'day', '99 يوماً'],
+    [100, 'day', '100 يوم'],
+    [101, 'day', '101 يوم'],
+    [102, 'day', '102 يوم'],
     [103, 'day', '103 أيام'],
+    [110, 'day', '110 أيام'],
     [111, 'day', '111 يوماً'],
+    [200, 'day', '200 يوم'],
     [0, 'day', '0 أيام'],
+    [1000, 'item', '1,000 بند'],
+    [1001, 'item', '1,001 بند'],
+    [1002, 'item', '1,002 بند'],
+    [1003, 'item', '1,003 بنود'],
+    [10, 'item', '10 بنود'],
+    [11, 'item', '11 بنداً'],
+    [99, 'item', '99 بنداً'],
+    [100, 'item', '100 بند'],
+    [1000, 'day', '1,000 يوم'],
+    [1000, 'session', '1,000 جلسة'],
     [3, 'session', '3 جلسات'],
     [2, 'time', 'مرتان'],
     [2, 'hour', 'ساعتان'],
@@ -102,5 +116,18 @@ describe('fmt.day and fmt.hijri', () => {
     setDigits('arab');
     expect(fmt.day('2026-11-10')).toContain('١٠');
     expect(fmt.hijri('2031-12-31')).toContain('١٤٥٣');
+  });
+
+  it.each(['2026-02-30', '2026-13-01', '2026-00-10', '2026-04-31', '2026-11-00', '2027-02-29', 'not a date', ''])(
+    'gives a dash for the impossible or malformed day %j',
+    (text) => {
+      expect(fmt.day(text)).toBe('—');
+      expect(fmt.hijri(text)).toBe('—');
+    },
+  );
+
+  it('accepts the last day of a leap February', () => {
+    expect(fmt.day('2028-02-29')).toContain('29');
+    expect(fmt.day('2028-02-29')).toContain('فبراير');
   });
 });
