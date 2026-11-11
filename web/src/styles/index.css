@@ -1,0 +1,18 @@
+/* Single stylesheet entry (loaded by main.tsx). Order matters: fonts, tokens, base, then the
+   component and layout layers that tasks 4b and 4c fill. */
+
+/* IBM Plex Sans Arabic, Arabic subset only, weights 400 and 600. font-display: swap comes with
+   these files. The woff2 files are emitted by the build but are not precached by the service worker. */
+@import '@fontsource/ibm-plex-sans-arabic/arabic-400.css';
+@import '@fontsource/ibm-plex-sans-arabic/arabic-600.css';
+
+@import './tokens.css';
+@import './base.css';
+@import './components.css';
+@import './layout.css';
+
+body {
+  font-family: var(--font);
+  background: var(--c-bg);
+  color: var(--c-ink);
+}

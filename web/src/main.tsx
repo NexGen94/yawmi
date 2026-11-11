@@ -2,7 +2,7 @@ import { render } from 'preact';
 import { registerSW } from 'virtual:pwa-register';
 
 import { App } from './app';
-import './styles/base.css';
+import './styles/index.css';
 
 // Registers the service worker. With registerType 'prompt' a new version waits instead of
 // swapping silently. TODO(design): pass onNeedRefresh to the update prompt once the design
