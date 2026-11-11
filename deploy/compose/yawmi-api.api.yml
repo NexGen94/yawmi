@@ -16,6 +16,8 @@ name: yawmi-api
 services:
   yawmi-api:
     image: ghcr.io/nexgen94/yawmi-api:0.1.0
+    # private image, pulled by hand in RUNBOOK step 6: compose never pulls it
+    pull_policy: never
     container_name: yawmi-api
     restart: unless-stopped
     environment:
@@ -58,28 +60,29 @@ services:
       - "traefik.http.middlewares.yawmi-rl.ratelimit.average=60"
       - "traefik.http.middlewares.yawmi-rl.ratelimit.period=1m"
       - "traefik.http.middlewares.yawmi-rl.ratelimit.burst=20"
-      - "traefik.http.routers.yawmi-api.rule=Host(`${YAWMI_API_HOST}`) && PathPrefix(`/v1`)"
+      - "traefik.http.routers.yawmi-api.rule=Host(`${YAWMI_API_HOST:?YAWMI_API_HOST is required}`) && PathPrefix(`/v1`)"
       - "traefik.http.routers.yawmi-api.priority=100"
       - "traefik.http.routers.yawmi-api.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
       - "traefik.http.routers.yawmi-api.tls=true"
-      - "traefik.http.routers.yawmi-api.tls.certresolver=${TRAEFIK_CERT_RESOLVER}"
+      - "traefik.http.routers.yawmi-api.tls.certresolver=${TRAEFIK_CERT_RESOLVER:?TRAEFIK_CERT_RESOLVER is required}"
       - "traefik.http.routers.yawmi-api.middlewares=yawmi-rl"
       - "traefik.http.routers.yawmi-api.service=yawmi-api"
       # Pairing is the only unauthenticated write: 10 a minute (burst 5), and it wins on priority.
       - "traefik.http.middlewares.yawmi-rl-pair.ratelimit.average=10"
       - "traefik.http.middlewares.yawmi-rl-pair.ratelimit.period=1m"
       - "traefik.http.middlewares.yawmi-rl-pair.ratelimit.burst=5"
-      - "traefik.http.routers.yawmi-pair.rule=Host(`${YAWMI_API_HOST}`) && Path(`/v1/devices/pair`)"
+      - "traefik.http.routers.yawmi-pair.rule=Host(`${YAWMI_API_HOST:?YAWMI_API_HOST is required}`) && Path(`/v1/devices/pair`)"
       - "traefik.http.routers.yawmi-pair.priority=200"
       - "traefik.http.routers.yawmi-pair.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
       - "traefik.http.routers.yawmi-pair.tls=true"
-      - "traefik.http.routers.yawmi-pair.tls.certresolver=${TRAEFIK_CERT_RESOLVER}"
+      - "traefik.http.routers.yawmi-pair.tls.certresolver=${TRAEFIK_CERT_RESOLVER:?TRAEFIK_CERT_RESOLVER is required}"
       - "traefik.http.routers.yawmi-pair.middlewares=yawmi-rl-pair"
       - "traefik.http.routers.yawmi-pair.service=yawmi-api"
 
   # The PWA: everything on the API host that is not /v1 (priority 1; the API routers are 100/200).
   yawmi-web:
     image: ghcr.io/nexgen94/yawmi-web:0.1.0
+    pull_policy: never
     container_name: yawmi-web
     restart: unless-stopped
     networks:
@@ -102,11 +105,11 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=${N8N_NETWORK}"
       - "traefik.http.services.yawmi-web.loadbalancer.server.port=8080"
-      - "traefik.http.routers.yawmi-web.rule=Host(`${YAWMI_API_HOST}`)"
+      - "traefik.http.routers.yawmi-web.rule=Host(`${YAWMI_API_HOST:?YAWMI_API_HOST is required}`)"
       - "traefik.http.routers.yawmi-web.priority=1"
       - "traefik.http.routers.yawmi-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
       - "traefik.http.routers.yawmi-web.tls=true"
-      - "traefik.http.routers.yawmi-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER}"
+      - "traefik.http.routers.yawmi-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER:?TRAEFIK_CERT_RESOLVER is required}"
       - "traefik.http.routers.yawmi-web.service=yawmi-web"
 
 volumes:

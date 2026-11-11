@@ -143,6 +143,11 @@ KEYGEN = COMPOSE_DIR / "yawmi-vapid-keygen.yml"
 ALL_COMPOSE = [API_COMPOSE, LOADER_1, LOADER_2, KEYGEN]
 
 
+# D-7: left empty, these two would give an empty Host() rule and the default certificate.
+API_HOST = "${YAWMI_API_HOST:?YAWMI_API_HOST is required}"
+CERT_RESOLVER = "${TRAEFIK_CERT_RESOLVER:?TRAEFIK_CERT_RESOLVER is required}"
+
+
 def _yaml(path: Path) -> dict:
     yaml = pytest.importorskip("yaml")
     return yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -245,11 +250,11 @@ def test_api_compose_traefik_router_priority_tls_and_rate_limit() -> None:
     labels = _labels(_yaml(API_COMPOSE)["services"]["yawmi-api"])
     assert labels["traefik.enable"] == "true"
     assert labels["traefik.http.routers.yawmi-api.rule"] == (
-        "Host(`${YAWMI_API_HOST}`) && PathPrefix(`/v1`)"
+        f"Host(`{API_HOST}`) && PathPrefix(`/v1`)"
     )
     assert labels["traefik.http.routers.yawmi-api.priority"] == "100"
     assert labels["traefik.http.routers.yawmi-api.tls"] == "true"
-    assert labels["traefik.http.routers.yawmi-api.tls.certresolver"] == "${TRAEFIK_CERT_RESOLVER}"
+    assert labels["traefik.http.routers.yawmi-api.tls.certresolver"] == CERT_RESOLVER
     assert labels["traefik.http.services.yawmi-api.loadbalancer.server.port"] == "8000"
     assert labels["traefik.http.routers.yawmi-api.middlewares"] == "yawmi-rl"
     rl = "traefik.http.middlewares.yawmi-rl.ratelimit."
@@ -263,7 +268,7 @@ def test_api_compose_traefik_router_priority_tls_and_rate_limit() -> None:
 def test_api_compose_pairing_has_its_own_stricter_and_higher_priority_router() -> None:
     labels = _labels(_yaml(API_COMPOSE)["services"]["yawmi-api"])
     assert labels["traefik.http.routers.yawmi-pair.rule"] == (
-        "Host(`${YAWMI_API_HOST}`) && Path(`/v1/devices/pair`)"
+        f"Host(`{API_HOST}`) && Path(`/v1/devices/pair`)"
     )
     assert int(labels["traefik.http.routers.yawmi-pair.priority"]) > int(
         labels["traefik.http.routers.yawmi-api.priority"]
@@ -1026,3 +1031,46 @@ def test_gitignore_keeps_env_variants_and_key_files_out() -> None:
     lines = (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
     for pattern in (".env", ".env.*", "*.pem", "*.key"):
         assert pattern in lines
+
+
+# --- D-5, D-6, D-7: one tag, no pull, required host and resolver ----------------------------------
+
+
+def test_api_compose_never_pulls_either_image() -> None:
+    """D-6: the images are private and compose must not try to pull them after `docker logout`."""
+    services = _yaml(API_COMPOSE)["services"]
+    assert {name: s.get("pull_policy") for name, s in services.items()} == {
+        "yawmi-api": "never",
+        "yawmi-web": "never",
+    }
+
+
+def test_api_host_and_cert_resolver_are_required_wherever_they_are_used() -> None:
+    text = API_COMPOSE.read_text(encoding="utf-8")
+    for name, guarded in (("YAWMI_API_HOST", API_HOST), ("TRAEFIK_CERT_RESOLVER", CERT_RESOLVER)):
+        uses = re.findall(r"\$\{" + name + r"[^}]*\}", text)
+        assert len(uses) == 3, name
+        assert set(uses) == {guarded}, name
+    services = _yaml(API_COMPOSE)["services"]
+    for service, router in (
+        ("yawmi-api", "yawmi-api"),
+        ("yawmi-api", "yawmi-pair"),
+        ("yawmi-web", "yawmi-web"),
+    ):
+        labels = _labels(services[service])
+        assert labels[f"traefik.http.routers.{router}.tls.certresolver"] == CERT_RESOLVER
+        assert f"Host(`{API_HOST}`)" in labels[f"traefik.http.routers.{router}.rule"]
+
+
+def test_the_keygen_runs_the_same_api_image_tag_as_the_api_project() -> None:
+    """D-5: one image is built from main; a second tag would exist only if pushed again."""
+    api_image = _yaml(API_COMPOSE)["services"]["yawmi-api"]["image"]
+    keygen_image = _yaml(KEYGEN)["services"]["yawmi-vapid-keygen"]["image"]
+    assert keygen_image == api_image
+    tags = set(
+        re.findall(r"ghcr\.io/nexgen94/yawmi-api:(\S+)", API_COMPOSE.read_text(encoding="utf-8"))
+    )
+    tags |= set(
+        re.findall(r"ghcr\.io/nexgen94/yawmi-api:(\S+)", KEYGEN.read_text(encoding="utf-8"))
+    )
+    assert len(tags) == 1
