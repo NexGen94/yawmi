@@ -208,7 +208,10 @@ describe('deploy wiring', () => {
   it('adds a yawmi-web service on a pinned image with a priority-1 catch-all router', () => {
     expect(compose).toMatch(/^ {2}yawmi-web:/m);
     expect(compose).toMatch(/image: ghcr\.io\/nexgen94\/yawmi-web:\d+\.\d+\.\d+/);
-    expect(compose).toContain('traefik.http.routers.yawmi-web.rule=Host(`${YAWMI_API_HOST}`)"');
+    // the host is required (`:?`): an empty one would serve the default certificate (D-7)
+    expect(compose).toContain(
+      'traefik.http.routers.yawmi-web.rule=Host(`${YAWMI_API_HOST:?YAWMI_API_HOST is required}`)"',
+    );
     expect(compose).toContain('traefik.http.routers.yawmi-web.priority=1"');
     expect(compose).toContain('traefik.http.services.yawmi-web.loadbalancer.server.port=8080"');
   });
