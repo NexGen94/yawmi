@@ -307,8 +307,11 @@ def test_the_secrets_volume_is_external_everywhere_so_compose_never_recreates_it
     # loader 1 writes the secret, loader 2 only reads it
     assert "yawmi_secrets:/run/yawmi" in first["services"]["yawmi-loader"]["volumes"]
     assert "yawmi_secrets:/run/yawmi:ro" in second["services"]["yawmi-loader"]["volumes"]
-    assert "yawmi_secrets:/run/yawmi:ro" in third["services"]["yawmi-loader"]["volumes"]
-    for data in (first, second, third, _yaml(API_COMPOSE)):
+    # loader 3 never reads the password, so it mounts nothing from that volume (least privilege)
+    assert not [v for v in third["services"]["yawmi-loader"]["volumes"] if "yawmi_secrets" in v]
+    assert "yawmi_secrets" not in third["volumes"]
+    assert "yawmi_secrets" not in LOADER_3.read_text(encoding="utf-8")
+    for data in (first, second, _yaml(API_COMPOSE)):
         assert data["volumes"]["yawmi_secrets"] == {"name": "yawmi_secrets", "external": True}
 
 
@@ -1241,6 +1244,8 @@ def test_loaders_1_and_2_are_byte_identical_to_main(path: Path) -> None:
         text=True,
     )
     if ref.returncode != 0:
+        if os.environ.get("CI"):
+            pytest.fail("origin/main is missing: the checkout needs full history (fetch-depth: 0)")
         pytest.skip("origin/main is not available (shallow or detached checkout)")
     result = subprocess.run(
         [git, "-C", str(REPO), "diff", "--exit-code", "origin/main", "--", str(path)],
@@ -1249,3 +1254,106 @@ def test_loaders_1_and_2_are_byte_identical_to_main(path: Path) -> None:
         text=True,
     )
     assert result.returncode == 0, result.stdout[:300]
+
+
+def _grants_run_outside_the_todo_branch(script: str) -> bool:
+    """True when the grants file is applied after `\\endif`, in its own transaction."""
+    return bool(
+        re.search(r"^\\endif\nBEGIN;\n\\i /tmp/grants\.sql\nCOMMIT;\n", script, re.MULTILINE)
+    )
+
+
+def test_loader_3_runs_the_grants_block_outside_the_not_yet_applied_branch() -> None:
+    script = _script(LOADER_3)
+    assert _grants_run_outside_the_todo_branch(script)
+    assert script.count("grants.sql") == 3  # cut, test for emptiness, applied
+    # the same script with the block moved inside the branch is recognised as wrong
+    block = "BEGIN;\n\\i /tmp/grants.sql\nCOMMIT;\n"
+    moved = script.replace(block, "").replace("\\else\n", block + "\\else\n", 1)
+    assert not _grants_run_outside_the_todo_branch(moved)
+
+
+def test_runbook_says_loader_3_runs_after_any_reapplication_of_loader_2() -> None:
+    assert "بعد أي إعادة تطبيق للمحمّل 2 يُشغَّل المحمّل 3" in RUNBOOK
+
+
+def _load_dsn_parts() -> dict[str, str]:
+    url = urlsplit(os.environ["TEST_DATABASE_URL"])
+    return {
+        "PGHOST": url.hostname or "127.0.0.1",
+        "PGPORT": str(url.port or 5432),
+        "PGUSER": url.username or "postgres",
+        "PGDATABASE": url.path.lstrip("/") or "raqib",
+    }
+
+
+def _run_loader_3(tmp_path: Path, script: str) -> subprocess.CompletedProcess[str]:
+    """Run loader 3's real shell script with psql, paths rewritten to a scratch directory.
+
+    Only paths and the admin password source change; every line of SQL runs as committed.
+    """
+    sh, psql = shutil.which("sh"), shutil.which("psql")
+    if sh is None or psql is None:
+        if os.environ.get("CI"):
+            pytest.fail("sh and psql are required to run the loader script in CI")
+        pytest.skip("sh or psql is not on PATH")
+    (tmp_path / "in").mkdir(exist_ok=True)
+    (tmp_path / "tmp").mkdir(exist_ok=True)
+    blob = _payload_text(LOADER_3.read_text(encoding="utf-8"), "0003")
+    (tmp_path / "in" / "0003.b64").write_text(blob, encoding="utf-8", newline="\n")
+    local = (
+        script.replace("/yawmi/in/", "in/")
+        .replace("/tmp/", "tmp/")
+        .replace('PGPASSWORD="$(cat /run/raqib/admin_pw)"', "PGPASSWORD=unused")
+        .replace("until pg_isready -q", "until true")
+    )
+    (tmp_path / "load.sh").write_text(local, encoding="utf-8", newline="\n")
+    env = {**os.environ, **_load_dsn_parts()}
+    return subprocess.run(
+        [sh, "load.sh"], cwd=tmp_path, env=env, check=False, capture_output=True, text=True
+    )
+
+
+@pytest.mark.skipif(not os.environ.get("TEST_DATABASE_URL"), reason="needs TEST_DATABASE_URL")
+async def test_loader_3_script_restores_the_delete_grants_after_0002_is_reapplied(
+    tmp_path: Path,
+) -> None:
+    import asyncpg
+    from test_migrations import _has, _reapply_0002, _reset, migrate  # type: ignore[import-not-found]
+
+    dsn = os.environ["TEST_DATABASE_URL"]
+    stub = (Path(__file__).parent / "fixtures" / "raqib_stub.sql").read_text(encoding="utf-8")
+    conn = await asyncpg.connect(dsn)
+    try:
+        await conn.execute(stub)
+        await _reset(conn)
+        await migrate(dsn, {"yawmi_api_pw": "x" * 16})
+        script = _script(LOADER_3)
+        await _reapply_0002(conn)
+        assert not await _has(conn, "yawmi.ai_memory", "DELETE")
+        # a copy with the grants moved inside the branch leaves them missing: the check bites
+        block = "BEGIN;\n\\i /tmp/grants.sql\nCOMMIT;\n"
+        broken = script.replace(block, "").replace("\\else\n", block + "\\else\n", 1)
+        # 0003 is recorded, so the branch body is skipped and the moved block never runs
+        result = _run_loader_3(tmp_path, broken)
+        assert result.returncode == 0, result.stderr
+        assert "already applied, skipped" in result.stdout
+        assert not await _has(conn, "yawmi.ai_memory", "DELETE")
+        # the committed script restores them, and as yawmi_api the deletes work
+        result = _run_loader_3(tmp_path, script)
+        assert result.returncode == 0, result.stderr
+        assert "grants re-asserted" in result.stdout
+        assert "denied_probes=3/3" in result.stderr + result.stdout
+        for table in ("ai_memory", "indicators"):
+            assert await _has(conn, f"yawmi.{table}", "DELETE")
+            await conn.execute("SET ROLE yawmi_api")
+            try:
+                await conn.execute(f"DELETE FROM yawmi.{table} WHERE false")
+            finally:
+                await conn.execute("RESET ROLE")
+        # and a second run in a row changes nothing and still succeeds
+        again = _run_loader_3(tmp_path, script)
+        assert again.returncode == 0, again.stderr
+    finally:
+        await conn.execute("RESET ROLE")
+        await conn.close()

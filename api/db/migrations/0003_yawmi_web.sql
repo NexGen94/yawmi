@@ -18,7 +18,8 @@
 -- applied. In yawmi_ro nothing but this file's SELECT grant ever reaches yawmi_api.
 -- RE-APPLYING 0002 resets all grants in schema yawmi, including the ones below on the
 -- ten tables (DELETE on ai_memory and indicators in particular). Loader 3 re-asserts
--- the GRANT section (everything from the line REVOKE ALL ON SCHEMA yawmi_ro on) on every
+-- the GRANT section (everything from the line REVOKE ALL ON ALL TABLES IN SCHEMA yawmi_ro
+-- on) on every
 -- run, so loader 3 must run after any re-application of loader 2.
 --
 -- Same recording rule as 0001: the runner records every applied file in
@@ -211,10 +212,22 @@ FROM raqib.notion_cards;
 -- Grants (idempotent; loader 3 runs this section alone on every run)
 -- ---------------------------------------------------------------------------
 
+REVOKE ALL ON ALL TABLES IN SCHEMA yawmi_ro FROM yawmi_api;
 REVOKE ALL ON SCHEMA yawmi_ro FROM yawmi_api;
-REVOKE ALL ON yawmi_ro.notion_card_fields FROM yawmi_api;
 GRANT USAGE ON SCHEMA yawmi_ro TO yawmi_api;
 GRANT SELECT ON yawmi_ro.notion_card_fields TO yawmi_api;
+REVOKE ALL ON
+yawmi.user_settings,
+yawmi.ai_consents,
+yawmi.ai_memory,
+yawmi.journal_entries,
+yawmi.mood_logs,
+yawmi.goal_tasks,
+yawmi.goal_edits,
+yawmi.indicators,
+yawmi.focus_plans,
+yawmi.notice_sends
+FROM yawmi_api;
 GRANT SELECT, INSERT, UPDATE ON
 yawmi.user_settings,
 yawmi.ai_consents,

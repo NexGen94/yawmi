@@ -1396,7 +1396,29 @@ async def test_yawmi_api_can_plan_every_store_statement(migrated: asyncpg.Connec
     assert problems == []
 
 
-GRANTS_SECTION = re.compile(r"^REVOKE ALL ON SCHEMA yawmi_ro.*", re.MULTILINE | re.DOTALL)
+GRANTS_SECTION = re.compile(
+    r"^REVOKE ALL ON ALL TABLES IN SCHEMA yawmi_ro.*", re.MULTILINE | re.DOTALL
+)
+NEW_TABLES = [
+    "user_settings",
+    "ai_consents",
+    "ai_memory",
+    "journal_entries",
+    "mood_logs",
+    "goal_tasks",
+    "goal_edits",
+    "indicators",
+    "focus_plans",
+    "notice_sends",
+]
+
+
+def grants_section() -> str:
+    """The re-runnable grants block of 0003 (the file's own BEGIN/COMMIT are not part of it)."""
+    text = (MIGRATIONS_DIR / "0003_yawmi_web.sql").read_text(encoding="utf-8")
+    section = GRANTS_SECTION.search(text)
+    assert section
+    return section.group(0).replace("COMMIT;", "")
 
 
 async def _reapply_0002(conn: asyncpg.Connection) -> None:
@@ -1414,15 +1436,14 @@ async def _as_api(conn: asyncpg.Connection, sql: str) -> None:
 
 
 @needs_db
-async def test_card_fields_view_is_never_writable_even_after_0002_is_reapplied(
-    migrated: asyncpg.Connection,
-):
+async def test_view_stays_read_only_after_reapplying_0002(migrated: asyncpg.Connection):
     await migrated.execute(
         "INSERT INTO raqib.notion_cards (page_id, title) VALUES ('w1', 't') ON CONFLICT DO NOTHING"
     )
     try:
         await _reapply_0002(migrated)  # 0002 -> 0003 -> 0002, without re-running 0003
         for write in (
+            "UPDATE yawmi_ro.notion_card_fields SET page_id = page_id",
             "UPDATE yawmi_ro.notion_card_fields SET page_id = 'hijack'",
             "INSERT INTO yawmi_ro.notion_card_fields (page_id) VALUES ('x')",
             "DELETE FROM yawmi_ro.notion_card_fields",
@@ -1436,22 +1457,33 @@ async def test_card_fields_view_is_never_writable_even_after_0002_is_reapplied(
             await migrated.fetchval("SELECT count(*) FROM raqib.notion_cards WHERE page_id = 'w1'")
             == 1
         )
+        # nothing in yawmi_ro beyond USAGE on the schema and SELECT on the view
+        assert await migrated.fetchval(
+            "SELECT has_schema_privilege('yawmi_api', 'yawmi_ro', 'USAGE')"
+        )
+        assert not await migrated.fetchval(
+            "SELECT has_schema_privilege('yawmi_api', 'yawmi_ro', 'CREATE')"
+        )
+        assert await _has(migrated, "yawmi_ro.notion_card_fields", "SELECT")
+        for privilege in ("INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"):
+            assert not await _has(migrated, "yawmi_ro.notion_card_fields", privilege), privilege
+        granted = await migrated.fetch(
+            "SELECT privilege_type FROM information_schema.role_table_grants "
+            "WHERE grantee = 'yawmi_api' AND table_schema = 'yawmi_ro'"
+        )
+        assert [r["privilege_type"] for r in granted] == ["SELECT"]
     finally:
         await migrated.execute("DELETE FROM raqib.notion_cards WHERE page_id = 'w1'")
 
 
 @needs_db
-async def test_reapplying_0002_strips_0003_grants_and_the_grants_section_restores_them(
-    migrated: asyncpg.Connection,
-):
+async def test_0003_grants_are_reasserted_after_0002(migrated: asyncpg.Connection):
     await _reapply_0002(migrated)
     # the state right after 0002 -> 0003 -> 0002, loader 3 not yet re-run
     assert not await _has(migrated, "yawmi.ai_memory", "DELETE")
     assert not await _has(migrated, "yawmi.indicators", "DELETE")
-    text = (MIGRATIONS_DIR / "0003_yawmi_web.sql").read_text(encoding="utf-8")
-    section = GRANTS_SECTION.search(text)
-    assert section
-    await migrated.execute(section.group(0).replace("COMMIT;", ""))
+    for _ in range(2):  # two runs in a row, no error, same end state
+        await migrated.execute(grants_section())
     assert await _has(migrated, "yawmi.ai_memory", "DELETE")
     assert await _has(migrated, "yawmi.indicators", "DELETE")
     await _as_api(migrated, "DELETE FROM yawmi.ai_memory WHERE false")
@@ -1460,4 +1492,30 @@ async def test_reapplying_0002_strips_0003_grants_and_the_grants_section_restore
     for table in YAWMI_TABLES:
         for privilege in ("SELECT", "INSERT", "UPDATE"):
             assert await _has(migrated, f"yawmi.{table}", privilege), (table, privilege)
+        assert await _has(migrated, f"yawmi.{table}", "DELETE") is (table in DELETABLE), table
     assert not await _has(migrated, "yawmi_ro.notion_card_fields", "UPDATE")
+
+
+@needs_db
+async def test_grants_block_is_a_full_reset_of_the_ten_tables_and_yawmi_ro(
+    migrated: asyncpg.Connection,
+):
+    # wrong grants planted by hand: DELETE and TRUNCATE where the design allows neither,
+    # and a write on the view
+    await migrated.execute(
+        "GRANT DELETE, TRUNCATE ON yawmi.goal_edits, yawmi.mood_logs TO yawmi_api"
+    )
+    await migrated.execute("GRANT UPDATE ON yawmi_ro.notion_card_fields TO yawmi_api")
+    await migrated.execute("GRANT CREATE ON SCHEMA yawmi_ro TO yawmi_api")
+    await migrated.execute("REVOKE UPDATE ON yawmi.journal_entries FROM yawmi_api")
+    assert await _has(migrated, "yawmi.goal_edits", "DELETE")
+    await migrated.execute(grants_section())
+    for table in NEW_TABLES:
+        for privilege in ("SELECT", "INSERT", "UPDATE"):
+            assert await _has(migrated, f"yawmi.{table}", privilege), (table, privilege)
+        assert await _has(migrated, f"yawmi.{table}", "DELETE") is (table in DELETABLE), table
+        assert not await _has(migrated, f"yawmi.{table}", "TRUNCATE"), table
+    assert not await _has(migrated, "yawmi_ro.notion_card_fields", "UPDATE")
+    assert not await migrated.fetchval(
+        "SELECT has_schema_privilege('yawmi_api', 'yawmi_ro', 'CREATE')"
+    )
