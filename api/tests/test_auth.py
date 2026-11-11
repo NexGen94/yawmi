@@ -539,6 +539,52 @@ async def test_refresh_with_body_rotates_token(
     assert chained.status_code == 200
 
 
+@pytest.mark.parametrize("kind", ["iphone", "web"])
+async def test_refresh_token_older_than_the_ttl_is_refused_by_the_server(
+    client: httpx.AsyncClient, store: InMemoryDeviceStore, kind: str
+) -> None:
+    """The 90 days are enforced by the server, not only by the cookie's Max-Age (I-3)."""
+    started = datetime.now(UTC)
+    store.clock = lambda: started
+    await seed_code(store, kind)
+    paired = await pair(client, kind=kind)
+    assert paired.status_code == 200
+
+    def attempt() -> dict[str, object]:
+        if kind == "web":
+            return {"headers": {"Cookie": cookie_pair(paired)}}
+        body = paired.json()
+        return {"json": {"device_id": body["device_id"], "refresh_token": body["refresh_token"]}}
+
+    store.clock = lambda: started + timedelta(days=90, seconds=1)
+    expired = await client.post("/v1/auth/refresh", **attempt())  # type: ignore[arg-type]
+    assert expired.status_code == 401
+    assert expired.json() == UNAUTHORIZED
+
+
+async def test_refresh_just_inside_the_ttl_still_rotates_and_restarts_the_clock(
+    client: httpx.AsyncClient, store: InMemoryDeviceStore
+) -> None:
+    started = datetime.now(UTC)
+    store.clock = lambda: started
+    await seed_code(store, "iphone")
+    paired = (await pair(client)).json()
+
+    store.clock = lambda: started + timedelta(days=89, hours=23)
+    first = await client.post(
+        "/v1/auth/refresh",
+        json={"device_id": paired["device_id"], "refresh_token": paired["refresh_token"]},
+    )
+    assert first.status_code == 200
+    # the rotation restarted the 90 days: 150 days after pairing, 60 after the rotation, it works
+    store.clock = lambda: started + timedelta(days=150)
+    second = await client.post(
+        "/v1/auth/refresh",
+        json={"device_id": paired["device_id"], "refresh_token": first.json()["refresh_token"]},
+    )
+    assert second.status_code == 200
+
+
 async def test_refresh_without_credentials_is_unauthorized(client: httpx.AsyncClient) -> None:
     response = await client.post("/v1/auth/refresh")
     assert response.status_code == 401

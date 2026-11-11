@@ -11,6 +11,7 @@ Two groups:
   happens in GitHub Actions (``.github/workflows/api-tests.yml``).
 """
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -29,6 +30,7 @@ import asyncpg
 import pytest
 from asyncpg import exceptions as pgerr
 
+from yawmi.auth.pg_store import AsyncpgDeviceStore
 from yawmi.db.migrate import (
     MIGRATIONS_DIR,
     MigrationError,
@@ -509,6 +511,70 @@ async def test_device_kind_is_checked(migrated: asyncpg.Connection):
         await migrated.execute(
             "INSERT INTO yawmi.devices (id, name, kind) VALUES ($1, 'tv', 'tv')", uuid.uuid4()
         )
+
+
+@needs_db
+async def test_device_refresh_rotated_at_is_a_nullable_timestamptz(migrated: asyncpg.Connection):
+    row = await migrated.fetchrow(
+        "SELECT data_type, is_nullable FROM information_schema.columns "
+        "WHERE table_schema = 'yawmi' AND table_name = 'devices' "
+        "AND column_name = 'refresh_rotated_at'"
+    )
+    assert row is not None
+    assert row["data_type"] == "timestamp with time zone"
+    assert row["is_nullable"] == "YES"
+
+
+@pytest.fixture
+async def device_store(migrated: asyncpg.Connection) -> AsyncIterator[AsyncpgDeviceStore]:
+    assert DSN
+    pool = await asyncpg.create_pool(DSN, min_size=2, max_size=2)
+    try:
+        yield AsyncpgDeviceStore(pool)
+    finally:
+        await pool.close()
+
+
+@needs_db
+async def test_pg_two_rotations_with_the_same_old_hash_give_exactly_one_success(
+    device_store: AsyncpgDeviceStore,
+):
+    device_id = await device_store.create_device("هاتف", "iphone", "old-hash")
+    ttl = timedelta(days=90)
+    results = await asyncio.gather(
+        device_store.rotate_refresh(device_id, "old-hash", "new-a", max_age=ttl),
+        device_store.rotate_refresh(device_id, "old-hash", "new-b", max_age=ttl),
+    )
+    assert sorted(results) == [False, True]
+    device = await device_store.get_device(device_id)
+    assert device is not None
+    assert device.refresh_hash in {"new-a", "new-b"}
+
+
+@needs_db
+async def test_pg_rotation_sets_the_timestamp_and_refuses_an_expired_token(
+    migrated: asyncpg.Connection, device_store: AsyncpgDeviceStore
+):
+    device_id = await device_store.create_device("هاتف", "iphone", "h0")
+    created = await migrated.fetchval(
+        "SELECT refresh_rotated_at FROM yawmi.devices WHERE id = $1", device_id
+    )
+    assert created is not None
+    ttl = timedelta(days=90)
+    assert await device_store.rotate_refresh(device_id, "h0", "h1", max_age=ttl)
+    rotated = await migrated.fetchval(
+        "SELECT refresh_rotated_at FROM yawmi.devices WHERE id = $1", device_id
+    )
+    assert rotated >= created
+
+    await migrated.execute(
+        "UPDATE yawmi.devices SET refresh_rotated_at = now() - interval '91 days' WHERE id = $1",
+        device_id,
+    )
+    assert not await device_store.rotate_refresh(device_id, "h1", "h2", max_age=ttl)
+    device = await device_store.get_device(device_id)
+    assert device is not None
+    assert device.refresh_hash == "h1"
 
 
 @needs_db

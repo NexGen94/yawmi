@@ -174,10 +174,17 @@ class FakePool:
 async def test_pg_rotate_refresh_reports_whether_a_row_changed() -> None:
     device_id = uuid4()
     hit = FakePool(execute="UPDATE 1")
-    assert await AsyncpgDeviceStore(hit).rotate_refresh(device_id, "old", "new") is True  # type: ignore[arg-type]
-    assert hit.calls[0][2] == (device_id, "old", "new")
+    ttl = timedelta(days=90)
+    assert (
+        await AsyncpgDeviceStore(hit).rotate_refresh(device_id, "old", "new", max_age=ttl) is True
+    )  # type: ignore[arg-type]
+    assert hit.calls[0][2] == (device_id, "old", "new", ttl)
+    assert "refresh_rotated_at > now() - $4::interval" in hit.calls[0][1]
+    assert "refresh_rotated_at = now()" in hit.calls[0][1]
     miss = FakePool(execute="UPDATE 0")
-    assert await AsyncpgDeviceStore(miss).rotate_refresh(device_id, "old", "new") is False  # type: ignore[arg-type]
+    assert (
+        await AsyncpgDeviceStore(miss).rotate_refresh(device_id, "old", "new", max_age=ttl) is False
+    )  # type: ignore[arg-type]
 
 
 async def test_pg_revoke_reports_whether_the_device_exists() -> None:
@@ -257,7 +264,9 @@ async def test_service_token_carries_no_usable_refresh_token() -> None:
     device_id = verify_access(token, SECRET).sub
     # nobody holds the raw refresh token, so no hash a client can present will ever rotate it
     for guess in ("", "x", "0" * 64):
-        assert await store.rotate_refresh(device_id, guess, "new") is False
+        assert (
+            await store.rotate_refresh(device_id, guess, "new", max_age=timedelta(days=90)) is False
+        )
 
 
 async def test_service_token_is_signed_with_the_given_secret_only() -> None:

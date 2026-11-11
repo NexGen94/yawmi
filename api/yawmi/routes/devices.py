@@ -5,6 +5,7 @@ it: it lives in the `yawmi_rt` cookie (HttpOnly, Strict, scoped to `/v1/auth`) a
 body carries `refresh_token: null`.
 """
 
+from datetime import timedelta
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -134,8 +135,10 @@ async def refresh_tokens(
     if device is None or device.revoked_at is not None:
         raise unauthorized(bearer=False)
     new_raw, new_digest = new_refresh()
-    # Atomic compare-and-swap: a replayed (already rotated) token matches nothing.
-    if not await devices.rotate_refresh(device_id, hash_refresh(raw), new_digest):
+    # Atomic compare-and-swap: a replayed (already rotated) token matches nothing, and a token
+    # older than `refresh_ttl_days` is dead on the server even if a client kept it (I-3).
+    max_age = timedelta(days=settings.refresh_ttl_days)
+    if not await devices.rotate_refresh(device_id, hash_refresh(raw), new_digest, max_age=max_age):
         raise unauthorized(bearer=False)
     return _token_pair(response, settings, device_id, device.kind, new_raw)
 

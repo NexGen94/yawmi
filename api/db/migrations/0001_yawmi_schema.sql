@@ -34,6 +34,7 @@ CREATE TABLE yawmi.devices (
   name text NOT NULL,
   kind text CHECK (kind IN ('iphone', 'watch', 'web', 'service')),
   refresh_hash text,
+  refresh_rotated_at timestamptz,
   paired_at timestamptz,
   revoked_at timestamptz
 );

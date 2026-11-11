@@ -3,7 +3,7 @@
 import hmac
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from yawmi.auth.deps import Device, PairingCode
@@ -29,6 +29,7 @@ class InMemoryDeviceStore:
         self.on_revoke = on_revoke
         self._codes: dict[str, tuple[PairingCode, bool]] = {}  # code -> (row, used)
         self._devices: dict[UUID, Device] = {}
+        self._rotated_at: dict[UUID, datetime] = {}  # the column `refresh_rotated_at`
 
     async def add_pairing_code(self, code: str, kind: str, expires_at: datetime) -> bool:
         if code in self._codes:
@@ -56,18 +57,26 @@ class InMemoryDeviceStore:
             paired_at=self.clock(),
             revoked_at=None,
         )
+        self._rotated_at[device_id] = self.clock()
         return device_id
 
     async def get_device(self, device_id: UUID) -> Device | None:
         return self._devices.get(device_id)
 
-    async def rotate_refresh(self, device_id: UUID, old_hash: str, new_hash: str) -> bool:
+    async def rotate_refresh(
+        self, device_id: UUID, old_hash: str, new_hash: str, *, max_age: timedelta
+    ) -> bool:
         device = self._devices.get(device_id)
         if device is None or device.revoked_at is not None or device.refresh_hash is None:
             return False
         if not hmac.compare_digest(device.refresh_hash, old_hash):
             return False
+        now = self.clock()
+        rotated_at = self._rotated_at.get(device_id)
+        if rotated_at is None or rotated_at <= now - max_age:
+            return False
         self._devices[device_id] = replace(device, refresh_hash=new_hash)
+        self._rotated_at[device_id] = now
         return True
 
     async def revoke(self, device_id: UUID) -> bool:

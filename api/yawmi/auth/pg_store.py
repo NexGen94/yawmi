@@ -9,7 +9,7 @@ with the same token cannot both succeed and a pairing code cannot be consumed tw
 """
 
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -31,8 +31,8 @@ RETURNING code, kind, expires_at
 """
 
 _CREATE_DEVICE = """
-INSERT INTO yawmi.devices (id, name, kind, refresh_hash, paired_at)
-VALUES ($1, $2, $3, $4, now())
+INSERT INTO yawmi.devices (id, name, kind, refresh_hash, paired_at, refresh_rotated_at)
+VALUES ($1, $2, $3, $4, now(), now())
 """
 
 _GET_DEVICE = """
@@ -41,10 +41,12 @@ FROM yawmi.devices
 WHERE id = $1
 """
 
+# The refresh token expires on the server too: a hash last rotated `$4` ago or earlier is dead.
 _ROTATE_REFRESH = """
 UPDATE yawmi.devices
-SET refresh_hash = $3
+SET refresh_hash = $3, refresh_rotated_at = now()
 WHERE id = $1 AND refresh_hash = $2 AND revoked_at IS NULL
+  AND refresh_rotated_at > now() - $4::interval
 """
 
 _REVOKE = """
@@ -96,8 +98,10 @@ class AsyncpgDeviceStore:
         row = await self._pool.fetchrow(_GET_DEVICE, device_id)
         return None if row is None else device_from_row(row)
 
-    async def rotate_refresh(self, device_id: UUID, old_hash: str, new_hash: str) -> bool:
-        tag = await self._pool.execute(_ROTATE_REFRESH, device_id, old_hash, new_hash)
+    async def rotate_refresh(
+        self, device_id: UUID, old_hash: str, new_hash: str, *, max_age: timedelta
+    ) -> bool:
+        tag = await self._pool.execute(_ROTATE_REFRESH, device_id, old_hash, new_hash, max_age)
         return affected_rows(tag) == 1
 
     async def revoke(self, device_id: UUID) -> bool:

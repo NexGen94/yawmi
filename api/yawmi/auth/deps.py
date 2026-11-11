@@ -6,7 +6,7 @@
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Protocol
 from uuid import UUID
 
@@ -55,8 +55,11 @@ class DeviceStore(Protocol):
 
     async def get_device(self, device_id: UUID) -> Device | None: ...
 
-    async def rotate_refresh(self, device_id: UUID, old_hash: str, new_hash: str) -> bool:
-        """Swap the refresh hash iff `old_hash` is current and the device is not revoked."""
+    async def rotate_refresh(
+        self, device_id: UUID, old_hash: str, new_hash: str, *, max_age: timedelta
+    ) -> bool:
+        """Swap the refresh hash iff `old_hash` is current, the device is not revoked and the
+        hash was issued (paired or last rotated) less than `max_age` ago; restart that clock."""
         ...
 
     async def revoke(self, device_id: UUID) -> bool:

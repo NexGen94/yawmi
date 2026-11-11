@@ -35,7 +35,7 @@ configs:
       until pg_isready -q; do n=$$((n+1)); [ $$n -lt 60 ] || { echo "yawmi-loader: database not ready"; exit 1; }; sleep 2; done
       PSQL="psql -v ON_ERROR_STOP=1 -v VERBOSITY=terse --no-psqlrc -q"
       base64 -d /yawmi/in/0001.b64 | gunzip -c > /tmp/0001.sql
-      printf '%s  %s\n' 28eb6a9e01096c1e349a7faa3926f0826bacbc14cc5fe366e46351d58f14dad1 /tmp/0001.sql | sha256sum -c -
+      printf '%s  %s\n' e319ec54f2d72a638c5505c41a31eab25e319f9eae9806193ede37012dcb6359 /tmp/0001.sql | sha256sum -c -
       sha256sum /tmp/0001.sql
       sed -i -e '/^[[:space:]]*BEGIN;[[:space:]]*$$/d' -e '/^[[:space:]]*COMMIT;[[:space:]]*$$/d' /tmp/0001.sql
       if [ ! -s /run/yawmi/yawmi_api_pw ]; then
@@ -68,33 +68,33 @@ configs:
       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
-      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
+      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
 volumes:
   raqib_secrets:
     name: raqib_secrets
