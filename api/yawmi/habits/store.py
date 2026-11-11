@@ -128,7 +128,12 @@ class CardRef:
 
 @dataclass(frozen=True)
 class KpiRef:
+    """The columns of `raqib.kpis` that decide a habit's prefill (`kpi_prefill_kind`)."""
+
     target: Decimal | None  # None: the KPI has no single target (a range, or nothing)
+    direction: str  # up, down or band
+    unit: str
+    frequency: str  # daily, weekly, monthly or cycle
 
 
 class MirrorReader(Protocol):
@@ -211,7 +216,7 @@ SELECT title, outcome_code, due_date FROM raqib.notion_milestones WHERE page_id 
 # column-level grant: never `props`
 CARD = "SELECT title, outcome_codes FROM raqib.notion_cards WHERE page_id = $1"
 OUTCOME_DEADLINE = "SELECT target_date FROM raqib.goals WHERE code = $1"
-KPI = "SELECT target FROM raqib.kpis WHERE code = $1"
+KPI = "SELECT target, direction, unit, frequency FROM raqib.kpis WHERE code = $1"
 # column-level grant: never `note`
 LATEST_READING = """
 SELECT value
@@ -329,7 +334,7 @@ class AsyncpgMirrorReader:
 
     async def kpi(self, code: str) -> KpiRef | None:
         row = await self._pool.fetchrow(KPI, code)
-        return None if row is None else KpiRef(row["target"])
+        return None if row is None else KpiRef(**dict(row))
 
     async def latest_reading(self, code: str, today: date) -> Decimal | None:
         return await self._pool.fetchval(LATEST_READING, code, today)

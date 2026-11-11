@@ -88,7 +88,7 @@ class InMemoryMirrorReader:
     milestones: dict[str, MilestoneRef] = field(default_factory=dict)
     cards: dict[str, CardRef] = field(default_factory=dict)
     deadlines: dict[str, date] = field(default_factory=dict)
-    kpi_targets: dict[str, Decimal | None] = field(default_factory=dict)  # key = a known KPI
+    kpis: dict[str, KpiRef] = field(default_factory=dict)  # key = a known KPI
     readings: dict[str, list[tuple[date, Decimal]]] = field(default_factory=dict)
 
     async def milestone(self, page_id: str) -> MilestoneRef | None:
@@ -101,7 +101,7 @@ class InMemoryMirrorReader:
         return self.deadlines.get(code)
 
     async def kpi(self, code: str) -> KpiRef | None:
-        return KpiRef(self.kpi_targets[code]) if code in self.kpi_targets else None
+        return self.kpis.get(code)
 
     async def latest_reading(self, code: str, today: date) -> Decimal | None:
         past = [(day, value) for day, value in self.readings.get(code, []) if day <= today]

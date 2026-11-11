@@ -447,7 +447,10 @@ def goal_prefill(
     period: Period,
     week_start: WeekStart,
 ) -> int:
-    """هدف الفترة المقترح لعادة تخدم هدفاً رقمياً: `max(1, ceil((G − current) / عدد الفترات))`.
+    """هدف الفترة المقترح لعادة تخدم مؤشراً تراكمياً: `max(1, ceil((G − current) / عدد الفترات))`.
+
+    للمؤشرات التراكمية وحدها (`kpi_prefill_kind(...) == "cumulative"`): الهدف مجموع يُبلغ بالموعد،
+    فالمتبقي منه يُوزَّع على الفترات الباقية.
 
     عدد الفترات من الفترة الحالية حتى فترة الموعد شاملتين (فترة واحدة على الأقل، حتى لو فات الموعد).
     والتقريب لأعلى بهامش `1e-9` على خارج القسمة: `ceil(x − 1e-9)`، فـ8.0000000005 تعطي 8 لا 9،
@@ -463,3 +466,57 @@ def goal_prefill(
         periods = (last.year - first.year) * 12 + last.month - first.month + 1
     periods = max(1, periods)
     return max(1, math.ceil((goal_target - current) / periods - _EPS))
+
+
+# ---------------------------------------------------------------- تعبئة الهدف بحسب نوع المؤشر
+
+KpiPrefillKind = Literal["cumulative", "per_period", "none"]
+
+# المؤشرات التراكمية على المدى كله: هدفها مجموع يُبلغ بالموعد لا عدد في كل فترة، فتُعبَّأ بـ
+# `goal_prefill` (المتبقي موزعاً على الفترات). قائمة صريحة لأن `raqib.kpis` لا يحمل علماً للتراكم،
+# وتواترها في المرآة لا يدل عليه (`books_done` شهري وهدفه 12 كتاباً في المدى كله).
+CUMULATIVE_KPIS: frozenset[str] = frozenset({"measured_projects", "workshops_count", "books_done"})
+
+# مؤشرات اتجاهها صاعد ولها هدف واحد لكنها متوسط أو مستوى لا عدد في الفترة. وكل رمز ينتهي بـ`_pct`
+# وكل وحدة `%` نسبةٌ أيضاً.
+RATE_OR_AVERAGE_KPIS: frozenset[str] = frozenset(
+    {"steps_avg", "weight_kg", "who5_raw", "clarity_score"}
+)
+
+# تواتر المؤشر وفترة العادة التي تقابله.
+KPI_FREQUENCY_PERIOD: dict[str, Period] = {"daily": "day", "weekly": "week", "monthly": "month"}
+
+
+def kpi_prefill_kind(
+    code: str,
+    direction: str,
+    unit: str | None,
+    target: float | None,
+    frequency: str,
+) -> KpiPrefillKind:
+    """كيف يُعبَّأ هدف عادة تخدم المؤشر `code` (أعمدة `raqib.kpis` كما هي):
+
+    1. `cumulative`: رمز من `CUMULATIVE_KPIS` وله هدف واحد. `goal_prefill` يوزّع
+       (الهدف − آخر قراءة) على الفترات حتى الموعد.
+    2. `per_period`: عدد في كل فترة: اتجاه `up` وهدف واحد وتواتر يومي أو أسبوعي أو شهري، وليس نسبة
+       ولا متوسطاً (لا وحدة `%`، ولا رمز ينتهي بـ`_pct`، ولا رمز من `RATE_OR_AVERAGE_KPIS`).
+       `per_period_prefill` يعطي هدف المؤشر نفسه إن طابقت فترةُ العادة تواترَه، وآخر قراءة لا تدخل.
+    3. `none`: كل ما سواه (اتجاه `down` أو `band`، نسبة، متوسط، مستوى، تواتر الدورة): لا هدف رقمي،
+       والمسودة عادة يومية بنعم أو لا.
+    """
+    if target is None:
+        return "none"
+    if code in CUMULATIVE_KPIS:
+        return "cumulative"
+    if direction != "up" or frequency not in KPI_FREQUENCY_PERIOD:
+        return "none"
+    if (unit or "").strip() == "%" or code.endswith("_pct") or code in RATE_OR_AVERAGE_KPIS:
+        return "none"
+    return "per_period"
+
+
+def per_period_prefill(target: float, frequency: str, period: Period) -> float | None:
+    """هدف عادة لمؤشر عدّ في الفترة: هدف المؤشر نفسه إن قابلت `period` تواترَه
+    (`day`↔`daily`، `week`↔`weekly`، `month`↔`monthly`)، وإلا `None` (لا تعبئة رقمية).
+    """
+    return float(target) if KPI_FREQUENCY_PERIOD.get(frequency) == period else None

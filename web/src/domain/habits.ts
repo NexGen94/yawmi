@@ -318,6 +318,8 @@ export function adherence(
  * Suggested per-period target for a habit serving a numeric goal:
  * max(1, ceil((goalTarget − current) / periods − 1e-9)), periods counted from the current one to
  * the deadline's, both included (at least one, even past the deadline).
+ * Only for a KPI that is cumulative over the horizon (owner decision 5); which KPI gets which
+ * prefill is decided by the server (`kpi_prefill_kind` in the reference), never by the web form.
  */
 export function goalPrefill(
   goalTarget: number,
