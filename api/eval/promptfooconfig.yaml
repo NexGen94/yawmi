@@ -20,16 +20,21 @@ prompts:
     ]
 
 providers:
+  # max_tokens وeffort كما في api/yawmi/ai/anthropic.py: التفكير مفعّل افتراضياً ويُحسب من max_tokens.
   - id: anthropic:messages:claude-haiku-5-5
     label: haiku-5-5 (يومي)
     config:
       apiKeyEnvar: ANTHROPIC_API_KEY
-      max_tokens: 1024
+      max_tokens: 4096
+      output_config:
+        effort: low
   - id: anthropic:messages:claude-sonnet-5-5
     label: sonnet-5-5 (أسبوعي)
     config:
       apiKeyEnvar: ANTHROPIC_API_KEY
-      max_tokens: 1024
+      max_tokens: 4096
+      output_config:
+        effort: low
   # DeepSeek معطّل افتراضياً. لتقييمه أزِل التعليق وضع DEEPSEEK_API_KEY في البيئة وحدها:
   # - id: deepseek:deepseek-chat
   #   label: deepseek-chat
