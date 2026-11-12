@@ -14,6 +14,7 @@ import type { components } from './schema';
 
 const REFRESH_URL = '/v1/auth/refresh';
 const PAIR_URL = '/v1/devices/pair';
+const LOGOUT_URL = '/v1/auth/logout';
 const PAIR_FAILED = 'تعذّر الإقران';
 /** Cross-tab lock name for the cookie rotation. */
 const REFRESH_LOCK = 'yawmi-auth-refresh';
@@ -26,7 +27,36 @@ const REFRESH_LOCK = 'yawmi-auth-refresh';
 export const refreshTimeouts = { requestMs: 15_000, lockWaitMs: 20_000 };
 
 let accessToken: string | null = null;
+let lastDeviceId: string | null = null;
 let refreshing: Promise<void> | null = null;
+
+export function getLastDeviceId(): string | null {
+  return lastDeviceId;
+}
+
+export function setLastDeviceId(id: string | null): void {
+  lastDeviceId = id;
+}
+
+export type UnauthorizedListener = () => void;
+const unauthorizedListeners = new Set<UnauthorizedListener>();
+
+export function onUnauthorized(listener: UnauthorizedListener): () => void {
+  unauthorizedListeners.add(listener);
+  return () => {
+    unauthorizedListeners.delete(listener);
+  };
+}
+
+function notifyUnauthorized(): void {
+  for (const listener of unauthorizedListeners) {
+    try {
+      listener();
+    } catch {
+      // ignore
+    }
+  }
+}
 
 export function setAccessToken(token: string): void {
   accessToken = token;
@@ -102,6 +132,7 @@ async function requestRefresh(): Promise<void> {
   // was revoked); then drop the token and let the app show the pairing screen.
   if (res.status === 401 || res.status === 403) {
     clearAccessToken();
+    notifyUnauthorized();
     throw new Unauthorized();
   }
   if (!res.ok) throw new RefreshError(`refresh failed: HTTP ${res.status}`, res.status);
@@ -157,6 +188,7 @@ export async function authedFetch(input: RequestInfo | URL, init?: RequestInit):
   const second = await send(replay, init, accessToken);
   if (second.status === 401) {
     clearAccessToken();
+    notifyUnauthorized();
     throw new Unauthorized();
   }
   return second;
@@ -171,14 +203,15 @@ function pairErrorMessage(body: unknown): string {
 const DEVICE_NAME = 'Safari iPhone';
 
 /** Exchange a one-time pairing code for a session on this device (cookie plus in-memory token). */
-export async function pair(code: string): Promise<void> {
+export async function pair(code: string, name?: string): Promise<void> {
   let res: Response;
+  const deviceName = name ?? DEVICE_NAME;
   try {
     res = await fetch(PAIR_URL, {
       method: 'POST',
       credentials: 'include',
       headers: jsonHeaders(),
-      body: JSON.stringify({ code, name: DEVICE_NAME, kind: 'web' } satisfies components['schemas']['PairRequest']),
+      body: JSON.stringify({ code, name: deviceName, kind: 'web' } satisfies components['schemas']['PairRequest']),
     });
   } catch (cause) {
     throw new PairError(PAIR_FAILED, { cause });
@@ -188,9 +221,19 @@ export async function pair(code: string): Promise<void> {
     const body: unknown = await res.json().catch(() => null);
     throw new PairError(pairErrorMessage(body));
   }
-  const token = await readAccessToken(res);
-  if (token === null) throw new PairError(PAIR_FAILED);
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    throw new PairError(PAIR_FAILED);
+  }
+  const token = (body as { access_token?: unknown } | null)?.access_token;
+  const deviceId = (body as { device_id?: unknown } | null)?.device_id;
+  if (typeof token !== 'string' || token === '') throw new PairError(PAIR_FAILED);
   setAccessToken(token);
+  if (typeof deviceId === 'string' && deviceId !== '') {
+    lastDeviceId = deviceId;
+  }
 
   // Ask the browser not to evict this site's storage (the outbox lives in IndexedDB). Not awaited:
   // some browsers prompt, and pairing must not wait on that. A refusal or a missing API is fine.
@@ -198,5 +241,23 @@ export async function pair(code: string): Promise<void> {
     void navigator.storage?.persist?.()?.catch(() => undefined);
   } catch {
     // no storage API in this environment
+  }
+}
+
+/**
+ * Revoke the device session on the server (POST /v1/auth/logout) and discard the in-memory access token.
+ * Access token is always cleared, even on network error or server failure.
+ */
+export async function logout(): Promise<void> {
+  try {
+    await fetch(LOGOUT_URL, {
+      method: 'POST',
+      credentials: 'include',
+      headers: jsonHeaders(),
+      body: '{}',
+    });
+  } finally {
+    clearAccessToken();
+    lastDeviceId = null;
   }
 }

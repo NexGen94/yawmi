@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   authedFetch,
   clearAccessToken,
+  logout,
   pair,
   PairError,
   RefreshError,
@@ -498,6 +499,50 @@ describe('pair', () => {
   it('does not store a token when pairing fails', async () => {
     fetchMock.mockResolvedValueOnce(json({ detail: 'الكود غير صالح أو منتهٍ' }, 400));
     await pair('WRONG').catch(() => undefined);
+
+    fetchMock.mockResolvedValueOnce(json({ ok: true }));
+    await authedFetch('/v1/things');
+    expect(authOf(fetchMock.mock.calls[1])).toBeNull();
+  });
+});
+
+describe('logout', () => {
+  it('calls POST /v1/auth/logout with credentials include and clears in-memory access token', async () => {
+    setAccessToken('tok-session');
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await logout();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const call = fetchMock.mock.calls[0] as Call;
+    expect(url(call)).toBe('/v1/auth/logout');
+    expect(initOf(call)).toMatchObject({
+      method: 'POST',
+      credentials: 'include',
+    });
+
+    // Access token is cleared:
+    fetchMock.mockResolvedValueOnce(json({ ok: true }));
+    await authedFetch('/v1/things');
+    expect(authOf(fetchMock.mock.calls[1])).toBeNull();
+  });
+
+  it('clears access token even if server returns 500', async () => {
+    setAccessToken('tok-session');
+    fetchMock.mockResolvedValueOnce(new Response('error', { status: 500 }));
+
+    await logout().catch(() => undefined);
+
+    fetchMock.mockResolvedValueOnce(json({ ok: true }));
+    await authedFetch('/v1/things');
+    expect(authOf(fetchMock.mock.calls[1])).toBeNull();
+  });
+
+  it('clears access token even on network failure', async () => {
+    setAccessToken('tok-session');
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    await logout().catch(() => undefined);
 
     fetchMock.mockResolvedValueOnce(json({ ok: true }));
     await authedFetch('/v1/things');
