@@ -3,7 +3,7 @@
 import logging
 import os
 from collections.abc import AsyncIterator
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID, uuid4
@@ -258,9 +258,18 @@ async def test_journal_range_limit_and_auth(
         )
     ).status_code == 403
 
+    # 400 calendar days inclusive (to - from <= 399) is accepted (200)
+    ok_400 = await client.get(
+        "/v1/journal",
+        params={"from": "2026-01-01", "to": (date(2026, 1, 1) + timedelta(days=399)).isoformat()},
+        headers=auth(),
+    )
+    assert ok_400.status_code == 200, ok_400.text
+
+    # 401 calendar days (to - from == 400) is rejected with 422 range_too_large
     too_wide = await client.get(
         "/v1/journal",
-        params={"from": "2025-01-01", "to": date(2026, 2, 6).isoformat()},
+        params={"from": "2026-01-01", "to": (date(2026, 1, 1) + timedelta(days=400)).isoformat()},
         headers=auth(),
     )
     assert too_wide.status_code == 422

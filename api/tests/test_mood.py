@@ -1,5 +1,6 @@
 """`mood_logged` event projection and `GET /v1/mood` on both backends (memory and Postgres)."""
 
+from datetime import date, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -92,3 +93,31 @@ async def test_invalid_mood_payloads_are_rejected(
     ev = mood_event(payload)
     res = await client.post("/v1/events", json={"events": [ev]}, headers=auth())
     assert res.status_code == 422
+
+
+async def test_legacy_free_form_mood_payload_without_score_is_rejected(
+    client: httpx.AsyncClient,
+) -> None:
+    """The legacy mood_logged payload (free-text `{"note": ...}` with no `score`) is rejected."""
+    ev = mood_event({"note": "شعور جيد لكن بلا تقييم رقمي"})
+    res = await client.post("/v1/events", json={"events": [ev]}, headers=auth())
+    assert res.status_code == 422
+    assert res.json()["errors"][0]["type"] == "invalid_payload"
+
+
+async def test_mood_range_limit_400_accepted_401_rejected(client: httpx.AsyncClient) -> None:
+    first = date(2026, 1, 1)
+    ok_res = await client.get(
+        "/v1/mood",
+        params={"from": first.isoformat(), "to": (first + timedelta(days=399)).isoformat()},
+        headers=auth(),
+    )
+    assert ok_res.status_code == 200, ok_res.text
+
+    bad_res = await client.get(
+        "/v1/mood",
+        params={"from": first.isoformat(), "to": (first + timedelta(days=400)).isoformat()},
+        headers=auth(),
+    )
+    assert bad_res.status_code == 422
+    assert bad_res.json()["errors"][0]["type"] == "range_too_large"

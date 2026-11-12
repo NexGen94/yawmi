@@ -6,7 +6,9 @@ from fastapi.exceptions import RequestValidationError
 
 from yawmi.events.project import EARLIEST, LATEST
 
-MAX_RANGE_DAYS = 400
+# Maximum span: `to - from <= 399` days, which is at most 400 calendar days inclusive.
+# A 401-day window (`to - from == 400` days) is refused with 422 range_too_large.
+MAX_RANGE_DAYS = 399
 
 _DAY_OUT_OF_RANGE = "اليوم خارج النطاق المعقول"
 _INVALID_RANGE = "نهاية المدى تسبق بدايته"
