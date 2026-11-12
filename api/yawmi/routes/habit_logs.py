@@ -70,8 +70,9 @@ async def list_habit_logs(
                 habit_code=r.habit_code,
                 day=r.day,
                 value=float(r.value) if r.value is not None else None,
-                status=r.status or "done",
+                status=r.status,
             )
             for r in rows
+            if r.status is not None
         ]
     )

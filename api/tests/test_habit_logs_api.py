@@ -139,8 +139,8 @@ async def test_range_of_400_days_is_accepted_and_401_is_rejected_with_range_too_
     client: httpx.AsyncClient,
 ) -> None:
     first = date(2026, 1, 1)
-    ok_last = first + timedelta(days=400)
-    bad_last = first + timedelta(days=401)
+    ok_last = first + timedelta(days=399)  # 400 calendar days inclusive: to - from <= 399
+    bad_last = first + timedelta(days=400)  # 401 calendar days inclusive: to - from == 400 -> 422
 
     ok_res = await client.get(
         "/v1/habit-logs",
@@ -196,3 +196,20 @@ async def test_code_filters_the_result_and_value_is_a_json_number(
         row["habit_code"] for row in all_res.json()["logs"] if row["habit_code"].startswith(PREFIX)
     }
     assert codes == {read_code, walk_code}
+
+
+async def test_null_status_log_is_omitted_and_never_reported_as_done(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    """A log with NULL status must not be returned by /v1/habit-logs, consistent with other readers."""
+    code = PREFIX + "null_status"
+    await backend.add_habit(code)
+    await backend.add_log(code, date(2026, 11, 10), status=None)  # type: ignore[arg-type]
+
+    res = await client.get(
+        "/v1/habit-logs",
+        params={"from": "2026-11-01", "to": "2026-11-10", "code": code},
+        headers=auth(),
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["logs"] == []

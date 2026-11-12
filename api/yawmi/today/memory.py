@@ -51,7 +51,9 @@ class InMemoryTodayReader:
             (
                 log
                 for log in self.logs
-                if first <= log.day <= last and (code is None or log.habit_code == code)
+                if first <= log.day <= last
+                and (code is None or log.habit_code == code)
+                and log.status is not None
             ),
             key=lambda lg: (lg.day, lg.habit_code),
         )
