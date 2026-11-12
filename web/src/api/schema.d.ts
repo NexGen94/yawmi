@@ -58,6 +58,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cards/{page_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * تعديل حالة بطاقة
+         * @description `status` إحدى الحالات الموجودة في بطاقات المرآة، وإلا 422 `status_unknown`: لا حالة جديدة ولا تغيير في المخطط. أي حقل آخر 422 `field_not_editable`. يُكتب تعديلاً معلّقاً بملاحظة مؤرخة. الإغلاق بالحالة، لا حذف.
+         */
+        patch: operations["edit_card_v1_cards__page_id__patch"];
+        trace?: never;
+    };
     "/v1/day/close": {
         parameters: {
             query?: never;
@@ -136,6 +156,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/goal-edits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * سجل تعديلات الأهداف
+         * @description الأحدث أولاً. `status` يقصره على حالة واحدة.
+         */
+        get: operations["list_edits_v1_goal_edits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/goal-edits/{edit_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * إلغاء تعديل معلّق أو متعارض
+         * @description يصير `cancelled` وتُضاف إلى ملاحظته سطر مؤرخ، ولا يُحذف شيء. تعود القيمة المعروضة إلى القيمة الأساس. المطبَّق والفاشل والمُزاح والملغى 409.
+         */
+        post: operations["cancel_edit_v1_goal_edits__edit_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/goal-tasks/{task_id}": {
         parameters: {
             query?: never;
@@ -165,7 +225,7 @@ export interface paths {
         };
         /**
          * الأهداف كاملة: المخرجات والدورات والمحطات والبطاقات
-         * @description قراءة كاملة من مرآة Notion مع العادات والمهام والمؤشرات. مرآة فارغة (قبل نشر المزامنة) تعطي قوائم فارغة و`synced_at: null`. `completion` المخرج المحطات المنجزة ÷ كلها كما في Notion، ولا تغيّرها العادات. `target_date` و`next_step` للبطاقة من خاصيتين مسمّاتين فقط، ولا يُقرأ غيرهما من خصائصها.
+         * @description قراءة كاملة من مرآة Notion مع العادات والمهام والمؤشرات. مرآة فارغة (قبل نشر المزامنة) تعطي قوائم فارغة و`synced_at: null`. `completion` المخرج المحطات المنجزة ÷ كلها كما في Notion، ولا تغيّرها العادات. `target_date` و`next_step` للبطاقة من خاصيتين مسمّاتين فقط، ولا يُقرأ غيرهما من خصائصها. وفوق المرآة تعديلات يومي: المعلّق أولاً (واسم حقله في `pending`)، ثم المطبَّق ما دامت المرآة لم تلحق به، ثم المرآة.
          */
         get: operations["get_goals_v1_goals_get"];
         put?: never;
@@ -419,6 +479,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/milestones/{page_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * تعديل محطة: إنجازها أو موعدها أو دليلها
+         * @description حقل واحد على الأقل من ثلاثة: `done` و`due_date` (من 2026-10-31 إلى 2031-12-31، وإلا `due_date_out_of_range`) و`evidence` (حتى 500 حرف). أي حقل آخر 422 `field_not_editable`، وأولها العلاقات. يُكتب تعديلاً معلّقاً في سجل يومي بملاحظة مؤرخة بالقيمة السابقة، ولا تُكتب المرآة ولا Notion. قيمة تساوي المعروض لا تكتب شيئاً. لا حذف.
+         */
+        patch: operations["edit_milestone_v1_milestones__page_id__patch"];
+        trace?: never;
+    };
     "/v1/mood": {
         parameters: {
             query?: never;
@@ -433,6 +513,46 @@ export interface paths {
         get: operations["list_mood_v1_mood_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notion/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * التغييرات المعلّقة لمطبّق Notion (رمز الخدمة فقط)
+         * @description المعلّق بترتيب إنشائه، و`limit` من 1 إلى 100. `old_value` القيمة المتوقعة في Notion: يقرأ المطبّق القيمة الحية، وإن خالفتها لا يكتب ويرسل `conflict`.
+         */
+        get: operations["list_changes_v1_notion_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notion/changes/{change_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * نتيجة تطبيق تغيير (رمز الخدمة فقط)
+         * @description `ok: true` يجعله `applied` ويملأ `applied_at`، و`ok: false` مع `conflict: true` يجعله `conflict`، و`ok: false` وحده `failed` بنص `error`. غير موجود 404، وغير معلّق 409.
+         */
+        post: operations["post_result_v1_notion_changes__change_id__result_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -648,6 +768,14 @@ export interface components {
             /** Sound */
             sound: boolean;
         };
+        /**
+         * CardEdit
+         * @description `status`: one of the statuses the cards of the mirror already have.
+         */
+        CardEdit: {
+            /** Status */
+            status?: string;
+        };
         /** CardFull */
         CardFull: {
             /** Habits */
@@ -670,7 +798,10 @@ export interface components {
             outcome_codes: string[];
             /** Page Id */
             page_id: string;
-            /** Pending */
+            /**
+             * Pending
+             * @description الحقول التي قيمتها المعروضة تعديل معلّق
+             */
             pending: string[];
             /** Status */
             status: string | null;
@@ -728,6 +859,22 @@ export interface components {
             remaining_days: number;
             /** Total */
             total: number;
+        };
+        /**
+         * ChangeResult
+         * @description `ok: true` applied; `ok: false` with `conflict: true` refused on a live mismatch; `ok:
+         *     false` alone a failure, `error` its text (up to 500 characters).
+         */
+        ChangeResult: {
+            /**
+             * Conflict
+             * @default false
+             */
+            conflict: boolean;
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
         };
         /**
          * ClientSource
@@ -1083,6 +1230,57 @@ export interface components {
             /** Outcomes */
             outcomes?: ("code" | "title" | "track" | "target_date" | "acceptance" | "status" | "milestones_total" | "milestones_done" | "milestones_due" | "completion" | "next_milestone" | "habits" | "indicator" | "kpis")[];
         };
+        /** GoalEditList */
+        GoalEditList: {
+            /** Items */
+            items: components["schemas"]["GoalEditOut"][];
+        };
+        /**
+         * GoalEditOut
+         * @description A stored edit (design §7.4). `old_value` is the value expected in Notion.
+         */
+        GoalEditOut: {
+            /** Applied At */
+            applied_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: string | null;
+            /** Field */
+            field: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** New Value */
+            new_value: boolean | string | null;
+            /**
+             * Note
+             * @description الملاحظة المؤرخة بالقيمة السابقة
+             */
+            note: string;
+            /**
+             * Old Value
+             * @description القيمة المتوقعة في Notion لحظة التعديل
+             */
+            old_value: boolean | string | null;
+            /** Page Id */
+            page_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "applied" | "failed" | "superseded" | "conflict" | "cancelled";
+            /**
+             * Target Kind
+             * @enum {string}
+             */
+            target_kind: "milestone" | "card";
+        };
         /**
          * GoalIndicatorValue
          * @description The indicator of an outcome or a card, computed (design §9.3).
@@ -1226,7 +1424,10 @@ export interface components {
             milestones: components["schemas"]["MilestoneFull"][];
             /** Outcomes */
             outcomes: components["schemas"]["GoalOutcome"][];
-            /** Pending Edits */
+            /**
+             * Pending Edits
+             * @description عدد التعديلات المعلّقة التي لم تصل Notion
+             */
             pending_edits: number;
             /**
              * Synced At
@@ -1825,6 +2026,22 @@ export interface components {
             /** Ok */
             ok: boolean;
         };
+        /**
+         * MilestoneEdit
+         * @description At least one field. `done` closes or reopens a milestone (no deletion); `due_date` lies in
+         *     the plan (2026-10-31 to 2031-12-31); `evidence` is text up to 500 characters.
+         */
+        MilestoneEdit: {
+            /** Done */
+            done?: boolean;
+            /**
+             * Due Date
+             * Format: date
+             */
+            due_date?: string;
+            /** Evidence */
+            evidence?: string;
+        };
         /** MilestoneFull */
         MilestoneFull: {
             /** Card Page Ids */
@@ -1852,7 +2069,7 @@ export interface components {
             page_id: string;
             /**
              * Pending
-             * @description التعديلات المعلّقة (فارغة في هذا الإصدار)
+             * @description الحقول التي قيمتها المعروضة تعديل معلّق
              */
             pending: string[];
             /** Title */
@@ -1938,6 +2155,40 @@ export interface components {
             source_id: string | null;
             /** Title */
             title: string;
+        };
+        /**
+         * NotionChange
+         * @description One property write for an applier: one field of one page (design §7.4).
+         */
+        NotionChange: {
+            /** Field */
+            field: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** New Value */
+            new_value: boolean | string | null;
+            /** Note */
+            note: string;
+            /**
+             * Old Value
+             * @description القيمة المتوقعة في Notion: يرفض المطبّق إن خالفتها
+             */
+            old_value: boolean | string | null;
+            /** Page Id */
+            page_id: string;
+            /**
+             * Target Kind
+             * @enum {string}
+             */
+            target_kind: "milestone" | "card";
+        };
+        /** NotionChangeList */
+        NotionChangeList: {
+            /** Items */
+            items: components["schemas"]["NotionChange"][];
         };
         /** OutcomeOut */
         OutcomeOut: {
@@ -2567,6 +2818,68 @@ export interface operations {
             };
         };
     };
+    edit_card_v1_cards__page_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CardEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardFull"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description لا صفحة بهذا المعرّف في المرآة */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
     close_day_v1_day_close_post: {
         parameters: {
             query?: never;
@@ -2811,6 +3124,123 @@ export interface operations {
                 };
             };
             /** @description طلب غير صالح: الدفعة تُرفض كاملة */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    list_edits_v1_goal_edits_get: {
+        parameters: {
+            query?: {
+                /** @description حالة التعديل */
+                status?: ("pending" | "applied" | "failed" | "superseded" | "conflict" | "cancelled") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalEditList"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    cancel_edit_v1_goal_edits__edit_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                edit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalEditOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description التعديل غير موجود */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description لا يُلغى إلا تعديل معلّق أو متعارض */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3708,6 +4138,68 @@ export interface operations {
             };
         };
     };
+    edit_milestone_v1_milestones__page_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MilestoneEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneFull"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description لا صفحة بهذا المعرّف في المرآة */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
     list_mood_v1_mood_get: {
         parameters: {
             query: {
@@ -3742,6 +4234,125 @@ export interface operations {
             };
             /** @description غير مسموح */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    list_changes_v1_notion_changes_get: {
+        parameters: {
+            query?: {
+                /** @description أقصى عدد */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotionChangeList"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    post_result_v1_notion_changes__change_id__result_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeResult"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description التغيير غير موجود */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description التغيير ليس معلّقاً */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
