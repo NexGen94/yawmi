@@ -18,8 +18,8 @@ import { uuidv7 } from './uuidv7';
 type Schemas = components['schemas'];
 
 const DB_NAME = 'yawmi';
-/** 1: `outbox`. 2: adds `quarantine` (existing queued events are kept by the upgrade). */
-const DB_VERSION = 2;
+/** 1: `outbox`. 2: adds `quarantine`. 3: adds `cache` and `kv`. */
+const DB_VERSION = 3;
 const STORE = 'outbox';
 const QUARANTINE = 'quarantine';
 const EVENTS_URL = '/v1/events';
@@ -190,6 +190,8 @@ function connect(): Promise<IDBPDatabase<YawmiDB>> {
         if (oldVersion < 1) db.createObjectStore(STORE, { keyPath: 'id' });
         if (oldVersion < 2) {
           if (!db.objectStoreNames.contains(QUARANTINE)) db.createObjectStore(QUARANTINE, { keyPath: 'id' });
+        }
+        if (oldVersion < 3) {
           if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache');
           if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
         }
@@ -310,6 +312,12 @@ export async function discard(id: string): Promise<boolean> {
 export async function clearOutbox(): Promise<void> {
   const db = await openDb();
   await db.clear(STORE);
+}
+
+/** Clear all quarantined events. */
+export async function clearQuarantine(): Promise<void> {
+  const db = await openDb();
+  await db.clear(QUARANTINE);
 }
 
 let flushTimer: ReturnType<typeof setTimeout> | null = null;

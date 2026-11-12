@@ -577,8 +577,55 @@ describe('quarantine', () => {
     expect(await pending()).toBe(1);
     expect(await quarantined()).toBe(0);
     const db = await openDb();
-    expect(db.version).toBe(2);
+    expect(db.version).toBe(3);
     expect(await db.getAllKeys('outbox')).toEqual([id]);
+    expect(db.objectStoreNames.contains('quarantine')).toBe(true);
+    expect(db.objectStoreNames.contains('cache')).toBe(true);
+    expect(db.objectStoreNames.contains('kv')).toBe(true);
+  });
+
+  it('upgrades a version 2 database keeping pending and quarantined events', async () => {
+    const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('yawmi', 2);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        db.createObjectStore('outbox', { keyPath: 'id' });
+        db.createObjectStore('quarantine', { keyPath: 'id' });
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const pendingId = uuidv7(Date.now());
+    const quarantinedId = uuidv7(Date.now() + 1);
+    await new Promise<void>((resolve, reject) => {
+      const tx = legacy.transaction(['outbox', 'quarantine'], 'readwrite');
+      tx.objectStore('outbox').add({
+        id: pendingId,
+        type: 'app_opened',
+        payload: {},
+        occurred_at: new Date().toISOString(),
+        tz: 'Asia/Riyadh',
+      });
+      tx.objectStore('quarantine').add({
+        id: quarantinedId,
+        type: 'app_opened',
+        payload: {},
+        occurred_at: new Date().toISOString(),
+        tz: 'Asia/Riyadh',
+        errors: [],
+        quarantined_at: new Date().toISOString(),
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    legacy.close();
+
+    expect(await pending()).toBe(1);
+    expect(await quarantined()).toBe(1);
+    const db = await openDb();
+    expect(db.version).toBe(3);
+    expect(await db.getAllKeys('outbox')).toEqual([pendingId]);
+    expect(await db.getAllKeys('quarantine')).toEqual([quarantinedId]);
     expect(db.objectStoreNames.contains('cache')).toBe(true);
     expect(db.objectStoreNames.contains('kv')).toBe(true);
   });
@@ -823,7 +870,7 @@ describe('database versions', () => {
     });
 
   it('asks for a reload when the stored database is newer than this app', async () => {
-    (await openRaw(3)).close();
+    (await openRaw(4)).close();
 
     const error = await pending().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(DatabaseNeedsReload);
