@@ -1,6 +1,8 @@
 import type { InputHTMLAttributes } from 'preact';
 import { useId } from 'preact/hooks';
 
+import { fmt } from '../lib/format';
+
 export type FieldType = 'text' | 'number' | 'date' | 'time';
 
 export interface FieldProps {
@@ -24,17 +26,30 @@ export interface FieldProps {
   max?: number | string;
   step?: number | string;
   autoComplete?: string;
+  /** The longest text the field takes. It is the control's own `maxlength`, a longer input (a
+   *  script, an input method) is cut to it, and a count «n / max» shows once 80% is used. */
+  maxLength?: number;
 }
+
+/** From this share of the limit the count shows: before it, it would only be noise. */
+const COUNT_FROM = 0.8;
 
 /** A labelled field. The border is --c-blue, because it carries meaning (design 5.1). */
 export function Field(props: FieldProps) {
-  const { label, value, onInput, type = 'text', multiline, hint, error, ...rest } = props;
+  const { label, value, onInput, type = 'text', multiline, hint, error, maxLength, ...rest } = props;
   const id = useId();
-  const described = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined;
+  const counted = maxLength !== undefined && value.length >= maxLength * COUNT_FROM ? maxLength : null;
+  const described =
+    [hint && `${id}-hint`, counted !== null && `${id}-count`, error && `${id}-error`].filter(Boolean).join(' ') || undefined;
+  const take = (el: HTMLInputElement | HTMLTextAreaElement): void => {
+    if (maxLength !== undefined && el.value.length > maxLength) el.value = el.value.slice(0, maxLength);
+    onInput(el.value);
+  };
   const shared = {
     ...rest,
     id,
     value,
+    maxLength,
     'aria-invalid': error ? ('true' as const) : undefined,
     'aria-describedby': described,
   };
@@ -45,7 +60,7 @@ export function Field(props: FieldProps) {
     type,
     class: 'field-input',
     inputMode: type === 'number' ? 'decimal' : undefined,
-    onInput: (event: Event) => onInput((event.currentTarget as HTMLInputElement).value),
+    onInput: (event: Event) => take(event.currentTarget as HTMLInputElement),
   } as InputHTMLAttributes<HTMLInputElement>;
   return (
     <div class="field">
@@ -57,7 +72,7 @@ export function Field(props: FieldProps) {
           {...shared}
           class="field-input field-textarea"
           rows={4}
-          onInput={(event) => onInput(event.currentTarget.value)}
+          onInput={(event) => take(event.currentTarget)}
         />
       ) : (
         <input {...inputProps} />
@@ -65,6 +80,11 @@ export function Field(props: FieldProps) {
       {hint && (
         <p id={`${id}-hint`} class="field-hint">
           {hint}
+        </p>
+      )}
+      {counted !== null && (
+        <p id={`${id}-count`} class="field-count">
+          {fmt.num(value.length)} / {fmt.num(counted)}
         </p>
       )}
       {error && (

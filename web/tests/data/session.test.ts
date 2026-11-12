@@ -228,3 +228,66 @@ describe('session and pairing', () => {
     expect(confirmSpy).toHaveBeenCalledWith(expectedPrompt);
   });
 });
+
+// A journal draft is private text kept in localStorage; it leaves the device with the session.
+describe('logout and the unsent journal drafts', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    closeDb();
+    Object.assign(globalThis, { indexedDB: new IDBFactory() });
+    clearAccessToken();
+    window.confirm = vi.fn();
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.clear();
+    localStorage.setItem('yawmi.draft.day.2026-11-10.morning', '{"note":"نص خاص"}');
+    localStorage.setItem('yawmi.draft.day.2026-11-10.evening', '{"note":"نص خاص آخر"}');
+    localStorage.setItem('yawmi.theme', 'unrelated');
+  });
+
+  afterEach(() => {
+    closeDb();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  const drafts = (): string[] => Object.keys(localStorage).filter((k) => k.startsWith('yawmi.draft.'));
+
+  it('removes every draft after the server confirmed the logout, and nothing else', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await logout();
+    expect(drafts()).toEqual([]);
+    expect(localStorage.getItem('yawmi.theme')).toBe('unrelated');
+  });
+
+  it('keeps the drafts when the server refuses the logout', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('Server Error', { status: 500 }));
+    await expect(logout()).rejects.toBeInstanceOf(LogoutError);
+    expect(drafts()).toHaveLength(2);
+  });
+
+  it('keeps the drafts while offline', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    await expect(logout()).rejects.toBeInstanceOf(LogoutError);
+    expect(drafts()).toHaveLength(2);
+  });
+
+  it('keeps the drafts when the person cancels the prompt about unsent events', async () => {
+    await enqueue('habit_logged', { habit_code: 'h', status: 'done' });
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    window.confirm = vi.fn().mockReturnValue(false);
+    await logout();
+    expect(drafts()).toHaveLength(2);
+  });
+
+  it('still logs out when localStorage refuses access', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.spyOn(Storage.prototype, 'key').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    await expect(logout()).resolves.toBeUndefined();
+    expect(await isPaired()).toBe(false);
+  });
+});
