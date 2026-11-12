@@ -1,0 +1,397 @@
+/* The day page (morning and evening). Colors only through the tokens, logical properties only.
+   The columns come from .page-cols (layout.css): the form first, the context column beside it on
+   a desktop and below it on a phone, in the same order. */
+
+.day-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3) var(--sp-5);
+  margin-block-end: var(--sp-5);
+}
+
+.day-date {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--c-ink-2);
+}
+
+.day-main {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.day-skeleton {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+/* ---------- The form ---------- */
+
+.day-form {
+  padding: var(--sp-6);
+}
+
+.day-section {
+  display: grid;
+  gap: var(--sp-3);
+  padding-block: var(--sp-5);
+  border-block-start: 1px solid var(--c-blue-pale);
+}
+
+/* The first section follows the card title, which already says where the form begins. */
+.day-form > .card-title + .day-section,
+.day-form > .closure-card + .day-section,
+.day-form > .closure-pending + .day-section {
+  border-block-start: 0;
+  padding-block-start: var(--sp-2);
+}
+
+.day-h {
+  margin: 0;
+  font-size: var(--fs-section);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.day-sub {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-note);
+  font-weight: 600;
+  color: var(--c-ink-2);
+}
+
+.day-note {
+  margin: 0;
+  font-size: var(--fs-note);
+  color: var(--c-ink-2);
+}
+
+.day-group {
+  display: block;
+}
+
+.day-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.day-form > .day-actions {
+  padding-block-start: var(--sp-5);
+  border-block-start: 1px solid var(--c-blue-pale);
+}
+
+/* What became of the last save, under the form. */
+.day-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0 0;
+  font-size: var(--fs-note);
+  font-weight: 600;
+  color: var(--c-ink-2);
+}
+
+/* ---------- Priorities ---------- */
+
+.day-slots,
+.day-priorities,
+.otd-list,
+.day-outcomes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.day-slots,
+.day-priorities {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.day-suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px dashed var(--c-blue);
+  border-radius: var(--radius-card);
+  background: var(--c-bg);
+}
+
+.day-suggestion-text {
+  display: grid;
+  flex: 1 1 14rem;
+  gap: var(--sp-1);
+  min-inline-size: 0;
+}
+
+.day-suggestion-title {
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.day-suggestion-source {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-note);
+  color: var(--c-ink-2);
+}
+
+.day-suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.day-priority {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.day-priority .btn[aria-pressed='true'] {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+  color: var(--c-surface);
+}
+
+.day-priority .btn[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--c-ink-2);
+}
+
+.day-gratitude {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+/* ---------- Mood ---------- */
+
+/* Five equal steps with a large numeral: the one tap of the evening. */
+.mood-scale .segmented {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  inline-size: 100%;
+}
+
+.mood-scale .segment {
+  min-block-size: 56px;
+  padding-inline: var(--sp-2);
+  font-size: var(--fs-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.mood-ends {
+  display: flex;
+  justify-content: space-between;
+  margin: var(--sp-1) var(--sp-3) 0;
+  font-size: var(--fs-note);
+  color: var(--c-ink-2);
+}
+
+/* ---------- The one-minute switch ---------- */
+
+.day-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  inline-size: fit-content;
+  min-block-size: var(--hit);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--c-ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.day-switch:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--focus);
+  border-radius: var(--radius-pill);
+}
+
+.day-switch-track {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-start;
+  inline-size: 52px;
+  block-size: 30px;
+  padding: 3px;
+  border: 1px solid var(--c-blue);
+  border-radius: var(--radius-pill);
+  background: var(--c-surface);
+}
+
+.day-switch-thumb {
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: 50%;
+  background: var(--c-blue);
+}
+
+.day-switch[aria-checked='true'] .day-switch-track {
+  justify-content: flex-end;
+  border-color: var(--c-ink);
+  background: var(--c-ink);
+}
+
+.day-switch[aria-checked='true'] .day-switch-thumb {
+  background: var(--c-surface);
+}
+
+.day-switch-text {
+  display: grid;
+}
+
+.day-switch-label {
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.day-switch-hint {
+  font-size: var(--fs-note);
+  color: var(--c-ink-2);
+}
+
+/* ---------- Sliders and the outcome select ---------- */
+
+.day-scores {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+/* A slider nobody moved keeps its middle position but looks unset. */
+.day-score[data-unset='true'] .slider-input {
+  opacity: 0.55;
+}
+
+.day-select {
+  appearance: auto;
+  max-inline-size: 16rem;
+}
+
+/* ---------- Closure and on this day ---------- */
+
+.closure-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-4);
+  margin-block-end: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--radius-card);
+  background: var(--c-ink);
+  color: var(--c-bg);
+}
+
+.closure-title {
+  margin: 0;
+  font-size: var(--fs-section);
+  font-weight: 600;
+}
+
+.closure-day {
+  font-size: var(--fs-note);
+  color: var(--c-blue-light);
+}
+
+.closure-pending {
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-card);
+  background: var(--c-blue-pale);
+  color: var(--c-ink);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.on-this-day {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  border-radius: var(--radius-card);
+  background: var(--c-bg);
+}
+
+.otd-list {
+  display: grid;
+  gap: var(--sp-2);
+  font-size: var(--fs-body);
+}
+
+.otd-label {
+  font-weight: 600;
+  color: var(--c-ink-2);
+}
+
+/* ---------- The context column ---------- */
+
+.day-context {
+  display: grid;
+  gap: var(--sp-5);
+  padding: var(--sp-5);
+  border: 1px solid var(--c-blue-pale);
+  border-radius: var(--radius-card);
+  background: var(--c-surface);
+}
+
+.day-context-block {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.day-context-block + .day-context-block {
+  padding-block-start: var(--sp-5);
+  border-block-start: 1px solid var(--c-blue-pale);
+}
+
+.day-context-title {
+  margin: 0;
+  font-size: var(--fs-note);
+  font-weight: 600;
+  color: var(--c-ink-2);
+}
+
+.day-context-line {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.day-outcomes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* Written by Abdullah alone: empty, between parentheses, until he writes it. */
+.day-placeholder {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--c-ink-2);
+}
+
+@media (width < 900px) {
+  .day-form {
+    padding: var(--sp-4);
+  }
+
+  .day-suggestion-actions {
+    inline-size: 100%;
+  }
+}
