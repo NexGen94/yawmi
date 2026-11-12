@@ -159,7 +159,7 @@ describe('session and pairing', () => {
 
     vi.stubGlobal('navigator', { onLine: false });
 
-    await expect(logout()).rejects.toThrow();
+    await expect(logout()).rejects.toBeInstanceOf(LogoutError);
 
     expect(await isPaired()).toBe(true);
     expect(await kvGet('device_id')).toBe('dev-live');
@@ -174,7 +174,7 @@ describe('session and pairing', () => {
 
     fetchMock.mockResolvedValueOnce(new Response('Server Error', { status: 500 }));
 
-    await expect(logout()).rejects.toThrow();
+    await expect(logout()).rejects.toBeInstanceOf(LogoutError);
 
     expect(await isPaired()).toBe(true);
     expect(await kvGet('device_id')).toBe('dev-live');

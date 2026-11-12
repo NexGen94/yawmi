@@ -156,7 +156,7 @@ describe('event helpers', () => {
     await saveJournal('morning', { grateful_for: 'الحمد لله' } as any);
     expect(scheduleSpy).toHaveBeenCalledTimes(2);
 
-    await logMood({ score: 5 });
+    await logMood({ score: 5, day: '2026-11-12' });
     expect(scheduleSpy).toHaveBeenCalledTimes(3);
 
     await setGoalTask('task-1', true);
@@ -181,7 +181,6 @@ describe('event helpers', () => {
       completed: true,
       duration_seconds: 120,
       ended_at: null,
-      feeling: null,
       pattern: 'box',
       started_at: null,
       breaths_per_min: 6,
