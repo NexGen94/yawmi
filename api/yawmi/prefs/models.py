@@ -108,6 +108,8 @@ CardColumns = Annotated[list[CardColumn], Field(max_length=len(get_args(CardColu
 
 
 class GoalColumnsIO(BaseModel):
+    """The columns each goals table shows, in order. A column appears once in a list."""
+
     model_config = ConfigDict(extra="forbid")
 
     outcomes: OutcomeColumns = Field(
@@ -126,6 +128,13 @@ class GoalColumnsIO(BaseModel):
             "milestones_done",
         ]
     )
+
+    @field_validator("outcomes", "milestones", "cards")
+    @classmethod
+    def validate_no_duplicates(cls, columns: list[str]) -> list[str]:
+        if len(set(columns)) != len(columns):
+            raise PydanticCustomError("duplicate_columns", "اسم العمود لا يتكرر في القائمة")
+        return columns
 
 
 BreathPattern = Literal["calm", "focus", "sleep", "energize", "unwind", "prepare"]

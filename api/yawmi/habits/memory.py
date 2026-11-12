@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from yawmi.habits.store import (
     CardRef,
     Change,
+    Guard,
     KpiRef,
     MilestoneRef,
     Reminder,
@@ -63,11 +64,15 @@ class InMemoryHabitStore:
         self._add(habit.code, sorted(set(habit.reminders)))
         return True
 
-    async def modify(self, code: str, change: Change) -> StoredHabit | None:
+    async def modify(
+        self, code: str, change: Change, guard: Guard | None = None
+    ) -> StoredHabit | None:
         if code not in self.habits:
             return None
         current = self._active(code)
         stored = self._with_reminders(code)
+        if guard is not None:
+            guard(stored, any(log.habit_code == code for log in self.log_rows))
         habit = change(stored)
         self.habits[code] = replace(
             habit, code=code, system=stored.system, created_by=stored.created_by

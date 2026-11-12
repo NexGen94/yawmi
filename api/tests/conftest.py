@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 import pytest
+from goals_harness import goals_backend  # noqa: F401  (the fixture of the goals tests)
 
 # The server's "now" for event validation. Fixed so that tests which date events in November
 # 2026 do not depend on the day they run; a test that needs another "now" patches it again.

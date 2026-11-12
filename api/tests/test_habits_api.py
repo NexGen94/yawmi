@@ -32,7 +32,14 @@ from yawmi.auth.tokens import issue_access
 from yawmi.db.pool import create_pool, set_pool
 from yawmi.db.seed import load_habits, seed_habits
 from yawmi.habits.memory import InMemoryHabitStore, InMemoryMirrorReader
-from yawmi.habits.store import ALL_SQL, CardRef, KpiRef, MilestoneRef, StoredHabit
+from yawmi.habits.store import (
+    ALL_SQL,
+    AsyncpgHabitStore,
+    CardRef,
+    KpiRef,
+    MilestoneRef,
+    StoredHabit,
+)
 from yawmi.main import create_app
 from yawmi.settings import Settings
 from yawmi.today.reader import LogRow
@@ -1500,3 +1507,82 @@ async def test_books_done_kpi_target_m5(
     )
     assert resp_zero.status_code == 200, resp_zero.text
     assert resp_zero.json()["target_per_period"] == 6.0
+
+
+POLARITY_LOCKED = "لا يمكن تغيير نوع العادة بعد تسجيلها"
+
+
+async def test_the_polarity_can_change_until_the_habit_has_a_log(
+    client: httpx.AsyncClient,
+) -> None:
+    habit = await create(client, title_ar=TITLE + "عادة نوعها يتغير")
+    url = f"/v1/habits/{habit['code']}"
+    resp = await client.patch(url, json={"polarity": "abstain"}, headers=auth())
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["polarity"] == "abstain"
+    resp = await client.patch(url, json={"polarity": "build"}, headers=auth())
+    assert resp.status_code == 200 and resp.json()["polarity"] == "build"
+
+
+@pytest.mark.parametrize(("start", "other"), [("build", "abstain"), ("abstain", "build")])
+@pytest.mark.parametrize("status", ["done", "skip", "vacation"])
+async def test_the_polarity_is_locked_once_the_habit_has_any_log(
+    client: httpx.AsyncClient, backend: Backend, start: str, other: str, status: str
+) -> None:
+    habit = await create(client, title_ar=TITLE + "عادة مسجَّلة", polarity=start)
+    await backend.add_log(habit["code"], date(2026, 11, 9), status, None)
+    url = f"/v1/habits/{habit['code']}"
+
+    resp = await client.patch(url, json={"polarity": other}, headers=auth())
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == POLARITY_LOCKED
+    assert resp.json()["errors"] == [{"loc": ["body", "polarity"], "type": "polarity_locked"}]
+    assert (await client.get("/v1/habits", headers=auth())).status_code == 200
+    stored = next(
+        h
+        for h in (await client.get("/v1/habits", headers=auth())).json()
+        if h["code"] == habit["code"]
+    )
+    assert stored["polarity"] == start  # nothing was written
+
+    # the same value is not a change, and the other fields stay editable
+    same = await client.patch(
+        url, json={"polarity": start, "title_ar": TITLE + "عنوان جديد"}, headers=auth()
+    )
+    assert same.status_code == 200, same.text
+    assert same.json()["title_ar"] == TITLE + "عنوان جديد"
+
+
+async def test_a_polarity_change_together_with_other_fields_changes_nothing_when_refused(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    habit = await create(client, title_ar=TITLE + "عادة أصلية")
+    await backend.add_log(habit["code"], date(2026, 11, 9), "done", None)
+    resp = await client.patch(
+        f"/v1/habits/{habit['code']}",
+        json={"polarity": "abstain", "title_ar": TITLE + "عنوان لا يُحفظ"},
+        headers=auth(),
+    )
+    assert resp.status_code == 422
+    listed = {h["code"]: h for h in (await client.get("/v1/habits", headers=auth())).json()}
+    assert listed[habit["code"]]["title_ar"] == TITLE + "عادة أصلية"
+
+
+async def test_the_polarity_lock_is_checked_inside_the_edit_not_before_it(
+    client: httpx.AsyncClient, backend: Backend, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A log that lands after any earlier check still locks the polarity: the check runs after
+    the habit row is locked, so it cannot rely on a read made before the edit."""
+    habit = await create(client, title_ar=TITLE + "عادة سباق")
+    await backend.add_log(habit["code"], date(2026, 11, 9), "done", None)
+
+    async def stale_logs(self: object, code: str, first: date, last: date) -> list[LogRow]:
+        return []  # what a check made just before the log was written would have seen
+
+    monkeypatch.setattr(AsyncpgHabitStore, "logs", stale_logs)
+    monkeypatch.setattr(InMemoryHabitStore, "logs", stale_logs)
+    resp = await client.patch(
+        f"/v1/habits/{habit['code']}", json={"polarity": "abstain"}, headers=auth()
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == POLARITY_LOCKED

@@ -62,7 +62,11 @@ def test_required_and_pending_paths_are_the_final_list(exporter: ModuleType) -> 
         "/v1/habit-logs",
         "/v1/journal",
         "/v1/mood",
+        "/v1/goals",
         "/v1/goals/{ref}/to-habit",
+        "/v1/goals/{ref}/pace",
+        "/v1/goals/{ref}/tasks",
+        "/v1/goal-tasks/{task_id}",
         "/v1/push/subscribe",
         "/v1/push/vapid-public-key",
         "/v1/settings",
@@ -70,7 +74,7 @@ def test_required_and_pending_paths_are_the_final_list(exporter: ModuleType) -> 
         "/v1/indicators/{subject_kind}/{subject_ref}",
     }
     required, pending = exporter.REQUIRED_PATHS, exporter.PENDING_PATHS
-    assert len(final) == 25
+    assert len(final) == 29
     assert set(required).isdisjoint(pending)
     assert len(set(required)) == len(required) and len(set(pending)) == len(pending)
     assert set(required) | set(pending) == final
@@ -228,3 +232,24 @@ def test_first_screen_contract_requires_all_fields_server_sends(exporter: Module
 
     card_habit = schemas["CardHabit"]
     assert "total_done" in card_habit.get("required", []), "total_done not in CardHabit.required"
+
+
+def test_goal_schemas_and_methods_are_in_the_contract(exporter: ModuleType) -> None:
+    spec = exporter.build_spec()
+    schemas = spec["components"]["schemas"]
+    for name in ("GoalsOut", "GoalOutcome", "MilestoneFull", "CardFull", "GoalIndicatorValue"):
+        assert name in schemas, name
+    for name in ("PaceOut", "GoalTaskIn", "GoalTaskPatch", "GoalTaskOut", "GoalTaskList"):
+        assert name in schemas, name
+    paths = spec["paths"]
+    assert set(paths["/v1/goals"]) == {"get"}
+    assert set(paths["/v1/goals/{ref}/tasks"]) == {"get", "post"}
+    assert set(paths["/v1/goal-tasks/{task_id}"]) == {"patch"}  # no deletion
+    assert set(paths["/v1/goals/{ref}/pace"]) == {"get"}
+    assert set(schemas["GoalTaskPatch"]["properties"]) == {
+        "title",
+        "due_day",
+        "done",
+        "archived",
+        "position",
+    }

@@ -190,6 +190,136 @@
         "title": "BreathPrefsIO",
         "type": "object"
       },
+      "CardFull": {
+        "properties": {
+          "habits": {
+            "items": {
+              "$ref": "#/components/schemas/CardHabit"
+            },
+            "title": "Habits",
+            "type": "array"
+          },
+          "habits_adherence_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Habits Adherence Avg"
+          },
+          "indicator": {
+            "$ref": "#/components/schemas/GoalIndicatorValue"
+          },
+          "milestones_done": {
+            "title": "Milestones Done",
+            "type": "integer"
+          },
+          "milestones_total": {
+            "title": "Milestones Total",
+            "type": "integer"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "من خاصية «الخطوة التالية» في Notion",
+            "title": "Next Step"
+          },
+          "notion_edited_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notion Edited At"
+          },
+          "outcome_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Outcome Codes",
+            "type": "array"
+          },
+          "page_id": {
+            "title": "Page Id",
+            "type": "string"
+          },
+          "pending": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending",
+            "type": "array"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "من خاصية «المستهدف» في Notion إن كانت تاريخاً",
+            "title": "Target Date"
+          },
+          "tasks_done": {
+            "title": "Tasks Done",
+            "type": "integer"
+          },
+          "tasks_total": {
+            "title": "Tasks Total",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "page_id",
+          "title",
+          "status",
+          "outcome_codes",
+          "target_date",
+          "next_step",
+          "notion_edited_at",
+          "habits",
+          "habits_adherence_avg",
+          "milestones_total",
+          "milestones_done",
+          "tasks_total",
+          "tasks_done",
+          "indicator",
+          "pending"
+        ],
+        "title": "CardFull",
+        "type": "object"
+      },
       "CardHabit": {
         "properties": {
           "adherence": {
@@ -338,6 +468,58 @@
           "text"
         ],
         "title": "ClientSource",
+        "type": "object"
+      },
+      "CycleOut": {
+        "properties": {
+          "cycle_no": {
+            "title": "Cycle No",
+            "type": "integer"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "gate": {
+            "title": "Gate",
+            "type": "string"
+          },
+          "review_end": {
+            "format": "date",
+            "title": "Review End",
+            "type": "string"
+          },
+          "review_start": {
+            "format": "date",
+            "title": "Review Start",
+            "type": "string"
+          },
+          "stage_no": {
+            "title": "Stage No",
+            "type": "integer"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "theme": {
+            "title": "Theme",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cycle_no",
+          "stage_no",
+          "start_date",
+          "end_date",
+          "review_start",
+          "review_end",
+          "theme",
+          "gate"
+        ],
+        "title": "CycleOut",
         "type": "object"
       },
       "DailyMetricsIn": {
@@ -1222,6 +1404,7 @@
       },
       "GoalColumnsIO": {
         "additionalProperties": false,
+        "description": "The columns each goals table shows, in order. A column appears once in a list.",
         "properties": {
           "cards": {
             "items": {
@@ -1298,6 +1481,322 @@
         "title": "GoalColumnsIO",
         "type": "object"
       },
+      "GoalIndicatorValue": {
+        "description": "The indicator of an outcome or a card, computed (design §9.3).\n\n`value` and `target` are the numbers the display shows («2 من 5»): done and total for\nmilestones and tasks (a stored target replaces the total), a percentage of 100 for linked\nhabits. `completion` is 0 to 1. Both are `null` when there is nothing to measure yet.",
+        "properties": {
+          "completion": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion"
+          },
+          "custom": {
+            "default": false,
+            "description": "مخزَّن بتخصيص من المستخدم لا افتراضي",
+            "title": "Custom",
+            "type": "boolean"
+          },
+          "display": {
+            "default": "ring",
+            "enum": [
+              "ring",
+              "bar",
+              "number",
+              "sparkline"
+            ],
+            "title": "Display",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "milestones",
+              "linked_habits",
+              "tasks"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "source",
+          "value",
+          "target",
+          "completion"
+        ],
+        "title": "GoalIndicatorValue",
+        "type": "object"
+      },
+      "GoalOutcome": {
+        "properties": {
+          "acceptance": {
+            "title": "Acceptance",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "completion": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "المحطات المنجزة ÷ كلها، أو null بلا محطات",
+            "title": "Completion"
+          },
+          "habits": {
+            "items": {
+              "$ref": "#/components/schemas/CardHabit"
+            },
+            "title": "Habits",
+            "type": "array"
+          },
+          "indicator": {
+            "$ref": "#/components/schemas/GoalIndicatorValue"
+          },
+          "kpis": {
+            "items": {
+              "$ref": "#/components/schemas/KpiOut"
+            },
+            "title": "Kpis",
+            "type": "array"
+          },
+          "milestones_done": {
+            "title": "Milestones Done",
+            "type": "integer"
+          },
+          "milestones_due": {
+            "description": "محطاتها التي حان موعدها حتى اليوم",
+            "title": "Milestones Due",
+            "type": "integer"
+          },
+          "milestones_total": {
+            "title": "Milestones Total",
+            "type": "integer"
+          },
+          "next_milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MilestoneOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target_date": {
+            "format": "date",
+            "title": "Target Date",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "track": {
+            "title": "Track",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "title",
+          "track",
+          "target_date",
+          "acceptance",
+          "status",
+          "milestones_total",
+          "milestones_done",
+          "milestones_due",
+          "completion",
+          "next_milestone",
+          "habits",
+          "indicator",
+          "kpis"
+        ],
+        "title": "GoalOutcome",
+        "type": "object"
+      },
+      "GoalTaskIn": {
+        "additionalProperties": false,
+        "description": "A task of a goal: the user's own small list, not a Notion page (design §13.1, ruling 2).",
+        "properties": {
+          "due_day": {
+            "anyOf": [
+              {
+                "description": "من 2000-01-01 إلى 2099-12-31",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Day"
+          },
+          "title": {
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "GoalTaskIn",
+        "type": "object"
+      },
+      "GoalTaskList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GoalTaskOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "GoalTaskList",
+        "type": "object"
+      },
+      "GoalTaskOut": {
+        "properties": {
+          "archived": {
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "done_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
+          "due_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Day"
+          },
+          "goal_ref": {
+            "title": "Goal Ref",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "goal_ref",
+          "title",
+          "due_day",
+          "done_at",
+          "position",
+          "archived"
+        ],
+        "title": "GoalTaskOut",
+        "type": "object"
+      },
+      "GoalTaskPatch": {
+        "additionalProperties": false,
+        "description": "The fields to change, at least one. `due_day: null` clears the due day. No deletion:\n`archived` closes a task, and an archived task leaves the totals.",
+        "properties": {
+          "archived": {
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "due_day": {
+            "anyOf": [
+              {
+                "description": "من 2000-01-01 إلى 2099-12-31",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Day"
+          },
+          "position": {
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "title": {
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "GoalTaskPatch",
+        "type": "object"
+      },
       "GoalTaskSetPayload": {
         "additionalProperties": false,
         "properties": {
@@ -1316,6 +1815,65 @@
           "done"
         ],
         "title": "GoalTaskSetPayload",
+        "type": "object"
+      },
+      "GoalsOut": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/CardFull"
+            },
+            "title": "Cards",
+            "type": "array"
+          },
+          "cycles": {
+            "items": {
+              "$ref": "#/components/schemas/CycleOut"
+            },
+            "title": "Cycles",
+            "type": "array"
+          },
+          "milestones": {
+            "items": {
+              "$ref": "#/components/schemas/MilestoneFull"
+            },
+            "title": "Milestones",
+            "type": "array"
+          },
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/GoalOutcome"
+            },
+            "title": "Outcomes",
+            "type": "array"
+          },
+          "pending_edits": {
+            "title": "Pending Edits",
+            "type": "integer"
+          },
+          "synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "آخر مزامنة لمرآة Notion، أو null إن كانت فارغة",
+            "title": "Synced At"
+          }
+        },
+        "required": [
+          "outcomes",
+          "cycles",
+          "milestones",
+          "cards",
+          "synced_at",
+          "pending_edits"
+        ],
+        "title": "GoalsOut",
         "type": "object"
       },
       "HabitDraft": {
@@ -2765,6 +3323,81 @@
         "title": "JournalSavedPayload",
         "type": "object"
       },
+      "KpiLatest": {
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "day",
+          "value"
+        ],
+        "title": "KpiLatest",
+        "type": "object"
+      },
+      "KpiOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "frequency": {
+            "title": "Frequency",
+            "type": "string"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KpiLatest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "unit",
+          "direction",
+          "target",
+          "frequency",
+          "latest"
+        ],
+        "title": "KpiOut",
+        "type": "object"
+      },
       "Live": {
         "properties": {
           "ok": {
@@ -2776,6 +3409,133 @@
           "ok"
         ],
         "title": "Live",
+        "type": "object"
+      },
+      "MilestoneFull": {
+        "properties": {
+          "card_page_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Card Page Ids",
+            "type": "array"
+          },
+          "criterion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Criterion"
+          },
+          "cycle_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle No"
+          },
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "notion_edited_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notion Edited At"
+          },
+          "outcome_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Code"
+          },
+          "overdue_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "أيام التأخر عن الموعد لمحطة مفتوحة فات موعدها",
+            "title": "Overdue Days"
+          },
+          "page_id": {
+            "title": "Page Id",
+            "type": "string"
+          },
+          "pending": {
+            "description": "التعديلات المعلّقة (فارغة في هذا الإصدار)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "page_id",
+          "title",
+          "outcome_code",
+          "card_page_ids",
+          "cycle_no",
+          "due_date",
+          "done",
+          "criterion",
+          "evidence",
+          "notion_edited_at",
+          "overdue_days",
+          "pending"
+        ],
+        "title": "MilestoneFull",
         "type": "object"
       },
       "MilestoneOut": {
@@ -3130,6 +3890,149 @@
           "cards"
         ],
         "title": "OverviewOut",
+        "type": "object"
+      },
+      "PaceOut": {
+        "description": "The pace line of an outcome (design §9.4); `days_left` is negative after the due day.",
+        "properties": {
+          "basis": {
+            "enum": [
+              "kpi",
+              "milestones"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "current_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Value"
+          },
+          "days_left": {
+            "title": "Days Left",
+            "type": "integer"
+          },
+          "due_day": {
+            "format": "date",
+            "title": "Due Day",
+            "type": "string"
+          },
+          "expected_today": {
+            "title": "Expected Today",
+            "type": "number"
+          },
+          "kpi_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kpi Code"
+          },
+          "on_pace": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Pace"
+          },
+          "projected_end": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projected End"
+          },
+          "readings": {
+            "items": {
+              "$ref": "#/components/schemas/PaceReading"
+            },
+            "title": "Readings",
+            "type": "array"
+          },
+          "start_day": {
+            "format": "date",
+            "title": "Start Day",
+            "type": "string"
+          },
+          "start_value": {
+            "title": "Start Value",
+            "type": "number"
+          },
+          "target_value": {
+            "title": "Target Value",
+            "type": "number"
+          },
+          "today": {
+            "format": "date",
+            "title": "Today",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "basis",
+          "kpi_code",
+          "unit",
+          "start_day",
+          "start_value",
+          "due_day",
+          "target_value",
+          "today",
+          "current_value",
+          "expected_today",
+          "projected_end",
+          "on_pace",
+          "days_left",
+          "readings"
+        ],
+        "title": "PaceOut",
+        "type": "object"
+      },
+      "PaceReading": {
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "day",
+          "value"
+        ],
+        "title": "PaceReading",
         "type": "object"
       },
       "PairRequest": {
@@ -4579,6 +5482,412 @@
         ]
       }
     },
+    "/v1/goal-tasks/{task_id}": {
+      "patch": {
+        "description": "حقل واحد على الأقل. `done` يكتب `done_at` ويحسم أمام أحداث `goal_task_set` الأقدم منه. `due_day: null` يمسح الموعد. لا حذف: الإغلاق بـ`archived`، ويخرج بها من المجاميع.",
+        "operationId": "patch_task_v1_goal_tasks__task_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalTaskPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalTaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "المهمة غير موجودة"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "تعديل مهمة أو إنجازها أو أرشفتها",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/v1/goals": {
+      "get": {
+        "description": "قراءة كاملة من مرآة Notion مع العادات والمهام والمؤشرات. مرآة فارغة (قبل نشر المزامنة) تعطي قوائم فارغة و`synced_at: null`. `completion` المخرج المحطات المنجزة ÷ كلها كما في Notion، ولا تغيّرها العادات. `target_date` و`next_step` للبطاقة من خاصيتين مسمّاتين فقط، ولا يُقرأ غيرهما من خصائصها.",
+        "operationId": "get_goals_v1_goals_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "الأهداف كاملة: المخرجات والدورات والمحطات والبطاقات",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/v1/goals/{ref}/pace": {
+      "get": {
+        "description": "الأساس `kpi` لمخرج له مؤشر تراكمي (مجموع يُبلغ بالموعد) بهدف واحد، و`kpi` يختار واحداً منها؛ والمؤشر السنوي `books_done` يُقاس على السنة الميلادية الحالية. العدّ الأسبوعي والمتوسط والمستوى لا تكون أساساً. وغير ذلك `milestones` (المنجزة من كلها، من 2026-10-31)؛ ولا محطات: `current_value` و`on_pace` و`projected_end` بـ`null`. `days_left` سالب بعد الموعد.",
+        "operationId": "get_pace_v1_goals__ref__pace_get",
+        "parameters": [
+          {
+            "description": "رمز المخرج",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "description": "رمز المخرج",
+              "maxLength": 64,
+              "title": "Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "رمز مؤشر المخرج",
+            "in": "query",
+            "name": "kpi",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "رمز مؤشر المخرج",
+              "title": "Kpi"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "لا مخرج بهذا الرمز"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "خط وتيرة مخرج",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/v1/goals/{ref}/tasks": {
+      "get": {
+        "description": "غير المؤرشفة بترتيب الموضع. `ref` رمز مخرج أو معرّف بطاقة أو محطة، وإلا 404.",
+        "operationId": "list_tasks_v1_goals__ref__tasks_get",
+        "parameters": [
+          {
+            "description": "رمز مخرج أو معرّف بطاقة أو محطة",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "description": "رمز مخرج أو معرّف بطاقة أو محطة",
+              "maxLength": 128,
+              "title": "Ref",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalTaskList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "لا مخرج ولا بطاقة ولا محطة بهذا المعرّف"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "مهام هدف",
+        "tags": [
+          "goals"
+        ]
+      },
+      "post": {
+        "description": "مهمة مفتوحة بعد آخر مهام الهدف. لا تُكتب في Notion.",
+        "operationId": "create_task_v1_goals__ref__tasks_post",
+        "parameters": [
+          {
+            "description": "رمز مخرج أو معرّف بطاقة أو محطة",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "description": "رمز مخرج أو معرّف بطاقة أو محطة",
+              "maxLength": 128,
+              "title": "Ref",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalTaskIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalTaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "لا مخرج ولا بطاقة ولا محطة بهذا المعرّف"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "إضافة مهمة إلى هدف",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
     "/v1/goals/{ref}/to-habit": {
       "post": {
         "description": "`ref` معرّف صفحة محطة أو بطاقة في المرآة. مع مؤشر تراكمي (مجموع يُبلغ بالموعد) وموعد: عادة عدّ هدفها في الفترة = ⌈(الهدف − آخر قراءة) ÷ عدد الفترات حتى الموعد⌉. ومع مؤشر عدّ في الفترة (صاعد بهدف واحد، يومي أو أسبوعي أو شهري، وليس نسبة ولا متوسطاً ولا مستوى ولا مالاً): عادة هدفها هدف المؤشر نفسه إن طابقت الفترة تواتره، مدةً بالدقائق لمؤشر بالدقائق وعدّاً لغيره. وغير ذلك (نازل، نطاق، نسبة، متوسط، مستوى، مال، أو فترة لا تطابق): عادة يومية بنعم أو لا هدفها 1. لا تغيّر نسبة إنجاز Notion.",
@@ -4898,7 +6207,7 @@
     },
     "/v1/habits/{code}": {
       "patch": {
-        "description": "تعديل جزئي: تتغير الحقول المرسلة وحدها، و`null` يفرغ الحقل الذي يقبل الفراغ. `reminders` يستبدل التذكيرات كلها. الأرشفة `active = false`، ولا حذف. العادة النظامية يُعدَّل فيها `anchor` و`reminders` فقط (409 لغيرهما إن اختلفت قيمته). التذكير الباقي بوقته وقناعه يحتفظ بصفّه، والمحذوف يُعطَّل، والجديد يُضاف.",
+        "description": "تعديل جزئي: تتغير الحقول المرسلة وحدها، و`null` يفرغ الحقل الذي يقبل الفراغ. `reminders` يستبدل التذكيرات كلها. الأرشفة `active = false`، ولا حذف. العادة النظامية يُعدَّل فيها `anchor` و`reminders` فقط (409 لغيرهما إن اختلفت قيمته). التذكير الباقي بوقته وقناعه يحتفظ بصفّه، والمحذوف يُعطَّل، والجديد يُضاف. و`polarity` لا يتغيّر بعد أول سجل للعادة، أياً كانت حالته: 422 بالرسالة «لا يمكن تغيير نوع العادة بعد تسجيلها».",
         "operationId": "patch_habit_v1_habits__code__patch",
         "parameters": [
           {

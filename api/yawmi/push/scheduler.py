@@ -35,6 +35,10 @@ from zoneinfo import ZoneInfo
 from yawmi.domain.days import is_valid_tz
 from yawmi.domain.habits import HabitLog, HabitSpec, period_progress
 from yawmi.domain.periods import WeekStart, is_scheduled, period_bounds
+from yawmi.goals.reader import AsyncpgGoalsReader
+from yawmi.goals.service import GoalSources
+from yawmi.goals.tasks_store import AsyncpgGoalTaskStore
+from yawmi.indicators.store import AsyncpgIndicatorStore
 from yawmi.journal.store import AsyncpgJournalReader
 from yawmi.prefs.store import AsyncpgPrefsStore
 from yawmi.push import notices
@@ -42,7 +46,7 @@ from yawmi.push.notices import NoticeContext, due_days
 from yawmi.push.sender import WebPushSender, default_check
 from yawmi.push.store import AsyncpgPushStore, PushStore, Reminder, Subscription
 from yawmi.today.assemble import habit_spec
-from yawmi.today.reader import LogRow
+from yawmi.today.reader import AsyncpgTodayReader, LogRow
 
 log = logging.getLogger("yawmi.push")
 
@@ -172,6 +176,7 @@ async def tick(
     week_start: WeekStart,
     prefs: Any = None,
     journal: Any = None,
+    goal_sources: GoalSources | None = None,
 ) -> int:
     """Send the reminders due at `now`; returns how many messages the push services accepted."""
     if now.tzinfo is None or now.utcoffset() is None:
@@ -189,7 +194,13 @@ async def tick(
                 )
 
     if prefs is not None:
-        ctx = NoticeContext(local=local, prefs=prefs, journal=journal, week_start=week_start)
+        ctx = NoticeContext(
+            local=local,
+            prefs=prefs,
+            journal=journal,
+            week_start=week_start,
+            goal_sources=goal_sources,
+        )
         for provider in notices.PROVIDERS:
             try:
                 found = await provider(ctx, now)
@@ -325,6 +336,12 @@ def start_reminders(pool: Any, config: Any) -> ReminderLoop:
 
     prefs = AsyncpgPrefsStore(pool)
     journal = AsyncpgJournalReader(pool)
+    goal_sources = GoalSources(
+        goals=AsyncpgGoalsReader(pool),
+        today=AsyncpgTodayReader(pool),
+        tasks=AsyncpgGoalTaskStore(pool),
+        indicators=AsyncpgIndicatorStore(pool),
+    )
 
     async def tick_once(now: datetime) -> int:
         # the module-level `tick` is looked up on every call, so tests can patch it
@@ -336,6 +353,7 @@ def start_reminders(pool: Any, config: Any) -> ReminderLoop:
             week_start=config.week_start,
             prefs=prefs,
             journal=journal,
+            goal_sources=goal_sources,
         )
 
     loop = ReminderLoop(tick_once, on_stop=sender.close)
