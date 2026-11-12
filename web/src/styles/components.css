@@ -484,13 +484,21 @@
 }
 
 .field-hint,
+.field-count,
 .field-error {
   margin: 0;
   font-size: var(--fs-note);
 }
 
-.field-hint {
+.field-hint,
+.field-count {
   color: var(--c-ink-2);
+}
+
+/* «n / max» under a field near its limit: at the end of the line, in digits that do not jump. */
+.field-count {
+  align-self: flex-end;
+  font-variant-numeric: tabular-nums;
 }
 
 .field-error {
