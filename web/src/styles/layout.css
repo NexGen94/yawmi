@@ -10,7 +10,8 @@
 
 /* Programmatic focus targets (the page heading, <main>) take focus without a ring: they are not
    controls, and the move is announced by the screen reader. */
-[tabindex='-1']:focus {
+#main:focus,
+#main h1:focus {
   outline: none;
 }
 
@@ -55,9 +56,7 @@
   block-size: 100dvh;
   padding-block: var(--sp-6) var(--sp-4);
   padding-inline: var(--sp-4);
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--c-ink-2) transparent;
+  overflow: hidden;
   background: var(--c-ink);
   color: var(--c-bg);
 }
@@ -80,6 +79,12 @@
   flex: 1;
   flex-direction: column;
   gap: var(--sp-5);
+  min-block-size: 0;
+  padding: var(--sp-1);
+  margin: calc(-1 * var(--sp-1));
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-ink-2) transparent;
 }
 
 .nav-group-label {
@@ -267,6 +272,7 @@
   display: inline-flex;
   align-items: center;
   min-block-size: var(--hit);
+  padding-inline: var(--sp-2);
   color: var(--c-ink);
   font-weight: 600;
   text-underline-offset: 4px;
@@ -275,6 +281,31 @@
 .not-found-link:focus-visible {
   outline: 2px solid transparent;
   border-radius: var(--sp-1);
+  box-shadow: var(--focus);
+}
+
+.retry-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--hit);
+  padding-inline: var(--sp-5);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--c-ink);
+  color: var(--c-bg);
+  font: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.retry-button:hover {
+  background: var(--c-ink-2);
+}
+
+.retry-button:focus-visible {
+  outline: 2px solid transparent;
   box-shadow: var(--focus);
 }
 
@@ -294,6 +325,13 @@
   background: var(--c-ink);
   color: var(--c-bg);
   box-shadow: 0 12px 28px -12px var(--c-ink);
+}
+
+.update-prompt:empty {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
 }
 
 .update-text {
@@ -381,6 +419,7 @@
     display: flex;
     gap: var(--sp-5);
     max-block-size: calc(100dvh - var(--hit) - var(--sp-2));
+    margin: 0;
     padding-block: var(--sp-3) var(--sp-5);
     padding-inline: var(--sp-4);
     overflow-y: auto;

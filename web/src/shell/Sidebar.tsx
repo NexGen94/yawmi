@@ -23,7 +23,9 @@ const NAV_ID = 'nav-main';
 // (layout.css) it is a top bar and the same <nav> opens below it as a drawer.
 export function Sidebar(props: { path: string }) {
   const [open, setOpen] = useState(false);
+  const sidebar = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+  const nav = useRef<HTMLElement>(null);
 
   // A new page closes the drawer.
   useEffect(() => setOpen(false), [props.path]);
@@ -31,16 +33,48 @@ export function Sidebar(props: { path: string }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent): void => {
-      if (event.code !== 'Escape' && event.key !== 'Escape') return;
+      if (event.code === 'Escape' || event.key === 'Escape') {
+        setOpen(false);
+        button.current?.focus();
+        return;
+      }
+      if (event.code !== 'Tab' && event.key !== 'Tab') return;
+      const first = button.current;
+      const links = nav.current?.querySelectorAll<HTMLElement>('a[href]');
+      const last = links?.[links.length - 1];
+      if (!first || !last) return;
+      const active = document.activeElement;
+      if (event.shiftKey) {
+        if (active === first || !sidebar.current?.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !sidebar.current?.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    const onPointerDown = (event: PointerEvent): void => {
+      if (sidebar.current?.contains(event.target as Node)) return;
       setOpen(false);
       button.current?.focus();
     };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
   }, [open]);
 
+  const onNavLinkClick = (): void => {
+    if (!open) return;
+    setOpen(false);
+    button.current?.focus();
+  };
+
   return (
-    <div class="sidebar" data-open={open ? '' : undefined}>
+    <div ref={sidebar} class="sidebar" data-open={open ? '' : undefined}>
       <div class="sidebar-bar">
         <span class="brand">يومي</span>
         <button
@@ -57,7 +91,7 @@ export function Sidebar(props: { path: string }) {
           </svg>
         </button>
       </div>
-      <nav id={NAV_ID} class="sidebar-nav" aria-label="التنقل الرئيسي">
+      <nav ref={nav} id={NAV_ID} class="sidebar-nav" aria-label="التنقل الرئيسي">
         {NAV.map((group, g) => (
           <div class="nav-group" key={group.label}>
             <p class="nav-group-label" id={`nav-group-${g}`}>
@@ -70,6 +104,7 @@ export function Sidebar(props: { path: string }) {
                     class="nav-link"
                     href={item.href}
                     aria-current={isActive(item.href, props.path) ? 'page' : undefined}
+                    onClick={onNavLinkClick}
                   >
                     <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                       <path d={ICONS[item.href]} />

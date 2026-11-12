@@ -17,10 +17,13 @@ const GO_TO: Readonly<Record<string, string>> = {
 /** How long after G the second key still counts, in milliseconds. */
 const SEQUENCE_MS = 1500;
 
-/** True when the key press belongs to text entry: an input, textarea, select or editable element. */
+const FIELD_SELECTOR = 'input, textarea, select, [role="textbox"], [role="combobox"], [role="searchbox"]';
+
+/** True when the key press belongs to text entry: an input, textarea, select, ARIA text/combo/search box, or editable element. */
 function inField(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
-  if (target.closest('input, textarea, select')) return true;
+  if (target.closest(FIELD_SELECTOR)) return true;
+  if (target instanceof HTMLElement && target.isContentEditable) return true;
   const editable = target.closest('[contenteditable]');
   return editable !== null && editable.getAttribute('contenteditable') !== 'false';
 }
@@ -30,7 +33,7 @@ export function installShortcuts(): () => void {
   let gAt = -Infinity;
 
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.defaultPrevented || event.isComposing) return;
+    if (event.defaultPrevented || event.isComposing || event.repeat) return;
     const { code } = event;
 
     if (code === 'KeyK' && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
@@ -40,7 +43,10 @@ export function installShortcuts(): () => void {
       return;
     }
 
-    if (event.ctrlKey || event.metaKey || event.altKey || inField(event.target)) return;
+    if (event.ctrlKey || event.metaKey || event.altKey || inField(event.target)) {
+      gAt = -Infinity;
+      return;
+    }
 
     if (code === 'Slash' && !event.shiftKey) {
       event.preventDefault();
@@ -49,7 +55,10 @@ export function installShortcuts(): () => void {
       return;
     }
 
-    if (event.shiftKey) return;
+    if (event.shiftKey) {
+      gAt = -Infinity;
+      return;
+    }
     const now = Date.now();
     const target = GO_TO[code];
     if (target !== undefined && now - gAt <= SEQUENCE_MS) {

@@ -42,8 +42,20 @@ export const NAV: readonly NavGroup[] = [
   },
 ];
 
-/** Whether the item owns the path: / only itself, every other item its sub-pages too. */
+const ROUTE_PATTERNS: Readonly<Record<string, RegExp>> = {
+  '/': /^\/$/,
+  '/day': /^\/day(?:\/(?:morning|evening))?$/,
+  '/habits': /^\/habits(?:\/[^/]+(?:\/edit)?)?$/,
+  '/goals': /^\/goals(?:\/[^/]+)?$/,
+  '/review': /^\/review$/,
+  '/focus': /^\/focus$/,
+  '/breath': /^\/breath$/,
+  '/ask': /^\/ask$/,
+  '/settings': /^\/settings$/,
+};
+
+/** Whether the item owns the path: only known routes under the item match; not-found paths match none. */
 export function isActive(href: string, path: string): boolean {
-  if (href === '/') return path === '/';
-  return path === href || path.startsWith(href + '/');
+  const clean = path.replace(/\/+$/g, '') || '/';
+  return ROUTE_PATTERNS[href]?.test(clean) ?? false;
 }

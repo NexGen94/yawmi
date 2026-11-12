@@ -1,10 +1,17 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
+import { LocationProvider, Route, Router } from 'preact-iso';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import * as appModule from '../src/app';
 import { App } from '../src/app';
 import { onAskOpen, openAsk } from '../src/ask/controller';
 import { installShortcuts } from '../src/lib/keys';
+import { navigate } from '../src/lib/navigate';
+import HomePage from '../src/pages/home';
+import { AppShell, focusPageHeading } from '../src/shell/AppShell';
 import { ConnectionStatus } from '../src/shell/ConnectionStatus';
 import { NAV } from '../src/shell/nav';
 import { UpdatePrompt } from '../src/shell/UpdatePrompt';
@@ -123,6 +130,76 @@ describe('the app shell', () => {
     expect(home.getAttribute('href')).toBe('/');
   });
 
+  it.each(['/nowhere', '/habits/a/b/c', '/day/noon', '/goals/O1/extra', '/settings/extra'])(
+    'marks no nav item current on not-found path %s (M-8)',
+    async (path) => {
+      go(path);
+      render(<App />);
+      expect(await screen.findByRole('heading', { level: 1, name: 'الصفحة غير موجودة' })).toBeTruthy();
+      const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' });
+      const current = within(nav)
+        .getAllByRole('link')
+        .filter((a) => a.getAttribute('aria-current') === 'page');
+      expect(current).toEqual([]);
+    },
+  );
+
+  it('sets document.title to "<page name> · يومي" on initial load and on navigation (M-1)', async () => {
+    render(<App />);
+    expect(document.title).toBe('الرئيسية · يومي');
+    fireEvent.click(screen.getByRole('link', { name: 'الأهداف' }));
+    await screen.findByRole('heading', { level: 1, name: 'الأهداف' });
+    await waitFor(() => expect(document.title).toBe('الأهداف · يومي'));
+  });
+
+  it('keeps focus on a control inside #main when moving from /day/morning to /day/evening (I-5)', async () => {
+    go('/day/morning');
+    render(<App />);
+    const heading = await screen.findByRole('heading', { level: 1, name: 'اليوم' });
+    const main = screen.getByRole('main');
+    const switcher = document.createElement('button');
+    switcher.type = 'button';
+    switcher.textContent = 'المساء';
+    main.appendChild(switcher);
+    switcher.focus();
+    expect(document.activeElement).toBe(switcher);
+
+    navigate('/day/evening');
+    await waitFor(() => expect(location.pathname).toBe('/day/evening'));
+    expect(document.activeElement).toBe(switcher);
+    expect(document.activeElement).not.toBe(heading);
+  });
+
+  it('shows an Arabic error state with a retry that reloads the app when a lazy page chunk rejects (I-2)', async () => {
+    const lazyPage = (appModule as { lazyPage?: (load: () => Promise<unknown>, onRetry?: () => void) => unknown }).lazyPage;
+    expect(typeof lazyPage).toBe('function');
+    let reloads = 0;
+    const BrokenPage = lazyPage!(() => Promise.reject(new Error('Failed to fetch dynamically imported module')), () => {
+      reloads += 1;
+    }) as typeof HomePage;
+
+    render(
+      <LocationProvider>
+        <AppShell>
+          <Router onRouteChange={focusPageHeading}>
+            <Route path="/" component={HomePage} />
+            <Route path="/habits" component={BrokenPage} />
+          </Router>
+        </AppShell>
+      </LocationProvider>,
+    );
+    expect(screen.getByRole('heading', { level: 1, name: 'الرئيسية' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('link', { name: 'العادات' }));
+    const errorHeading = await screen.findByRole('heading', { level: 1, name: 'تعذّر التحميل' });
+    expect(screen.queryByRole('heading', { level: 1, name: 'الرئيسية' })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(errorHeading));
+
+    const retry = within(screen.getByRole('main')).getByRole('button', { name: 'إعادة المحاولة' });
+    fireEvent.click(retry);
+    expect(reloads).toBe(1);
+  });
+
   it('has the «اسأل» button in the header; it calls openAsk once', () => {
     const ask = countAsk();
     render(<App />);
@@ -170,6 +247,55 @@ describe('the narrow-width menu (under 900px the sidebar is a top bar with a dra
     fireEvent.click(screen.getByRole('link', { name: 'التركيز' }));
     await screen.findByRole('heading', { level: 1, name: 'التركيز' });
     expect(button.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('holds focus inside the open drawer: Tab from the last link wraps to the menu button, Shift+Tab back (I-4)', () => {
+    render(<App />);
+    const button = screen.getByRole('button', { name: 'القائمة' });
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+
+    const lastLink = screen.getByRole('link', { name: 'الإعدادات' });
+    lastLink.focus();
+    expect(document.activeElement).toBe(lastLink);
+
+    const tabForward = new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab', bubbles: true, cancelable: true });
+    lastLink.dispatchEvent(tabForward);
+    expect(tabForward.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(button);
+
+    const tabBackward = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      code: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    button.dispatchEvent(tabBackward);
+    expect(tabBackward.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(lastLink);
+  });
+
+  it('closes on clicking the already-active nav link and returns focus to the menu button (I-4)', () => {
+    render(<App />);
+    const button = screen.getByRole('button', { name: 'القائمة' });
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+
+    fireEvent.click(screen.getByRole('link', { name: 'الرئيسية' }));
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('closes on a pointer press outside the sidebar and returns focus to the menu button (I-4)', () => {
+    render(<App />);
+    const button = screen.getByRole('button', { name: 'القائمة' });
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+
+    fireEvent.pointerDown(screen.getByRole('main'));
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(button);
   });
 });
 
@@ -233,10 +359,41 @@ describe('installShortcuts (lib/keys.ts)', () => {
       ),
     ],
     ['contenteditable', () => <div aria-label="حقل" contentEditable tabIndex={0} />],
-  ])('Slash inside a %s does not call openAsk', (_name, field) => {
+    ['role="textbox"', () => <div role="textbox" aria-label="حقل" tabIndex={0} />],
+    ['role="combobox"', () => <div role="combobox" aria-label="حقل" tabIndex={0} />],
+    ['role="searchbox"', () => <div role="searchbox" aria-label="حقل" tabIndex={0} />],
+  ])('Slash and G-sequence inside a %s are ignored as text entry (M-4)', (_name, field) => {
+    go('/settings');
     const { container } = render(field());
-    fireEvent.keyDown(container.firstElementChild as HTMLElement, { key: 'ظ', code: 'Slash' });
+    const el = container.firstElementChild as HTMLElement;
+    fireEvent.keyDown(el, { key: 'ظ', code: 'Slash' });
     expect(ask.count()).toBe(0);
+    fireEvent.keyDown(el, { key: 'ل', code: 'KeyG' });
+    fireEvent.keyDown(el, { key: 'ش', code: 'KeyA' });
+    expect(location.pathname).toBe('/settings');
+  });
+
+  it('ignores auto-repeat keydown events (M-2)', () => {
+    go('/settings');
+    fireEvent.keyDown(document.body, { ctrlKey: true, key: 'ن', code: 'KeyK', repeat: true });
+    fireEvent.keyDown(document.body, { key: 'ظ', code: 'Slash', repeat: true });
+    expect(ask.count()).toBe(0);
+    fireEvent.keyDown(document.body, { key: 'ل', code: 'KeyG', repeat: true });
+    fireEvent.keyDown(document.body, { key: 'ش', code: 'KeyA' });
+    expect(location.pathname).toBe('/settings');
+  });
+
+  it('a modified key cancels the G sequence (M-3)', () => {
+    go('/settings');
+    fireEvent.keyDown(document.body, { key: 'ل', code: 'KeyG' });
+    fireEvent.keyDown(document.body, { ctrlKey: true, key: 'ش', code: 'KeyA' });
+    fireEvent.keyDown(document.body, { key: 'ش', code: 'KeyA' });
+    expect(location.pathname).toBe('/settings');
+
+    fireEvent.keyDown(document.body, { key: 'ل', code: 'KeyG' });
+    fireEvent.keyDown(document.body, { shiftKey: true, key: 'ش', code: 'KeyA' });
+    fireEvent.keyDown(document.body, { key: 'ش', code: 'KeyA' });
+    expect(location.pathname).toBe('/settings');
   });
 
   it('matches by code: a Latin k on another key and a / on the keypad do nothing', () => {
@@ -309,9 +466,19 @@ describe('ConnectionStatus', () => {
 });
 
 describe('UpdatePrompt', () => {
-  it('renders nothing when needRefresh is false', () => {
-    const { container } = render(<UpdatePrompt needRefresh={false} onUpdate={() => undefined} />);
-    expect(container.innerHTML).toBe('');
+  it('mounts an empty polite status live region when needRefresh is false, then fills it when true (M-6)', () => {
+    let updates = 0;
+    const { rerender } = render(<UpdatePrompt needRefresh={false} onUpdate={() => (updates += 1)} />);
+    const status = screen.getByRole('status');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    expect(status.textContent).toBe('');
+    expect(within(status).queryByRole('button')).toBeNull();
+
+    rerender(<UpdatePrompt needRefresh onUpdate={() => (updates += 1)} />);
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status.textContent).toContain('نسخة جديدة متاحة');
+    fireEvent.click(within(status).getByRole('button', { name: 'تحديث الآن' }));
+    expect(updates).toBe(1);
   });
 
   it('says a new version is available and updates on «تحديث الآن»', () => {
@@ -321,5 +488,27 @@ describe('UpdatePrompt', () => {
     expect(status.textContent).toContain('نسخة جديدة متاحة');
     fireEvent.click(within(status).getByRole('button', { name: 'تحديث الآن' }));
     expect(updates).toBe(1);
+  });
+});
+
+describe('layout.css rules (I-3, M-9, M-10)', () => {
+  const css = readFileSync(join(resolve(import.meta.dirname, '..'), 'src/styles/layout.css'), 'utf8');
+
+  it('makes .sidebar-nav the scroll container so the sidebar foot never scrolls away (I-3)', () => {
+    const navBlock = /\.sidebar-nav\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(navBlock).toMatch(/min-block-size:\s*0/);
+    expect(navBlock).toMatch(/overflow-y:\s*auto/);
+    const sidebarBlock = /\.sidebar\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(sidebarBlock).not.toMatch(/overflow-y:\s*auto/);
+  });
+
+  it('gives .not-found-link inline padding so the focus ring does not touch the letters (M-9)', () => {
+    const linkBlock = /\.not-found-link\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(linkBlock).toMatch(/padding-inline:\s*var\(--sp-2\)/);
+  });
+
+  it('scopes the programmatic focus outline rule to #main and #main h1 (M-10)', () => {
+    expect(css).not.toMatch(/(?:^|\n)\s*\[tabindex=['"]-1['"]\]:focus\s*\{/);
+    expect(css).toMatch(/#main(?:\[tabindex=['"]-1['"]\])?:focus,\s*#main h1(?:\[tabindex=['"]-1['"]\])?:focus\s*\{\s*outline:\s*none;/);
   });
 });

@@ -6,12 +6,21 @@ import { installShortcuts } from '../lib/keys';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 
+/** Keeps document.title in sync with the current page heading: «<page name> · يومي». */
+export function syncPageTitle(): void {
+  const title = document.getElementById('main')?.querySelector('h1')?.textContent?.trim();
+  document.title = title ? `${title} · يومي` : 'يومي';
+}
+
 /** After a route change (the lazy page loaded and rendered), focus moves to the page heading so a
- *  screen reader starts on the new page. The main region takes focus when a page has no <h1>. */
+ *  screen reader starts on the new page, unless focus is still inside #main (same-page sub-routes). */
 export function focusPageHeading(): void {
+  syncPageTitle();
   const main = document.getElementById('main');
-  const heading = main?.querySelector<HTMLElement>('h1') ?? main;
-  if (!heading) return;
+  if (!main) return;
+  const active = document.activeElement;
+  if (active && active !== main && main.contains(active)) return;
+  const heading = main.querySelector<HTMLElement>('h1') ?? main;
   if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
   heading.focus({ preventScroll: true });
 }
@@ -20,6 +29,9 @@ export function AppShell(props: { children?: ComponentChildren }) {
   const { path } = useLocation();
 
   useEffect(() => installShortcuts(), []);
+  useEffect(() => {
+    syncPageTitle();
+  }, [path]);
 
   const skip = (event: MouseEvent): void => {
     event.preventDefault();
