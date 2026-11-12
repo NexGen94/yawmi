@@ -35,12 +35,14 @@
   z-index: 1;
   flex: none;
   inline-size: 44px;
+  block-size: var(--lanes-h);
   margin-inline-end: -44px;
   background: var(--c-surface);
 }
 
 .timeline-lane-code {
   position: absolute;
+  inset-block-start: var(--lane-y);
   inset-inline: 0;
   color: var(--c-ink-2);
   font-family: var(--font-code);
@@ -52,7 +54,7 @@
 
 .timeline-scroll .timeline {
   flex: none;
-  inline-size: 960px;
+  inline-size: 920px;
   max-inline-size: none;
   block-size: auto;
 }

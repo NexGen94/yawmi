@@ -18,8 +18,8 @@ export interface TimelineProps {
 
 // Geometry. The plan runs from 2026-10-31 (the right edge of the plot, where reading starts) to
 // 2031-12-31 (the left edge). A right gutter holds the outcome codes of the lanes.
-const W = 960;
-const GUTTER = 44;
+const W = 920;
+const GUTTER = 64;
 const PAD_END = 24;
 const PLOT = W - GUTTER - PAD_END;
 const AXIS_H = 56;
@@ -119,9 +119,9 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
     <div class="timeline-wrap">
       <section class="timeline-scroll" aria-label={`${label}، قابل للتمرير`} tabIndex={0}>
         {/* The outcome codes of the lanes stay at the start of the view while the chart scrolls. */}
-        <div class="timeline-lanes" aria-hidden="true" style={{ blockSize: height }}>
+        <div class="timeline-lanes" aria-hidden="true" style={{ '--lanes-h': `${height}px` }}>
           {codes.map((code, i) => (
-            <span key={code} class="timeline-lane-code" data-lane={code} style={{ insetBlockStart: TOP + i * LANE_H + LANE_H / 2 - 9 }}>
+            <span key={code} class="timeline-lane-code" data-lane={code} style={{ '--lane-y': `${TOP + i * LANE_H + LANE_H / 2 - 9}px` }}>
               {code === '' ? '—' : code}
             </span>
           ))}
