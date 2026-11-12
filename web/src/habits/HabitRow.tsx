@@ -24,6 +24,9 @@ const STEP: Record<HabitUnit, { step: number; noun: string }> = {
   '': { step: 1, noun: 'مرة' },
 };
 
+/** Keeps a phrase whole when a note wraps. */
+const NBSP = String.fromCharCode(0xa0);
+
 const PERIOD_WORD = { day: 'اليوم', week: 'هذا الأسبوع', month: 'هذا الشهر' } as const;
 
 function amount(n: number, unit: HabitUnit): string {
@@ -31,8 +34,6 @@ function amount(n: number, unit: HabitUnit): string {
   // «جلسة» and «جلستان» alone would read as a label, not a quantity.
   return n === 1 || n === 2 ? `${fmt.num(n)} ${text}` : text;
 }
-
-const oneDecimal = (n: number): string => fmt.num(Math.ceil(n * 10 - 1e-9) / 10, { maximumFractionDigits: 1 });
 
 /** The second line of a build habit: the status of today, then the progress of the period. */
 function buildNote(item: HabitTodayItem): string | undefined {
@@ -44,7 +45,8 @@ function buildNote(item: HabitTodayItem): string | undefined {
   const unit: HabitUnit = habit.kind === 'boolean' ? '' : habit.unit;
   parts.push(`${fmt.num(progress.done)} من ${amount(progress.target, unit)} ${PERIOD_WORD[habit.period]}`);
   if (habit.period !== 'day' && !progress.reached && progress.needPerDay > 0) {
-    parts.push(`المطلوب يومياً: ${oneDecimal(progress.needPerDay)}`);
+    // Non-breaking spaces keep the phrase whole when the note wraps.
+    parts.push(`المطلوب${NBSP}يومياً:${NBSP}${amount(Math.ceil(progress.needPerDay * 10 - 1e-9) / 10, unit).replace(' ', NBSP)}`);
   }
   return parts.join(' · ');
 }
@@ -116,7 +118,7 @@ export function HabitRow({ item, onTick, onValue, onSkip }: HabitRowProps) {
             aria-label={`+${fmt.num(quick.step)} ${quick.noun} · ${habit.title_ar}`}
             onClick={() => onValue(nextDayValue(item.valueToday, quick.step))}
           >
-            +{fmt.num(quick.step)}
+            <bdi dir="ltr">+{fmt.num(quick.step)}</bdi>
           </button>
         )}
         {skip}

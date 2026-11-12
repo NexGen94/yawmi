@@ -173,7 +173,7 @@ describe('home: the habit groups', () => {
     render(<HomePage />);
     const item = (await screen.findByText('إنجليزية أسبوعية')).closest('li') as HTMLElement;
     expect(within(item).getByText(/60 من 285 دقيقة هذا الأسبوع/)).toBeTruthy();
-    expect(within(item).getByText(/المطلوب يومياً/)).toBeTruthy();
+    expect(within(item).getByText(/المطلوب يومياً: 45 دقيقة/)).toBeTruthy();
   });
 
   it('shows the outcome code as a badge', async () => {

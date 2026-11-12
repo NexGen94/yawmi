@@ -263,12 +263,13 @@ p.summary-note {
     font-size: calc(var(--fs-num-lg) * 0.75);
   }
 
-  /* The actions drop under the title, in line with the text, so the title keeps its width. */
-  .habit-row {
+  /* A row with the «+» button drops its actions under the title, in line with the text, so the
+     title keeps its width. A row with «تخطي» alone keeps it on the same line. */
+  .habit-row:has(.habit-plus) {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .habit-row .habit-actions {
+  .habit-row:has(.habit-plus) .habit-actions {
     padding-inline-start: calc(var(--sp-2) + var(--hit) + var(--sp-3));
   }
 }
