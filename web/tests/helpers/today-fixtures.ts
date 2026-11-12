@@ -53,6 +53,7 @@ export function due(h: HabitOut): HabitDue {
     outcome: h.outcome,
     polarity: h.polarity,
     period: h.period,
+    polarity: h.polarity,
     period_progress: { completion: 0, done: 0, expected: 0, need_per_day: 0, on_track: true, reached: false, target: h.target_per_period },
     status_today: null,
     target_per_period: h.target_per_period,
