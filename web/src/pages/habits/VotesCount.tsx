@@ -1,4 +1,5 @@
 import { amount } from '../../habits/amount';
+import { IsoDay } from '../../habits/IsoDay';
 import type { HabitOut } from '../../habits/types';
 import { fmt } from '../../lib/format';
 import { Card } from '../../ui/Card';
@@ -15,7 +16,10 @@ export function VotesCount({ habit, total }: VotesCountProps) {
   const text = habit.kind === 'boolean' ? fmt.count(total, 'day') : amount(total, habit.unit);
   return (
     <Card title="إجمالي التكرارات" class="votes-count">
-      <p class="votes-total">{`${text} منذ ${habit.start_day}`}</p>
+      <p class="votes-total">
+        {`${text} منذ `}
+        <IsoDay day={habit.start_day} />
+      </p>
     </Card>
   );
 }

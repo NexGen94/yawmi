@@ -193,21 +193,25 @@ describe('habit detail: the 56 days', () => {
 describe('habit detail: the total', () => {
   it('writes 85 minutes since the start: «85 دقيقة منذ 2026-11-01»', async () => {
     await open();
-    expect(screen.getByText('85 دقيقة منذ 2026-11-01')).toBeTruthy();
+    expect(document.querySelector('.votes-total')?.textContent).toBe('85 دقيقة منذ 2026-11-01');
+    // the day is isolated and set left to right, or it would read 01-11-2026 after Arabic letters
+    expect(document.querySelector('.votes-total bdi')?.getAttribute('dir')).toBe('ltr');
   });
 
   it('counts the days of a yes/no habit', async () => {
     const walk = habit('walk', 'المشي', { start_day: '2026-11-01' });
     serve({ habits: [walk], progress: { walk: { ...PROGRESS, total_done: 12 } }, logs: [] });
     mount('walk');
-    expect(await screen.findByText('12 يوماً منذ 2026-11-01')).toBeTruthy();
+    await screen.findByText(/12 يوماً منذ/);
+    expect(document.querySelector('.votes-total')?.textContent).toBe('12 يوماً منذ 2026-11-01');
   });
 
   it('counts times for a count habit without a unit', async () => {
     const pages = habit('pushups', 'ضغط', { kind: 'count', unit: '', target_per_period: 20, start_day: '2026-11-01' });
     serve({ habits: [pages], progress: { pushups: { ...PROGRESS, total_done: 40 } }, logs: [] });
     mount('pushups');
-    expect(await screen.findByText('40 مرة منذ 2026-11-01')).toBeTruthy();
+    await screen.findByText(/40 مرة منذ/);
+    expect(document.querySelector('.votes-total')?.textContent).toBe('40 مرة منذ 2026-11-01');
   });
 });
 

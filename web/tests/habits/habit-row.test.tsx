@@ -166,6 +166,10 @@ describe('HabitRow: the identity sentence', () => {
   });
 });
 
+/** A text matcher on the whole text of an element, for text that has a nested `<bdi>` day. */
+const wholeText = (text: string) => (_: string, el: Element | null): boolean =>
+  el?.textContent === text && !Array.from(el.children).some((c) => c.textContent === text);
+
 describe('HabitRow: a habit that is not live today', () => {
   const staticItem = (state: HabitTodayItem['state'], over: Partial<HabitTodayItem['habit']> = {}, dueToday = false): HabitTodayItem => ({
     habit: habit('challenge', 'تحدٍّ', over),
@@ -185,7 +189,9 @@ describe('HabitRow: a habit that is not live today', () => {
 
   it('an upcoming habit says when it starts', () => {
     renderRow(staticItem('upcoming', { start_day: '2026-11-15' }));
-    expect(screen.getByText('تبدأ في 2026-11-15')).toBeTruthy();
+    expect(screen.getByText(wholeText('تبدأ في 2026-11-15'))).toBeTruthy();
+    // the day is isolated and set left to right, or it would read 15-11-2026 after Arabic letters
+    expect(document.querySelector('.check-note bdi')?.getAttribute('dir')).toBe('ltr');
     expect(screen.queryByRole('button')).toBeNull();
   });
 

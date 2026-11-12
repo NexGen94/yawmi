@@ -4,6 +4,7 @@ import { CheckRow } from '../ui/CheckRow';
 import { Badge } from '../ui/Badge';
 import { fmt } from '../lib/format';
 import { amount, PERIOD_WORD } from './amount';
+import { IsoDay } from './IsoDay';
 import { isCleanToday, isDoneToday, polarityOf, roundUpNeed, type HabitTodayItem } from './useHabitsToday';
 import type { HabitUnit } from './types';
 import './habit-row.css';
@@ -53,12 +54,16 @@ function buildNote(item: HabitTodayItem): string | undefined {
 }
 
 /** A habit that is not in force today has no actions: the row only says why. */
-function staticNote(item: HabitTodayItem): string {
+function staticNote(item: HabitTodayItem): ComponentChildren {
   switch (item.state) {
     case 'archived':
       return 'مؤرشفة';
     case 'upcoming':
-      return `تبدأ في ${item.habit.start_day}`;
+      return (
+        <>
+          تبدأ في <IsoDay day={item.habit.start_day} />
+        </>
+      );
     case 'ended':
       return 'انتهت مدتها';
     default:
@@ -88,10 +93,10 @@ function badgesOf(item: HabitTodayItem, showState: boolean): ComponentChildren |
   const late = showState && item.state === 'late' ? <Badge tone="signal">متأخرة</Badge> : null;
   if (!outcome && !late) return undefined;
   return (
-    <>
+    <span class="habit-badges">
       {late}
       {outcome}
-    </>
+    </span>
   );
 }
 

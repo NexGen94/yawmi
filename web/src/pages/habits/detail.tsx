@@ -1,3 +1,5 @@
+import type { ComponentChildren } from 'preact';
+
 import { api } from '../../api/client';
 import type { components } from '../../api/schema';
 import { HttpError, unwrap } from '../../api/unwrap';
@@ -7,6 +9,7 @@ import { WeekBars } from '../../charts/WeekBars';
 import { combine } from '../../data/combine';
 import { useQuery } from '../../data/query';
 import { amount, PERIOD_WORD } from '../../habits/amount';
+import { IsoDay } from '../../habits/IsoDay';
 import { type HabitTodayItem, useHabitsToday } from '../../habits/useHabitsToday';
 import { fmt } from '../../lib/format';
 import type { HabitState } from '../../progress/state';
@@ -29,10 +32,14 @@ const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأر�
 const ALL_DAYS = 0b1111111;
 
 /** What a state is called on the page (design 9.1); an active habit needs no word. */
-function stateBadge(item: HabitTodayItem): { text: string; signal: boolean } | undefined {
-  const words: Record<HabitState, string | undefined> = {
+function stateBadge(item: HabitTodayItem): { text: ComponentChildren; signal: boolean } | undefined {
+  const words: Record<HabitState, ComponentChildren | undefined> = {
     archived: 'مؤرشفة',
-    upcoming: `تبدأ في ${item.habit.start_day}`,
+    upcoming: (
+      <>
+        تبدأ في <IsoDay day={item.habit.start_day} />
+      </>
+    ),
     ended: 'انتهت مدتها',
     done: 'تحقق هدف الفترة',
     late: 'متأخرة',

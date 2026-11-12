@@ -150,7 +150,7 @@ describe('habits list: what each row says', () => {
   it('«الكل» holds all six states: an upcoming habit says when it starts, an archived one says so', async () => {
     await open('/habits?status=all');
     expect(titles()).toHaveLength(10);
-    expect(within(row('عادة قادمة')).getByText('تبدأ في 2026-11-15')).toBeTruthy();
+    expect(row('عادة قادمة').querySelector('.check-note')?.textContent).toBe('تبدأ في 2026-11-15');
     expect(within(row('عادة قديمة')).getByText('مؤرشفة')).toBeTruthy();
     expect(within(row('مراجعة الخطة')).getByText('متأخرة')).toBeTruthy();
   });
