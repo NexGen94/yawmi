@@ -11,6 +11,7 @@ import { Skeleton } from '../../ui/Skeleton';
 import { StateFrame } from '../../ui/StateFrame';
 import { ContextColumn } from './ContextColumn';
 import './day.css';
+import { pruneOldDrafts } from './draft';
 import { EveningForm } from './EveningForm';
 import { MorningForm } from './MorningForm';
 import { type DayPart, defaultPart } from './part';
@@ -34,6 +35,9 @@ export default function DayPage() {
 
   const data = useDayData();
   const status = useSaveStatus(data.pending, data.refreshPending);
+
+  // Drafts are private text: those of days before yesterday go when the page loads, and again at midnight.
+  useEffect(() => pruneOldDrafts(data.day), [data.day]);
 
   if (part === null) return <h1>اليوم</h1>;
 

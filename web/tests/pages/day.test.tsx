@@ -647,6 +647,31 @@ describe('the unsent draft', () => {
     expect(Object.keys(localStorage).filter((k) => k.includes('draft'))).toHaveLength(0);
   });
 
+  it('prunes the drafts of days older than yesterday when the page loads', async () => {
+    for (const day of ['2026-11-07', '2026-11-08', '2026-11-09', DAY]) {
+      localStorage.setItem(`yawmi.draft.day.${day}.morning`, JSON.stringify({ note: day }));
+    }
+    stubApi();
+    await openDay('/day/morning');
+    await screen.findByRole('button', { name: 'حفظ الصباح' });
+    expect(
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('yawmi.draft.'))
+        .sort(),
+    ).toEqual(['yawmi.draft.day.2026-11-09.morning', `yawmi.draft.day.${DAY}.morning`]);
+  });
+
+  it('removes the evening draft as soon as the evening is saved', async () => {
+    stubEvening();
+    await openDay('/day/evening');
+    await screen.findByRole('button', { name: 'إغلاق اليوم' });
+    type('تعلّمت', 'درس لم يُحفظ');
+    expect(localStorage.getItem(`yawmi.draft.day.${DAY}.evening`)).not.toBeNull();
+    click('إغلاق اليوم');
+    await waitFor(async () => expect(await pendingOf('journal_saved')).toHaveLength(1));
+    expect(localStorage.getItem(`yawmi.draft.day.${DAY}.evening`)).toBeNull();
+  });
+
   it('keeps the evening draft apart from the morning one', async () => {
     stubEvening();
     const first = await openDay('/day/evening');
