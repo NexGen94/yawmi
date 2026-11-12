@@ -32,10 +32,76 @@ export function focusables(root: HTMLElement): HTMLElement[] {
 
 // Open layers, in the order they opened. The topmost is the last one that contains no other.
 const open: HTMLElement[] = [];
+const inertByLayer = new Set<HTMLElement>();
+let savedHtmlOverflow: string | null = null;
+let savedBodyOverflow: string | null = null;
+
+function topLayer(): HTMLElement | undefined {
+  const innermost = open.filter((layer) => !open.some((other) => other !== layer && layer.contains(other)));
+  return innermost.at(-1);
+}
 
 function isTop(root: HTMLElement): boolean {
-  const innermost = open.filter((layer) => !open.some((other) => other !== layer && layer.contains(other)));
-  return innermost.at(-1) === root;
+  return topLayer() === root;
+}
+
+/** Locks root scrolling and marks every sibling branch outside the topmost open layer `inert`. */
+function syncModalState(): void {
+  const top = topLayer();
+  if (!top) {
+    for (const el of inertByLayer) {
+      el.inert = false;
+      el.removeAttribute('inert');
+    }
+    inertByLayer.clear();
+    if (savedHtmlOverflow !== null) {
+      document.documentElement.style.overflow = savedHtmlOverflow;
+      savedHtmlOverflow = null;
+    }
+    if (savedBodyOverflow !== null) {
+      document.body.style.overflow = savedBodyOverflow;
+      savedBodyOverflow = null;
+    }
+    return;
+  }
+
+  if (savedHtmlOverflow === null) savedHtmlOverflow = document.documentElement.style.overflow;
+  if (savedBodyOverflow === null) savedBodyOverflow = document.body.style.overflow;
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+
+  const nextInert = new Set<HTMLElement>();
+  let branch: HTMLElement | null = top.parentElement?.classList.contains('layer') ? top.parentElement : top;
+  while (branch && branch !== document.body && branch !== document.documentElement) {
+    const parent: HTMLElement | null = branch.parentElement;
+    if (!parent) break;
+    for (const child of parent.children) {
+      if (
+        child instanceof HTMLElement &&
+        child !== branch &&
+        child.tagName !== 'SCRIPT' &&
+        child.tagName !== 'STYLE'
+      ) {
+        nextInert.add(child);
+      }
+    }
+    branch = parent;
+  }
+
+  for (const el of [...inertByLayer]) {
+    if (!nextInert.has(el)) {
+      el.inert = false;
+      el.removeAttribute('inert');
+      inertByLayer.delete(el);
+    }
+  }
+  for (const el of nextInert) {
+    if (!inertByLayer.has(el) && !el.inert && !el.hasAttribute('inert')) {
+      el.inert = true;
+      el.setAttribute('inert', '');
+      inertByLayer.add(el);
+    }
+  }
 }
 
 /** Makes `panel` a modal layer while `isOpen`. The first focusable element inside the part marked
@@ -52,6 +118,7 @@ export function useModalLayer(isOpen: boolean, panel: RefObject<HTMLElement | nu
     if (!isOpen || !root) return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     open.push(root);
+    syncModalState();
 
     if (!root.contains(document.activeElement)) {
       const body = root.querySelector<HTMLElement>('[data-layer-body]');
@@ -105,6 +172,7 @@ export function useModalLayer(isOpen: boolean, panel: RefObject<HTMLElement | nu
       document.removeEventListener('focusin', onFocusIn);
       backdrop?.removeEventListener('click', onBackdropClick);
       open.splice(open.indexOf(root), 1);
+      syncModalState();
       if (opener?.isConnected) opener.focus();
     };
   }, [isOpen, panel]);
