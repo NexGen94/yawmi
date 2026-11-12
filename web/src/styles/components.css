@@ -23,8 +23,13 @@
   box-shadow: var(--focus);
 }
 
-:where(.hero-card, .toast) :focus-visible {
+:where(.hero-card, .on-ink, .toast) :focus-visible {
   box-shadow: var(--focus-on-ink);
+}
+
+:where(.dialog, .drawer):focus-visible,
+:where(.dialog, .drawer) :focus-visible {
+  box-shadow: var(--focus);
 }
 
 .visually-hidden {
@@ -99,25 +104,125 @@
   line-height: 1.3;
 }
 
-.hero-card {
+.hero-card,
+.on-ink {
   background: var(--c-ink);
   color: var(--c-bg);
+}
+
+.hero-card {
   border-radius: var(--radius-hero);
   padding: var(--sp-6);
 }
 
-.hero-card .card-title {
+:is(.hero-card, .on-ink) .card-title {
   color: var(--c-bg);
 }
 
-.hero-card .btn-primary {
+:is(.hero-card, .on-ink) .btn-primary {
   background: var(--c-bg);
   color: var(--c-ink);
 }
 
-.hero-card .btn-primary:hover {
+:is(.hero-card, .on-ink) .btn-primary:hover {
   background: var(--c-blue-light);
   color: var(--c-ink);
+}
+
+:is(.hero-card, .on-ink) .btn-quiet {
+  background: transparent;
+  color: var(--c-bg);
+  border-color: var(--c-blue-light);
+}
+
+:is(.hero-card, .on-ink) .btn-quiet:hover {
+  background: var(--c-ink-2);
+}
+
+:is(.hero-card, .on-ink) :is(.check-note, .field-label, .field-hint, .slider-label, .state-text, .heat-key) {
+  color: var(--c-blue-light);
+}
+
+:is(.hero-card, .on-ink) .field-error {
+  color: var(--c-signal-bg);
+}
+
+:is(.hero-card, .on-ink) .disclosure {
+  border-block-start-color: var(--c-ink-2);
+}
+
+:is(.hero-card, .on-ink) .disclosure-chevron {
+  color: var(--c-blue-light);
+}
+
+:is(.hero-card, .on-ink) .skeleton {
+  background: var(--c-ink-2);
+}
+
+:is(.hero-card, .on-ink) .check-row:hover:not(:disabled) {
+  background: var(--c-ink-2);
+}
+
+:is(.hero-card, .on-ink) .check-mark {
+  border-color: var(--c-blue-light);
+  background: transparent;
+  color: var(--c-ink);
+}
+
+:is(.hero-card, .on-ink) .check-row[aria-pressed='true'] .check-mark {
+  background: var(--c-bg);
+  border-color: var(--c-bg);
+}
+
+:is(.dialog, .drawer) .btn-primary {
+  background: var(--c-ink);
+  color: var(--c-surface);
+}
+
+:is(.dialog, .drawer) .btn-primary:hover {
+  background: var(--c-ink-2);
+  color: var(--c-surface);
+}
+
+:is(.dialog, .drawer) .btn-quiet {
+  background: var(--c-surface);
+  color: var(--c-ink);
+  border-color: var(--c-blue);
+}
+
+:is(.dialog, .drawer) .btn-quiet:hover {
+  background: var(--c-blue-pale);
+}
+
+:is(.dialog, .drawer) :is(.check-note, .field-label, .field-hint, .slider-label, .state-text, .heat-key) {
+  color: var(--c-ink-2);
+}
+
+:is(.dialog, .drawer) .field-error {
+  color: var(--c-signal-ink);
+}
+
+:is(.dialog, .drawer) .disclosure {
+  border-block-start-color: var(--c-blue-pale);
+}
+
+:is(.dialog, .drawer) .disclosure-chevron {
+  color: var(--c-blue);
+}
+
+:is(.dialog, .drawer) .check-row:hover:not(:disabled) {
+  background: var(--c-blue-pale);
+}
+
+:is(.dialog, .drawer) .check-mark {
+  border-color: var(--c-blue);
+  background: var(--c-surface);
+  color: var(--c-surface);
+}
+
+:is(.dialog, .drawer) .check-row[aria-pressed='true'] .check-mark {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
 }
 
 /* ---------- Badge ---------- */
@@ -167,12 +272,19 @@
   cursor: pointer;
 }
 
-.check-row:hover {
+.check-row:hover:not(:disabled) {
   background: var(--c-blue-pale);
 }
 
 .check-row:disabled {
+  color: var(--c-ink-2);
+  opacity: 0.6;
   cursor: not-allowed;
+}
+
+.check-row:disabled .check-mark {
+  border-color: var(--c-blue-light);
+  background: var(--c-blue-pale);
 }
 
 .check-mark {
@@ -339,6 +451,13 @@
 .field-input::placeholder {
   color: var(--c-ink-2);
   opacity: 1;
+}
+
+.field-input:disabled {
+  border-color: var(--c-blue-light);
+  background: var(--c-blue-pale);
+  color: var(--c-ink-2);
+  cursor: not-allowed;
 }
 
 .field-input[aria-invalid='true'] {
@@ -529,6 +648,11 @@
 
 /* ---------- Dialog and Drawer ---------- */
 
+:root:has(.layer),
+body:has(.layer) {
+  overflow: hidden;
+}
+
 .layer {
   position: fixed;
   inset: 0;
@@ -536,6 +660,7 @@
   display: grid;
   place-items: center;
   padding: var(--sp-4);
+  overscroll-behavior: contain;
 }
 
 .layer-backdrop {
@@ -543,6 +668,7 @@
   inset: 0;
   background: var(--c-ink);
   opacity: 0.45;
+  overscroll-behavior: contain;
   animation: layer-fade 160ms ease-out;
 }
 
@@ -551,6 +677,7 @@
   inline-size: min(100%, 480px);
   max-block-size: calc(100dvh - 2 * var(--sp-4));
   overflow: auto;
+  overscroll-behavior: contain;
   margin: 0;
   padding: var(--sp-6);
   border: 0;
@@ -570,7 +697,10 @@
   display: flex;
   flex-direction: column;
   inline-size: min(100%, 420px);
+  block-size: 100%;
+  max-block-size: 100%;
   overflow: auto;
+  overscroll-behavior: contain;
   margin: 0;
   padding: var(--sp-6);
   border: 0;
@@ -724,15 +854,15 @@
   font-weight: 600;
 }
 
-.hero-card .ring-track {
+:is(.hero-card, .on-ink) .ring-track {
   stroke: var(--c-ink-2);
 }
 
-.hero-card .ring-arc {
+:is(.hero-card, .on-ink) .ring-arc {
   stroke: var(--c-blue-light);
 }
 
-.hero-card .ring-value {
+:is(.hero-card, .on-ink) .ring-value {
   fill: var(--c-bg);
 }
 
@@ -748,17 +878,17 @@
   fill: var(--c-blue);
 }
 
-.hero-card .bar-track {
+:is(.hero-card, .on-ink) .bar-track {
   fill: var(--c-ink-2);
 }
 
-.hero-card .bar-fill {
+:is(.hero-card, .on-ink) .bar-fill {
   fill: var(--c-blue-light);
 }
 
 .bars {
   inline-size: 100%;
-  block-size: auto;
+  block-size: 120px;
 }
 
 .bars-base {
@@ -780,6 +910,22 @@
   font-weight: 600;
 }
 
+:is(.hero-card, .on-ink) .bars-base {
+  stroke: var(--c-ink-2);
+}
+
+:is(.hero-card, .on-ink) .bars-bar {
+  fill: var(--c-blue-light);
+}
+
+:is(.hero-card, .on-ink) .bars-latest {
+  fill: var(--c-bg);
+}
+
+:is(.hero-card, .on-ink) .bars-value {
+  fill: var(--c-bg);
+}
+
 .spark {
   inline-size: 100%;
   max-inline-size: 240px;
@@ -798,6 +944,15 @@
   fill: var(--c-ink);
   stroke: var(--c-surface);
   stroke-width: 2;
+}
+
+:is(.hero-card, .on-ink) .spark-line {
+  stroke: var(--c-blue-light);
+}
+
+:is(.hero-card, .on-ink) .spark-dot {
+  fill: var(--c-bg);
+  stroke: var(--c-ink);
 }
 
 .heat {
@@ -832,6 +987,26 @@
 
 .heat-off {
   fill: var(--c-ink-2);
+}
+
+:is(.hero-card, .on-ink) .heat-done {
+  fill: var(--c-blue-light);
+}
+
+:is(.hero-card, .on-ink) :is(.heat-missed, .heat-cross) {
+  stroke: var(--c-signal-bg);
+}
+
+:is(.hero-card, .on-ink) :is(.heat-skipped, .heat-hatch) {
+  stroke: var(--c-blue-light);
+}
+
+:is(.hero-card, .on-ink) .heat-hatch-bg {
+  fill: var(--c-ink);
+}
+
+:is(.hero-card, .on-ink) .heat-off {
+  fill: var(--c-blue-pale);
 }
 
 .heat-key {

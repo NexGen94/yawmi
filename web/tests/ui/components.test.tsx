@@ -43,7 +43,7 @@ describe('StateFrame', () => {
     );
     const frame = container.firstElementChild;
     expect(frame?.getAttribute('aria-busy')).toBe('true');
-    expect(screen.getByText('جارٍ التحميل')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('جارٍ التحميل');
     expect(container.querySelector('.skeleton')).toBeTruthy();
     expect(screen.queryByText('المحتوى')).toBeNull();
   });
@@ -86,14 +86,14 @@ describe('StateFrame', () => {
     expect(screen.queryByText('المحتوى')).toBeNull();
   });
 
-  it('error: «تعذّر التحميل» and «إعادة المحاولة», which calls onRetry once', () => {
+  it('error: «تعذّر التحميل» in an alert region and «إعادة المحاولة», which calls onRetry once', () => {
     const onRetry = vi.fn();
     render(
       <StateFrame state="error" emptyText="أ" onRetry={onRetry}>
         <p>المحتوى</p>
       </StateFrame>,
     );
-    expect(screen.getByText('تعذّر التحميل')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('تعذّر التحميل');
     fireEvent.click(screen.getByRole('button', { name: 'إعادة المحاولة' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('المحتوى')).toBeNull();
@@ -222,15 +222,31 @@ describe('every control meets the 44px target', () => {
 });
 
 describe('CheckRow', () => {
-  it('is a toggle button: aria-pressed, named by its label, described by its note', () => {
+  it('is a toggle button: aria-pressed, named by its label, described by its note and badge', () => {
     const onToggle = vi.fn();
-    render(<CheckRow checked={false} label="المشي" note="بعد الاستيقاظ" badge={<Badge>O1</Badge>} onToggle={onToggle} />);
+    render(<CheckRow checked={false} label="المشي" note="بعد الاستيقاظ" badge={<Badge tone="signal">متأخر</Badge>} onToggle={onToggle} />);
     const row = screen.getByRole('button', { name: 'المشي' });
     expect(row.getAttribute('aria-pressed')).toBe('false');
-    expect(row.getAttribute('aria-describedby')).toBeTruthy();
-    expect(document.getElementById(row.getAttribute('aria-describedby') ?? '')?.textContent).toContain('بعد الاستيقاظ');
+    const describedIds = (row.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean);
+    expect(describedIds).toHaveLength(2);
+    const describedText = describedIds.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
+    expect(describedText).toContain('بعد الاستيقاظ');
+    expect(describedText).toContain('متأخر');
     fireEvent.click(row);
     expect(onToggle).toHaveBeenCalledWith(true);
+  });
+
+  it('announces its badge via aria-describedby even when there is no note', () => {
+    render(<CheckRow checked={false} label="قراءة 20 صفحة" badge={<Badge>O1</Badge>} onToggle={() => undefined} />);
+    const row = screen.getByRole('button', { name: 'قراءة 20 صفحة' });
+    const describedId = row.getAttribute('aria-describedby') ?? '';
+    expect(describedId).not.toBe('');
+    expect(document.getElementById(describedId)?.textContent).toBe('O1');
+  });
+
+  it('visually distinguishes a disabled row from an enabled one', () => {
+    expect(css('components.css')).toMatch(/\.check-row:disabled\s*\{[^}]*color:\s*var\(--c-ink-2\)/);
+    expect(css('components.css')).toMatch(/\.check-row:disabled\s+\.check-mark\s*\{[^}]*background:\s*var\(--c-blue-pale\)/);
   });
 
   it('done shows a drawn check mark, not a colour alone', () => {
@@ -360,8 +376,9 @@ describe('Field', () => {
     expect(screen.getByLabelText('اليومية').tagName).toBe('TEXTAREA');
   });
 
-  it('the input border carries meaning, so it is --c-blue', () => {
+  it('the input border carries meaning, so it is --c-blue, and disabled fields have a distinct surface', () => {
     expect(css('components.css')).toMatch(/\.field-input\s*\{[^}]*border:\s*1px solid var\(--c-blue\)/);
+    expect(css('components.css')).toMatch(/\.field-input:disabled\s*\{[^}]*background:\s*var\(--c-blue-pale\)/);
   });
 });
 
@@ -480,8 +497,14 @@ describe('Dialog', () => {
   it('closes with Escape and returns the focus to what opened it', () => {
     render(<Harness />);
     const opener = open();
+    expect(opener.hasAttribute('inert')).toBe(true);
+    expect(document.documentElement.style.overflow).toBe('hidden');
+    expect(document.body.style.overflow).toBe('hidden');
     fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(opener.hasAttribute('inert')).toBe(false);
+    expect(document.documentElement.style.overflow).toBe('');
+    expect(document.body.style.overflow).toBe('');
     expect(document.activeElement).toBe(opener);
   });
 
@@ -561,12 +584,17 @@ describe('Drawer', () => {
     );
   }
 
-  it('traps the focus, closes with Escape and gives the focus back', () => {
+  it('traps the focus, locks scroll and marks background inert, closes with Escape and gives the focus back', () => {
+    withStyles();
     render(<Harness />);
     const opener = screen.getByRole('button', { name: 'اسأل' });
     opener.focus();
     fireEvent.click(opener);
     const drawer = screen.getByRole('dialog', { name: 'اسأل' });
+    expect(getComputedStyle(drawer).getPropertyValue('block-size')).toBe('100%');
+    expect(getComputedStyle(drawer).getPropertyValue('max-block-size')).toBe('100%');
+    expect(opener.hasAttribute('inert')).toBe(true);
+    expect(document.documentElement.style.overflow).toBe('hidden');
     expect(document.activeElement).toBe(screen.getByLabelText('السؤال'));
     const items = [...drawer.querySelectorAll<HTMLElement>('button, input')];
     const last = items[items.length - 1] as HTMLElement;
@@ -575,21 +603,28 @@ describe('Drawer', () => {
     expect(document.activeElement).toBe(items[0]);
     fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(opener.hasAttribute('inert')).toBe(false);
+    expect(document.documentElement.style.overflow).toBe('');
     expect(document.activeElement).toBe(opener);
   });
 });
 
 describe('Escape closes only the topmost layer', () => {
-  it('a dialog opened inside a drawer closes first', () => {
+  it('a dialog opened inside a drawer makes the drawer inert and closes first', () => {
     const closeDrawer = vi.fn();
     const closeDialog = vi.fn();
-    render(
+    const { container } = render(
       <Drawer open title="اسأل" onClose={closeDrawer}>
+        <button type="button">زر الدرج</button>
         <Dialog open title="تأكيد" onClose={closeDialog}>
           <button type="button">نعم</button>
         </Dialog>
       </Drawer>,
     );
+    const drawerHead = container.querySelector('.drawer > .layer-head') as HTMLElement;
+    expect(drawerHead.hasAttribute('inert')).toBe(true);
+    expect(screen.getByRole('button', { name: 'زر الدرج', hidden: true }).hasAttribute('inert')).toBe(true);
+    expect(screen.getByRole('button', { name: 'نعم' }).hasAttribute('inert')).toBe(false);
     fireEvent.keyDown(screen.getByRole('button', { name: 'نعم' }), { key: 'Escape' });
     expect(closeDialog).toHaveBeenCalledTimes(1);
     expect(closeDrawer).not.toHaveBeenCalled();
@@ -679,9 +714,34 @@ describe('components.css', () => {
   const outside = sheet.replace(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '');
   const reduced = /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{((?:[^{}]*\{[^{}]*\})*[^{}]*)\}/.exec(sheet)?.[1] ?? '';
 
-  it('shows focus with the --focus ring, and --focus-on-ink on the ink surfaces', () => {
+  it('shows focus with the --focus ring, --focus-on-ink on ink surfaces, and restores --focus inside a dialog or drawer', () => {
     expect(sheet).toMatch(/:focus-visible[^{]*\{[^}]*box-shadow:\s*var\(--focus\)/);
     expect(sheet).toMatch(/\.hero-card[^{]*:focus-visible[^{]*\{[^}]*box-shadow:\s*var\(--focus-on-ink\)/);
+    expect(sheet).toMatch(/\.on-ink[^{]*:focus-visible[^{]*\{[^}]*box-shadow:\s*var\(--focus-on-ink\)/);
+    expect(sheet).toMatch(/:where\(\.dialog,\s*\.drawer\)\s+:focus-visible\s*\{[^}]*box-shadow:\s*var\(--focus\)/);
+  });
+
+  it('pins Drawer to full block-size and contains overscroll on modal layers', () => {
+    expect(sheet).toMatch(/\.drawer\s*\{[^}]*block-size:\s*100%;[^}]*max-block-size:\s*100%;/s);
+    expect(sheet).toMatch(/\.dialog\s*\{[^}]*overscroll-behavior:\s*contain;/s);
+    expect(sheet).toMatch(/\.drawer\s*\{[^}]*overscroll-behavior:\s*contain;/s);
+    expect(sheet).toMatch(/\.layer\s*\{[^}]*overscroll-behavior:\s*contain;/s);
+  });
+
+  it('provides on-ink variants for WeekBars, Sparkline, Heatmap, Disclosure, and secondary text inside HeroCard and .on-ink', () => {
+    expect(sheet).toMatch(/:is\(\.hero-card,\s*\.on-ink\)\s+\.bars-bar\s*\{[^}]*fill:\s*var\(--c-blue-light\)/);
+    expect(sheet).toMatch(/:is\(\.hero-card,\s*\.on-ink\)\s+\.bars-latest\s*\{[^}]*fill:\s*var\(--c-bg\)/);
+    expect(sheet).toMatch(/:is\(\.hero-card,\s*\.on-ink\)\s+\.bars-value\s*\{[^}]*fill:\s*var\(--c-bg\)/);
+    expect(sheet).toMatch(/:is\(\.hero-card,\s*\.on-ink\)\s+\.spark-line\s*\{[^}]*stroke:\s*var\(--c-blue-light\)/);
+    expect(sheet).toMatch(/:is\(\.hero-card,\s*\.on-ink\)\s+\.disclosure-chevron\s*\{[^}]*color:\s*var\(--c-blue-light\)/);
+    expect(sheet).toMatch(/:is\(\.hero-card,\s*\.on-ink\)\s+:is\([^)]*\.check-note[^)]*\)\s*\{[^}]*color:\s*var\(--c-blue-light\)/);
+  });
+
+  it('never redefines .num or .num-lg outside index.css', () => {
+    const hasNumRule = (cssText: string): boolean => /(?:^|[},])\s*\.num(?:-lg)?(?![\w-])\s*[,{]/m.test(cssText);
+    expect(hasNumRule(sheet)).toBe(false);
+    expect(hasNumRule(`${sheet}\n.num { font-size: 12px; }`)).toBe(true);
+    expect(hasNumRule(`${sheet}\n.num-lg { font-size: 24px; }`)).toBe(true);
   });
 
   it('every animated or transitioning rule is stilled under prefers-reduced-motion', () => {
