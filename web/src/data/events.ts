@@ -1,6 +1,6 @@
 import type { components } from '../api/schema';
 import type { Day } from '../domain/types';
-import { enqueue } from '../sync/outbox';
+import { enqueue, scheduleFlush } from '../sync/outbox';
 
 type MorningAnswers = components['schemas']['MorningAnswers'];
 type EveningAnswers = components['schemas']['EveningAnswers'];
@@ -29,7 +29,9 @@ export async function logHabit(code: string, input: LogHabitInput): Promise<stri
   if (input.day !== undefined) {
     payload.day = input.day;
   }
-  return enqueue('habit_logged', payload);
+  const id = await enqueue('habit_logged', payload);
+  scheduleFlush();
+  return id;
 }
 
 /**
@@ -47,43 +49,55 @@ export async function saveJournal(
   if (day !== undefined) {
     payload.day = day;
   }
-  return enqueue('journal_saved', payload);
+  const id = await enqueue('journal_saved', payload);
+  scheduleFlush();
+  return id;
 }
 
 /**
  * Enqueue a mood logged event.
  */
 export async function logMood(input: MoodLoggedPayload): Promise<string> {
-  return enqueue('mood_logged', input as Record<string, unknown>);
+  const id = await enqueue('mood_logged', input as Record<string, unknown>);
+  scheduleFlush();
+  return id;
 }
 
 /**
  * Enqueue a goal task completion toggle event.
  */
 export async function setGoalTask(taskId: string, done: boolean): Promise<string> {
-  return enqueue('goal_task_set', {
+  const id = await enqueue('goal_task_set', {
     task_id: taskId,
     done,
   });
+  scheduleFlush();
+  return id;
 }
 
 /**
  * Enqueue a focus session started event.
  */
 export async function startFocus(p: FocusStartedPayload): Promise<string> {
-  return enqueue('focus_started', p as Record<string, unknown>);
+  const id = await enqueue('focus_started', p as Record<string, unknown>);
+  scheduleFlush();
+  return id;
 }
 
 /**
  * Enqueue a focus session ended event.
  */
 export async function endFocus(p: FocusEndedPayload): Promise<string> {
-  return enqueue('focus_ended', p as Record<string, unknown>);
+  const id = await enqueue('focus_ended', p as Record<string, unknown>);
+  scheduleFlush();
+  return id;
 }
 
 /**
  * Enqueue a breath session ended event.
  */
 export async function endBreath(p: BreathEndedPayload): Promise<string> {
-  return enqueue('breath_ended', p as Record<string, unknown>);
+  const id = await enqueue('breath_ended', p as Record<string, unknown>);
+  scheduleFlush();
+  return id;
 }
