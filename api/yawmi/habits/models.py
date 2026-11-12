@@ -29,7 +29,7 @@ from typing import Annotated, Any, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, StrictInt
 from pydantic_core import PydanticCustomError
 
-from yawmi.domain.habits import HabitKind, HabitLog, ScheduleKind
+from yawmi.domain.habits import BOOLEAN_MAX_TARGET, HabitKind, HabitLog, ScheduleKind
 from yawmi.domain.periods import Period
 from yawmi.habits.store import Reminder, StoredHabit
 from yawmi.text import StorableText
@@ -40,7 +40,6 @@ MAX_REMINDERS = 3
 FIRST_DAY = date(2000, 1, 1)
 LAST_DAY = date(2099, 12, 31)
 SYSTEM_EDITABLE = frozenset({"anchor", "reminders", "identity_text"})
-BOOLEAN_MAX_TARGET: dict[str, int] = {"day": 1, "week": 7, "month": 28}
 
 HabitUnit = Literal["", "session", "min", "hour"]
 Anchor = Literal["after_wake", "before_sleep", "free"]
@@ -72,6 +71,7 @@ def _day(value: date) -> date:
 
 
 Title = Annotated[StorableText, Field(max_length=200), AfterValidator(_title)]
+ShortTitle = Annotated[StorableText, Field(max_length=80), AfterValidator(_title)]
 Ref = Annotated[StorableText, Field(min_length=1, max_length=128), AfterValidator(_ref)]
 Day = Annotated[date, AfterValidator(_day), Field(description="من 2000-01-01 إلى 2099-12-31")]
 OutcomeCode = Annotated[str, Field(pattern=r"^O([1-9]|1[0-2])$")]

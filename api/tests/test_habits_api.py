@@ -56,6 +56,8 @@ REAL_KPIS = (
     "side_income_sar",
     "measured_projects",
     "workshops_count",
+    "meditation_days",
+    "family_halfday",
 )
 SYSTEM_START = date(2026, 11, 1)
 SYSTEM_LOCKED = "عادة نظامية: يُعدَّل المرسى والتذكيرات فقط"
@@ -284,7 +286,7 @@ class PostgresBackend:
         )
         await self.pool.execute("DELETE FROM yawmi.habits WHERE title_ar LIKE $1", like)
         await self.pool.execute(
-            "UPDATE yawmi.habits SET anchor = NULL, start_day = $1, active = true WHERE code = 'english_minutes'",
+            "UPDATE yawmi.habits SET anchor = NULL, start_day = $1 WHERE code = 'english_minutes'",
             SYSTEM_START,
         )
         await self.pool.execute(
@@ -733,6 +735,27 @@ async def test_progress_returns_the_six_indicators(
     assert out["last_8_periods"] == [1.0, 1.0, 1.0]
 
 
+async def test_progress_of_an_abstain_habit_has_no_need_per_day(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    """«المطلوب يومياً» لا معنى له لعادة امتناع: `null`، وللعادة العادية رقمها."""
+    abstain = await create(
+        client, kind="boolean", period="day", target_per_period=1, polarity="abstain"
+    )
+    build = await create(client, kind="boolean", period="day", target_per_period=1)
+    await backend.add_log(abstain["code"], DAY, "done", None)  # a slip: the day is not clean
+    slipped = (await client.get(f"/v1/habits/{abstain['code']}/progress", headers=auth())).json()
+    assert slipped["period_progress"]["need_per_day"] is None
+    assert slipped["period_progress"]["reached"] is False
+    clean = await create(
+        client, kind="boolean", period="day", target_per_period=1, polarity="abstain"
+    )
+    clean_out = (await client.get(f"/v1/habits/{clean['code']}/progress", headers=auth())).json()
+    assert clean_out["period_progress"]["need_per_day"] is None
+    built = (await client.get(f"/v1/habits/{build['code']}/progress", headers=auth())).json()
+    assert built["period_progress"]["need_per_day"] == 1.0
+
+
 async def test_progress_total_done_sums_duration_minutes(
     client: httpx.AsyncClient, backend: Backend
 ) -> None:
@@ -903,6 +926,9 @@ async def test_a_per_period_kpi_prefills_its_own_target_when_the_periods_match(
     [
         ("strength_sessions", "count", "جلسة", "2", "session"),
         ("sleep_7h_nights", "boolean", "ليلة", "5", ""),
+        ("meditation_days", "boolean", "يوم", "5", ""),
+        ("family_halfday", "boolean", "نعم/لا", "1", ""),
+        ("english_minutes", "duration", "دقيقة", "285", "min"),
     ],
 )
 async def test_a_per_period_count_maps_the_kpi_unit_when_the_habit_has_one(

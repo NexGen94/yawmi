@@ -1,9 +1,11 @@
 """Tests for `GET`, `PUT`, and `DELETE` `/v1/indicators` (memory and Postgres backends)."""
 
+import json
 import os
+import urllib.parse
 from collections.abc import AsyncIterator
-from typing import Protocol
-from uuid import UUID
+from typing import Any, Protocol
+from uuid import UUID, uuid4
 
 import asyncpg
 import httpx
@@ -16,6 +18,7 @@ from yawmi.auth.memory_store import InMemoryDeviceStore
 from yawmi.auth.tokens import issue_access
 from yawmi.db.pool import create_pool, set_pool
 from yawmi.indicators.memory import InMemoryIndicatorStore
+from yawmi.indicators.models import IndicatorIO
 from yawmi.indicators.store import AsyncpgIndicatorStore
 from yawmi.main import create_app
 from yawmi.settings import Settings
@@ -30,6 +33,8 @@ needs_db = pytest.mark.skipif(
 
 
 class Backend(Protocol):
+    indicators: Any
+
     def install(self, app: FastAPI) -> None: ...
     async def setup(self) -> None: ...
     async def cleanup(self) -> None: ...
@@ -201,3 +206,140 @@ async def test_goal_indicator_crud_and_deduplication(
     list_resp_after = await client.get("/v1/indicators", headers=auth_header())
     assert list_resp_after.status_code == 200
     assert list_resp_after.json() == {"items": []}
+
+
+def goal_body(**over: Any) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "subject_kind": "goal",
+        "subject_ref": "O1",
+        "source": "tasks",
+        "measure": "completion",
+        "period": "cycle",
+        "display": "bar",
+    }
+    return body | over
+
+
+def habit_body(**over: Any) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "subject_kind": "habit",
+        "subject_ref": "read",
+        "source": "habit_logs",
+        "measure": "strength",
+        "period": "week",
+        "display": "ring",
+    }
+    return body | over
+
+
+def raw_json(headers: dict[str, str] | None = None) -> dict[str, str]:
+    return (headers or auth_header()) | {"Content-Type": "application/json"}
+
+
+async def test_the_subject_is_the_urls_and_a_mismatching_body_is_a_422_that_stores_nothing(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    # a habit body sent to a goal URL, and a goal body (with a reminder) sent to a habit URL
+    for url, body in (
+        ("/v1/indicators/goal/O1", habit_body()),
+        ("/v1/indicators/habit/read", goal_body(reminder={"time": "20:00", "days_mask": 127})),
+        ("/v1/indicators/goal/O1", goal_body(subject_ref="O2")),
+        ("/v1/indicators/goal/O1", goal_body(subject_kind="habit", source="habit_logs")),
+    ):
+        resp = await client.put(url, json=body, headers=auth_header())
+        assert resp.status_code == 422, (url, resp.text)
+    assert await backend.indicators.list() == []
+
+
+async def test_a_body_without_the_subject_is_a_422(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    body = goal_body()
+    del body["subject_kind"]
+    resp = await client.put("/v1/indicators/goal/O1", json=body, headers=auth_header())
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.parametrize(
+    "over",
+    [
+        {"title_ar": "عنوان\x00خبيث"},
+        {"title_ar": "أ" * 5000},
+        {"title_ar": "أ" * 81},
+        {"title_ar": "   "},
+        {"title_ar": ""},
+        {"target": 0},
+        {"target": -1},
+        {"target": float("inf")},
+        {"target": 1e12},
+    ],
+)
+async def test_the_new_text_and_number_fields_are_validated(
+    client: httpx.AsyncClient, backend: Backend, over: dict[str, Any]
+) -> None:
+    resp = await client.put(
+        "/v1/indicators/goal/O1", content=json.dumps(goal_body(**over)).encode(), headers=raw_json()
+    )
+    assert resp.status_code == 422, resp.text
+    assert await backend.indicators.list() == []
+
+
+async def test_a_lone_surrogate_in_the_title_is_a_422(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    raw = json.dumps(goal_body())[:-1] + ', "title_ar": "' + "\\" + 'ud800"}'
+    resp = await client.put("/v1/indicators/goal/O1", content=raw.encode(), headers=raw_json())
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.parametrize("ref", ["%20", "%20%20", "%00", "a%00b", "x" * 129])
+async def test_a_blank_nul_or_long_subject_ref_is_a_422_on_every_verb(
+    client: httpx.AsyncClient, backend: Backend, ref: str
+) -> None:
+    decoded = urllib.parse.unquote(ref)
+    put = await client.put(
+        f"/v1/indicators/goal/{ref}", json=goal_body(subject_ref=decoded), headers=auth_header()
+    )
+    assert put.status_code == 422, put.text
+    delete = await client.delete(f"/v1/indicators/goal/{ref}", headers=auth_header())
+    assert delete.status_code == 422, delete.text
+    assert await backend.indicators.list() == []
+
+
+async def test_the_id_is_the_servers_and_stays_when_the_indicator_is_replaced(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    first = await client.put(
+        "/v1/indicators/goal/O1",
+        json=goal_body(id=str(uuid4()), updated_at="2001-01-01T00:00:00Z"),
+        headers=auth_header(),
+    )
+    assert first.status_code == 200, first.text
+    second = await client.put(
+        "/v1/indicators/goal/O1", json=goal_body(title_ar="ثانٍ"), headers=auth_header()
+    )
+    assert second.json()["id"] == first.json()["id"]
+    assert second.json()["updated_at"] >= first.json()["updated_at"]
+    assert not second.json()["updated_at"].startswith("2001")
+
+
+async def test_the_store_lists_puts_and_deletes_by_the_registry_names(backend: Backend) -> None:
+    saved = await backend.indicators.put(IndicatorIO(**goal_body()))
+    assert (saved.subject_kind, saved.subject_ref) == ("goal", "O1")
+    assert [i.subject_ref for i in await backend.indicators.list()] == ["O1"]
+    assert await backend.indicators.delete("goal", "O1") is True
+    assert await backend.indicators.delete("goal", "O1") is False
+    assert await backend.indicators.list() == []
+
+
+async def test_the_put_body_is_the_one_indicator_schema(
+    client: httpx.AsyncClient, backend: Backend, app: FastAPI
+) -> None:
+    spec = app.openapi()
+    schemas = spec["components"]["schemas"]
+    assert "IndicatorIn" not in schemas
+    put = spec["paths"]["/v1/indicators/{subject_kind}/{subject_ref}"]["put"]
+    body = put["requestBody"]["content"]["application/json"]["schema"]
+    assert body == {"$ref": "#/components/schemas/IndicatorIO"}
+    # one schema serves as request and response: no `-Input` / `-Output` pair
+    assert not [name for name in schemas if name.startswith("IndicatorIO-")]

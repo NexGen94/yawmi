@@ -211,7 +211,6 @@ async def clear(pool: asyncpg.Pool) -> None:
     await pool.execute("DELETE FROM yawmi.habit_reminders WHERE habit_code LIKE $1", like)
     await pool.execute("DELETE FROM yawmi.habit_logs WHERE habit_code LIKE $1", like)
     await pool.execute("DELETE FROM yawmi.habits WHERE code LIKE $1", like)
-    await pool.execute("UPDATE yawmi.habits SET active = false WHERE code NOT LIKE $1", like)
     await pool.execute("DELETE FROM yawmi.push_subscriptions")
     await pool.execute("DELETE FROM yawmi.devices WHERE name LIKE $1", like)
 
@@ -224,6 +223,9 @@ class Backend:
         self.pool = pool
         self.dsn = dsn
         self.extra_pools: list[asyncpg.Pool] = []
+        self.paused: list[
+            tuple[str, bool]
+        ] = []  # (code, active) of habits `pause_other_habits` set
         self.devices: DeviceStore = (
             InMemoryDeviceStore(on_revoke=self.memory.forget_device)
             if pool is None
@@ -234,6 +236,28 @@ class Backend:
     def memory(self) -> InMemoryPushStore:
         assert isinstance(self.store, InMemoryPushStore)
         return self.store
+
+    async def pause_other_habits(self) -> None:
+        """Deactivate the habits this test did not create (seed rows), to count only its own.
+
+        Each one is put back as it was, by `restore_paused_habits`, when the fixture ends.
+        """
+        if self.pool is None:
+            return
+        rows = await self.pool.fetch(
+            "UPDATE yawmi.habits SET active = false WHERE code NOT LIKE $1 AND active"
+            " RETURNING code",
+            CODE_PREFIX + "%",
+        )
+        self.paused.extend((r["code"], True) for r in rows)
+
+    async def restore_paused_habits(self) -> None:
+        if self.pool is not None:
+            for code, active in self.paused:
+                await self.pool.execute(
+                    "UPDATE yawmi.habits SET active = $2 WHERE code = $1", code, active
+                )
+        self.paused.clear()
 
     async def habit(self, code: str, title: str, **extra: Any) -> HabitRow:
         polarity = extra.get("polarity", "build")
@@ -382,9 +406,7 @@ async def backend(request: pytest.FixtureRequest) -> AsyncIterator[Backend]:
     finally:
         set_pool(None)
         await clear(pool)
-        await pool.execute(
-            "UPDATE yawmi.habits SET active = true WHERE code NOT LIKE $1", CODE_PREFIX + "%"
-        )
+        await b.restore_paused_habits()
         for extra in b.extra_pools:
             await extra.close()
         await pool.close()
@@ -751,29 +773,43 @@ async def test_badge_counts_the_due_habits_that_are_not_reached(
     assert receiver.decrypt(service.hits[0].body)["notification"]["app_badge"] == 2
 
 
-async def test_abstain_habit_excluded_from_badge_and_reminded_unless_slip_or_set_aside(
+async def test_an_abstain_habit_is_reminded_on_time_and_is_not_in_the_badge(
     backend: Backend, service: PushService, sender: WebPushSender
 ) -> None:
-    # 1 build habit (not reached, badge=1) and 1 abstain habit (clean)
-    await backend.habit("read", "القراءة")
+    await backend.pause_other_habits()
+    await backend.habit("read", "القراءة")  # a build habit, not reached: the badge counts it
     await backend.habit("smoke", "الامتناع عن التدخين", polarity="abstain")
     await backend.reminder("smoke", 7, 0)
     receiver = Receiver()
     await backend.subscribe(service.endpoint("a"), receiver)
 
-    # Abstain habit is reminded on time, and badge reflects only the build habit (1, not 2)
     assert await run_tick(backend, sender, at(7, 5)) == 1
-    hit = service.hits[-1]
-    notification = receiver.decrypt(hit.body)["notification"]
+    notification = receiver.decrypt(service.hits[-1].body)["notification"]
     assert notification["body"] == "الامتناع عن التدخين"
-    assert notification["app_badge"] == 1
+    assert notification["app_badge"] == 1  # the build habit only, not the abstain one
 
-    # If slip (done) was logged today, reminder is not sent
-    await backend.log("smoke", DAY, status="done")
-    await backend.habit("junk", "امتناع 2", polarity="abstain")
-    await backend.reminder("junk", 8, 0)
-    await backend.log("junk", DAY, status="skip")
-    assert await run_tick(backend, sender, at(8, 5)) == 0
+
+@pytest.mark.parametrize("status", ["done", "skip", "vacation"])
+async def test_an_abstain_habit_with_a_slip_or_a_set_aside_day_is_not_reminded(
+    backend: Backend, service: PushService, sender: WebPushSender, status: str
+) -> None:
+    await backend.habit("smoke", "الامتناع عن التدخين", polarity="abstain")
+    await backend.reminder("smoke", 7, 0)
+    await backend.subscribe(service.endpoint("a"), Receiver())
+    await backend.log("smoke", DAY, status=status)  # `done` is the slip of an abstain habit
+    # 07:05 is inside the reminder's window: only the log keeps it from being sent
+    assert await run_tick(backend, sender, at(7, 5)) == 0
+    assert service.hits == []
+
+
+async def test_an_abstain_habit_with_no_log_is_reminded_in_the_same_window(
+    backend: Backend, service: PushService, sender: WebPushSender
+) -> None:
+    # the control of the test above: the same tick, with no log, sends
+    await backend.habit("smoke", "الامتناع عن التدخين", polarity="abstain")
+    await backend.reminder("smoke", 7, 0)
+    await backend.subscribe(service.endpoint("a"), Receiver())
+    assert await run_tick(backend, sender, at(7, 5)) == 1
 
 
 async def test_a_reminder_late_at_night_is_sent_after_midnight_for_its_own_day(
@@ -1118,9 +1154,11 @@ async def test_lifespan_starts_and_stops_the_scheduler_only_when_push_is_enabled
     monkeypatch.setattr("yawmi.main.create_pool", fake_create_pool)
     ticks: list[datetime] = []
 
-    async def fake_tick(store, sender, now, *, tz, week_start) -> int:
+    async def fake_tick(store, sender, now, *, tz, week_start, prefs, journal) -> int:
         ticks.append(now)
         assert (tz, week_start) == ("Asia/Riyadh", "sun")
+        # the notice providers get their stores from the loop, not from the push store's pool
+        assert prefs is not None and journal is not None
         return 0
 
     monkeypatch.setattr("yawmi.push.scheduler.tick", fake_tick)

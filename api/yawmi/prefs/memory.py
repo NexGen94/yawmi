@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from yawmi.prefs.models import SettingsOut, SettingsPatch
+from yawmi.prefs.models import SettingsOut, settings_from_stored, validated_changes
 
 
 class InMemoryPrefsStore:
@@ -10,14 +10,8 @@ class InMemoryPrefsStore:
         self._values: dict[str, Any] = {}
 
     async def get(self) -> SettingsOut:
-        data = SettingsOut().model_dump()
-        data.update(self._values)
-        return SettingsOut.model_validate(data)
+        return settings_from_stored(self._values)
 
-    async def patch(self, changes: SettingsPatch | dict[str, Any]) -> SettingsOut:
-        if isinstance(changes, dict):
-            changes = SettingsPatch.model_validate(changes)
-        patch_data = changes.model_dump(exclude_unset=True)
-        for k, v in patch_data.items():
-            self._values[k] = v
+    async def patch(self, changes: dict[str, Any]) -> SettingsOut:
+        self._values.update(validated_changes(changes))
         return await self.get()

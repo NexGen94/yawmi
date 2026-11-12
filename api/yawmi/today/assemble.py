@@ -130,16 +130,7 @@ def _logs_by_habit(logs: Iterable[LogRow]) -> dict[str, list[HabitLog]]:
 def _period_progress(
     spec: HabitSpec, logs: list[HabitLog], day: date, week_start: WeekStart
 ) -> PeriodProgressOut:
-    p = period_progress(spec, logs, day, week_start)
-    return PeriodProgressOut(
-        done=p.done,
-        target=p.target,
-        completion=p.completion,
-        reached=p.reached,
-        expected=p.expected,
-        on_track=p.on_track,
-        need_per_day=p.need_per_day,
-    )
+    return PeriodProgressOut.of(period_progress(spec, logs, day, week_start), spec)
 
 
 def build_habits_due(

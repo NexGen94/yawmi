@@ -834,6 +834,7 @@ async def test_today_abstain_habit_polarity_and_progress(
     assert h["polarity"] == "abstain"
     assert h["done_today"] is False
     assert h["period_progress"]["reached"] is True
+    assert h["period_progress"]["need_per_day"] is None  # meaningless for an abstain habit
 
     # Now record a slip event today (status="done")
     await backend.add(log("clean", day=DAY, status="done", value="1"))
@@ -845,3 +846,4 @@ async def test_today_abstain_habit_polarity_and_progress(
     assert h_slip["polarity"] == "abstain"
     assert h_slip["done_today"] is True
     assert h_slip["period_progress"]["reached"] is False
+    assert h_slip["period_progress"]["need_per_day"] is None

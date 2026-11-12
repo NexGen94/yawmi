@@ -4,13 +4,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
-from yawmi.auth.deps import require_kind
+from yawmi.auth.deps import USER_KINDS, require_kind
 from yawmi.db.pool import get_pool
 from yawmi.errors import FORBIDDEN, INVALID, UNAUTHORIZED
 from yawmi.prefs.models import SettingsOut, SettingsPatch
 from yawmi.prefs.store import AsyncpgPrefsStore, PrefsStore
-
-USER_KINDS = ("iphone", "watch", "web")
 
 router = APIRouter(
     prefix="/v1",
@@ -41,8 +39,14 @@ async def get_settings(store: PrefsDep) -> SettingsOut:
 @router.patch(
     "/settings",
     summary="تعديل إعدادات المستخدم",
+    description=(
+        "تتغيّر المفاتيح المرسَلة وحدها. و`null` مقبول لـ`focus_daily_target_min` و"
+        "`breath_weekly_target_min` و`breath_prefs` وخانات `day_reminders` فقط. "
+        "والكائن المتداخل (`day_reminders` و`goal_columns` و`breath_prefs`) يستبدل المخزَّن كله: "
+        "ما يُترك منه يعود إلى افتراضه."
+    ),
     response_model=SettingsOut,
     responses={**INVALID},
 )
 async def patch_settings(patch: SettingsPatch, store: PrefsDep) -> SettingsOut:
-    return await store.patch(patch)
+    return await store.patch(patch.model_dump(exclude_unset=True))

@@ -302,7 +302,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** إنشاء أو تحديث مؤشر */
+        /**
+         * إنشاء أو تحديث مؤشر
+         * @description الموضوع من المسار، ويكرّره الجسم: إن خالفه فـ422. و`id` و`updated_at` يضعهما الخادم.
+         */
         put: operations["put_indicator_v1_indicators__subject_kind___subject_ref__put"];
         post?: never;
         /** حذف مؤشر */
@@ -447,7 +450,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** تعديل إعدادات المستخدم */
+        /**
+         * تعديل إعدادات المستخدم
+         * @description تتغيّر المفاتيح المرسَلة وحدها. و`null` مقبول لـ`focus_daily_target_min` و`breath_weekly_target_min` و`breath_prefs` وخانات `day_reminders` فقط. والكائن المتداخل (`day_reminders` و`goal_columns` و`breath_prefs`) يستبدل المخزَّن كله: ما يُترك منه يعود إلى افتراضه.
+         */
         patch: operations["patch_settings_v1_settings_patch"];
         trace?: never;
     };
@@ -730,18 +736,11 @@ export interface components {
             /** Sources */
             sources?: components["schemas"]["ClientSource"][];
         };
-        /** DayReminderItemIO */
-        DayReminderItemIO: {
-            /** Days Mask */
-            days_mask: number;
-            /** Time */
-            time: string;
-        };
         /** DayRemindersIO */
         DayRemindersIO: {
-            evening?: components["schemas"]["DayReminderItemIO"] | null;
-            morning?: components["schemas"]["DayReminderItemIO"] | null;
-            weekly?: components["schemas"]["DayReminderItemIO"] | null;
+            evening?: components["schemas"]["ReminderIO"] | null;
+            morning?: components["schemas"]["ReminderIO"] | null;
+            weekly?: components["schemas"]["ReminderIO"] | null;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -922,11 +921,11 @@ export interface components {
         /** GoalColumnsIO */
         GoalColumnsIO: {
             /** Cards */
-            cards?: string[];
+            cards?: ("page_id" | "title" | "status" | "outcome_codes" | "target_date" | "next_step" | "notion_edited_at" | "habits" | "habits_adherence_avg" | "milestones_total" | "milestones_done" | "tasks_total" | "tasks_done" | "indicator" | "pending")[];
             /** Milestones */
-            milestones?: string[];
+            milestones?: ("page_id" | "title" | "outcome_code" | "card_page_ids" | "cycle_no" | "due_date" | "done" | "criterion" | "evidence" | "notion_edited_at" | "overdue_days" | "pending")[];
             /** Outcomes */
-            outcomes?: string[];
+            outcomes?: ("code" | "title" | "track" | "target_date" | "acceptance" | "status" | "milestones_total" | "milestones_done" | "milestones_due" | "completion" | "next_milestone" | "habits" | "indicator" | "kpis")[];
         };
         /** GoalTaskSetPayload */
         GoalTaskSetPayload: {
@@ -1349,9 +1348,9 @@ export interface components {
             display: "ring" | "bar" | "number" | "sparkline";
             /**
              * Id
-             * Format: uuid
+             * @description للقراءة فقط: يضعه الخادم
              */
-            id?: string;
+            id?: string | null;
             /**
              * Measure
              * @enum {string}
@@ -1362,7 +1361,7 @@ export interface components {
              * @enum {string}
              */
             period: "day" | "week" | "month" | "cycle" | "all";
-            reminder?: components["schemas"]["IndicatorReminderIO"] | null;
+            reminder?: components["schemas"]["ReminderIO"] | null;
             /**
              * Source
              * @enum {string}
@@ -1379,55 +1378,16 @@ export interface components {
             target?: number | null;
             /** Title Ar */
             title_ar?: string | null;
-            /** Updated At */
+            /**
+             * Updated At
+             * @description للقراءة فقط: يضعه الخادم
+             */
             updated_at?: string | null;
-        };
-        /** IndicatorIn */
-        IndicatorIn: {
-            /**
-             * Display
-             * @enum {string}
-             */
-            display: "ring" | "bar" | "number" | "sparkline";
-            /**
-             * Measure
-             * @enum {string}
-             */
-            measure: "completion" | "total" | "avg_7d" | "avg_30d" | "strength";
-            /**
-             * Period
-             * @enum {string}
-             */
-            period: "day" | "week" | "month" | "cycle" | "all";
-            reminder?: components["schemas"]["IndicatorReminderIO"] | null;
-            /**
-             * Source
-             * @enum {string}
-             */
-            source: "habit_logs" | "linked_habits" | "milestones" | "tasks";
-            /**
-             * Subject Kind
-             * @enum {string}
-             */
-            subject_kind: "habit" | "goal";
-            /** Subject Ref */
-            subject_ref: string;
-            /** Target */
-            target?: number | null;
-            /** Title Ar */
-            title_ar?: string | null;
         };
         /** IndicatorList */
         IndicatorList: {
             /** Items */
             items: components["schemas"]["IndicatorIO"][];
-        };
-        /** IndicatorReminderIO */
-        IndicatorReminderIO: {
-            /** Days Mask */
-            days_mask: number;
-            /** Time */
-            time: string;
         };
         /**
          * InsightOut
@@ -1682,8 +1642,11 @@ export interface components {
             done: number;
             /** Expected */
             expected: number;
-            /** Need Per Day */
-            need_per_day: number;
+            /**
+             * Need Per Day
+             * @description المطلوب يومياً لبلوغ الهدف؛ `null` لعادة امتناع فلا معنى له
+             */
+            need_per_day: number | null;
             /** On Track */
             on_track: boolean;
             /** Reached */
@@ -1810,6 +1773,7 @@ export interface components {
             late_notice_enabled: boolean;
             /**
              * Late Notice Time
+             * @description HH:mm محلياً
              * @default 20:00
              */
             late_notice_time: string;
@@ -1824,31 +1788,49 @@ export interface components {
              */
             vision: string;
         };
-        /** SettingsPatch */
+        /**
+         * SettingsPatch
+         * @description The keys to change; the others stay. A nested object replaces the stored one whole.
+         */
         SettingsPatch: {
-            /** Ai Checkin */
-            ai_checkin?: ("morning" | "evening") | null;
-            /** Ai Lines */
-            ai_lines?: (1 | 2) | null;
-            /** Ai Tone */
-            ai_tone?: ("direct" | "explained") | null;
+            /**
+             * Ai Checkin
+             * @enum {string}
+             */
+            ai_checkin?: "morning" | "evening";
+            /**
+             * Ai Lines
+             * @enum {integer}
+             */
+            ai_lines?: 1 | 2;
+            /**
+             * Ai Tone
+             * @enum {string}
+             */
+            ai_tone?: "direct" | "explained";
             breath_prefs?: components["schemas"]["BreathPrefsIO"] | null;
             /** Breath Weekly Target Min */
             breath_weekly_target_min?: number | null;
-            day_reminders?: components["schemas"]["DayRemindersIO"] | null;
-            /** Digits */
-            digits?: ("latn" | "arab") | null;
+            day_reminders?: components["schemas"]["DayRemindersIO"];
+            /**
+             * Digits
+             * @enum {string}
+             */
+            digits?: "latn" | "arab";
             /** Focus Daily Target Min */
             focus_daily_target_min?: number | null;
-            goal_columns?: components["schemas"]["GoalColumnsIO"] | null;
+            goal_columns?: components["schemas"]["GoalColumnsIO"];
             /** Late Notice Enabled */
-            late_notice_enabled?: boolean | null;
-            /** Late Notice Time */
-            late_notice_time?: string | null;
+            late_notice_enabled?: boolean;
+            /**
+             * Late Notice Time
+             * @description HH:mm محلياً
+             */
+            late_notice_time?: string;
             /** Mission */
-            mission?: string | null;
+            mission?: string;
             /** Vision */
-            vision?: string | null;
+            vision?: string;
         };
         /**
          * StoredEvent
@@ -2888,7 +2870,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IndicatorIn"];
+                "application/json": components["schemas"]["IndicatorIO"];
             };
         };
         responses: {

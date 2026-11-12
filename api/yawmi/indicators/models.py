@@ -1,28 +1,37 @@
-"""Models for habit and goal indicators."""
+"""Models for habit and goal indicators (design §7.5).
+
+`IndicatorIO` is the one schema: the body of `PUT /v1/indicators/{subject_kind}/{subject_ref}`
+and what is read back. `id` and `updated_at` are the server's: a body that carries them is not
+refused, and they are ignored. The subject of a `PUT` is the URL's; the body repeats it, and a
+body that names another subject is a 422.
+"""
 
 from datetime import datetime
 from typing import Literal, Self
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from yawmi.habits.models import Ref, ReminderIO, ShortTitle, Target
 
-class IndicatorReminderIO(BaseModel):
-    time: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
-    days_mask: int = Field(ge=1, le=127)
+SubjectKind = Literal["habit", "goal"]
 
 
-class IndicatorIn(BaseModel):
-    subject_kind: Literal["habit", "goal"]
-    subject_ref: str
-    title_ar: str | None = None
+class IndicatorIO(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    subject_kind: SubjectKind
+    subject_ref: Ref
+    title_ar: ShortTitle | None = None
     source: Literal["habit_logs", "linked_habits", "milestones", "tasks"]
     measure: Literal["completion", "total", "avg_7d", "avg_30d", "strength"]
-    target: float | None = Field(default=None, gt=0)
+    target: Target | None = None
     period: Literal["day", "week", "month", "cycle", "all"]
     display: Literal["ring", "bar", "number", "sparkline"]
-    reminder: IndicatorReminderIO | None = None
+    reminder: ReminderIO | None = None
+    id: UUID | None = Field(default=None, description="للقراءة فقط: يضعه الخادم")
+    updated_at: datetime | None = Field(default=None, description="للقراءة فقط: يضعه الخادم")
 
     @model_validator(mode="after")
     def validate_indicator_shape(self) -> Self:
@@ -37,8 +46,8 @@ class IndicatorIn(BaseModel):
                     "habit_reminder_invalid",
                     "Habit indicator cannot have a custom reminder",
                 )
-        elif self.subject_kind == "goal":
-            if self.source not in ("linked_habits", "milestones", "tasks"):
+        else:
+            if self.source == "habit_logs":
                 raise PydanticCustomError(
                     "goal_source_invalid",
                     "Goal indicator source must be linked_habits, milestones, or tasks",
@@ -49,11 +58,6 @@ class IndicatorIn(BaseModel):
                     "Goal indicator measure must be completion",
                 )
         return self
-
-
-class IndicatorIO(IndicatorIn):
-    id: UUID = Field(default_factory=uuid4)
-    updated_at: datetime | None = None
 
 
 class IndicatorList(BaseModel):

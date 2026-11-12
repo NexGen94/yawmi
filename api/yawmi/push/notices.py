@@ -1,4 +1,11 @@
-"""Push notices providers for day reminders and notifications."""
+"""Push notice providers: what to say besides the habit reminders, and when (design §9.3).
+
+A provider is `async (ctx, now) -> list[Notice]`. Each `tick` calls every provider in
+`PROVIDERS`; a notice is sent once per `(kind, ref, day)`, `day` being the day it belongs to (a
+reminder at 23:55 still due at 00:02 belongs to the day before), claimed in `notice_sends`.
+This module holds the day reminders (morning, evening, weekly review); the late summary and the
+goal indicators add theirs to the list.
+"""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -6,97 +13,79 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from yawmi.domain.periods import WeekStart, weekday_bit
-from yawmi.prefs.models import DayReminderItemIO, SettingsOut
+from yawmi.habits.models import ReminderIO
+from yawmi.prefs.models import SettingsOut
 
 WINDOW = timedelta(minutes=10)
+_ONE_DAY = timedelta(days=1)
 
 
 @dataclass(frozen=True, slots=True)
 class Notice:
     kind: str
     ref: str
+    day: date
     body: str
     navigate: str
 
 
 @dataclass(frozen=True, slots=True)
 class NoticeContext:
-    now: datetime
-    local: datetime
-    day: date
-    prefs: Any
-    journal: Any
+    local: datetime  # the tick's instant in the plan's zone
+    prefs: Any  # PrefsStore
+    journal: Any  # JournalReader
     week_start: WeekStart
 
 
-def _is_due(item: DayReminderItemIO | None, local: datetime) -> date | None:
+NoticeProvider = Callable[[NoticeContext, datetime], Awaitable[list[Notice]]]
+
+
+def due_days(at: time, weekday_mask: int, local: datetime) -> list[date]:
+    """The local days whose occurrence at `at` has its 10-minute window around `local`.
+
+    Near midnight that may be yesterday: a 23:55 reminder is still due at 00:03.
+    """
+    days = []
+    for day in (local.date(), local.date() - _ONE_DAY):
+        start = datetime.combine(day, at, local.tzinfo)
+        if start <= local <= start + WINDOW and weekday_mask >> weekday_bit(day) & 1:
+            days.append(day)
+    return days
+
+
+def _due_day(item: ReminderIO | None, local: datetime) -> date | None:
+    """The day a day-reminder `item` is due for at `local`, if any."""
     if item is None:
         return None
-    zone = local.tzinfo
     hour, minute = map(int, item.time.split(":"))
-    t = time(hour, minute)
-    for day in (local.date(), local.date() - timedelta(days=1)):
-        start = datetime.combine(day, t, zone)
-        if start <= local <= start + WINDOW and (item.days_mask >> weekday_bit(day) & 1):
-            return day
-    return None
+    days = due_days(time(hour, minute), item.days_mask, local)
+    return days[0] if days else None
 
 
-async def day_reminder_notices(ctx: NoticeContext) -> list[Notice]:
+async def _journal_part_saved(ctx: NoticeContext, day: date, part: str) -> bool:
+    if ctx.journal is None:
+        return False
+    entries = await ctx.journal.entries(day, day)
+    return any(e.part == part for e in entries)
+
+
+async def day_reminder_notices(ctx: NoticeContext, now: datetime) -> list[Notice]:
     if ctx.prefs is None:
         return []
     settings: SettingsOut = await ctx.prefs.get()
     reminders = settings.day_reminders
     notices: list[Notice] = []
-
-    # Evening reminder
-    evening_day = _is_due(reminders.evening, ctx.local)
-    if evening_day is not None:
-        has_evening_entry = False
-        if ctx.journal is not None:
-            entries = await ctx.journal.entries(evening_day, evening_day)
-            has_evening_entry = any(e.part == "evening" for e in entries)
-        if not has_evening_entry:
-            notices.append(
-                Notice(
-                    kind="day_reminder",
-                    ref="evening",
-                    body="يومية المساء",
-                    navigate="/day/evening",
-                )
-            )
-
-    # Morning reminder
-    morning_day = _is_due(reminders.morning, ctx.local)
-    if morning_day is not None:
-        has_morning_entry = False
-        if ctx.journal is not None:
-            entries = await ctx.journal.entries(morning_day, morning_day)
-            has_morning_entry = any(e.part == "morning" for e in entries)
-        if not has_morning_entry:
-            notices.append(
-                Notice(
-                    kind="day_reminder",
-                    ref="morning",
-                    body="يومية الصباح",
-                    navigate="/day/morning",
-                )
-            )
-
-    # Weekly review reminder
-    weekly_day = _is_due(reminders.weekly, ctx.local)
+    for part, item, body in (
+        ("evening", reminders.evening, "يومية المساء"),
+        ("morning", reminders.morning, "يومية الصباح"),
+    ):
+        day = _due_day(item, ctx.local)
+        if day is not None and not await _journal_part_saved(ctx, day, part):
+            notices.append(Notice("day_reminder", part, day, body, f"/day/{part}"))
+    weekly_day = _due_day(reminders.weekly, ctx.local)
     if weekly_day is not None:
-        notices.append(
-            Notice(
-                kind="day_reminder",
-                ref="weekly",
-                body="مراجعة الأسبوع",
-                navigate="/review",
-            )
-        )
-
+        notices.append(Notice("day_reminder", "weekly", weekly_day, "مراجعة الأسبوع", "/review"))
     return notices
 
 
-NoticeProvider = Callable[[NoticeContext], Awaitable[list[Notice]]]
 PROVIDERS: list[NoticeProvider] = [day_reminder_notices]

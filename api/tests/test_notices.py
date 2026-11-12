@@ -1,5 +1,6 @@
 """Tests for the notices push provider: day reminders (morning, evening, weekly) and deduplication."""
 
+import json
 import os
 from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime, timedelta
@@ -15,7 +16,9 @@ from yawmi.journal.memory import InMemoryJournalReader
 from yawmi.journal.store import AsyncpgJournalReader
 from yawmi.prefs.memory import InMemoryPrefsStore
 from yawmi.prefs.store import AsyncpgPrefsStore
+from yawmi.push import notices as notices_module
 from yawmi.push.memory_store import InMemoryPushStore
+from yawmi.push.notices import Notice, NoticeContext
 from yawmi.push.scheduler import tick
 from yawmi.push.store import AsyncpgPushStore, Subscription
 
@@ -51,6 +54,7 @@ class Backend(Protocol):
     async def setup(self) -> None: ...
     async def cleanup(self) -> None: ...
     async def reopen(self) -> Any: ...
+    async def plant(self, key: str, value: Any) -> None: ...
 
 
 class MemoryBackend:
@@ -66,6 +70,9 @@ class MemoryBackend:
         self.store = InMemoryPushStore()
         self.prefs = InMemoryPrefsStore()
         self.journal = InMemoryJournalReader()
+
+    async def plant(self, key: str, value: Any) -> None:
+        self.prefs._values[key] = value
 
     async def reopen(self) -> Any:
         # returns new store sharing the same notice_sends (simulating restart over same db)
@@ -103,6 +110,14 @@ class PostgresBackend:
         await self.pool.execute("DELETE FROM yawmi.journal_entries")
         await self.pool.execute("DELETE FROM yawmi.user_settings")
         await self.pool.execute("DELETE FROM yawmi.push_subscriptions")
+
+    async def plant(self, key: str, value: Any) -> None:
+        await self.pool.execute(
+            "INSERT INTO yawmi.user_settings (key, value) VALUES ($1, $2::jsonb)"
+            " ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+            key,
+            json.dumps(value),
+        )
 
     async def reopen(self) -> Any:
         return AsyncpgPushStore(self.pool)
@@ -281,3 +296,72 @@ async def test_morning_and_weekly_reminders(backend: Backend, sender: FakeSender
     assert sent_weekly == 1
     assert sender.sent[-1][1]["notification"]["body"] == "مراجعة الأسبوع"
     assert sender.sent[-1][1]["notification"]["navigate"] == "/review"
+
+
+async def _tick(backend: Backend, sender: FakeSender, now: datetime) -> int:
+    return await tick(
+        backend.store,
+        sender,  # type: ignore[arg-type]
+        now,
+        tz=TZ,
+        week_start="sun",
+        prefs=backend.prefs,
+        journal=backend.journal,
+    )
+
+
+def _riyadh(day: int, hour: int, minute: int) -> datetime:
+    """A November 2026 instant given as Riyadh wall-clock time."""
+    return datetime(2026, 11, day, hour, minute, tzinfo=RIYADH).astimezone(UTC)
+
+
+async def test_an_evening_reminder_near_midnight_is_sent_once_for_its_day(
+    backend: Backend, sender: FakeSender
+) -> None:
+    await backend.prefs.patch({"day_reminders": {"evening": {"time": "23:55", "days_mask": 127}}})
+
+    # 23:57 on the 10th and 00:02 on the 11th are the same reminder (the 10th's, window 10 min)
+    assert await _tick(backend, sender, _riyadh(10, 23, 57)) == 1
+    assert await _tick(backend, sender, _riyadh(11, 0, 2)) == 0
+    assert len(sender.sent) == 1
+
+    # the 11th's own 23:55 reminder is a new day, and goes out
+    assert await _tick(backend, sender, _riyadh(11, 23, 57)) == 1
+    assert len(sender.sent) == 2
+    assert await _tick(backend, sender, _riyadh(12, 0, 3)) == 0
+
+
+async def test_a_notice_is_claimed_by_its_own_day_not_by_the_tick_day(
+    backend: Backend, sender: FakeSender, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def provider(ctx: NoticeContext, now: datetime) -> list[Notice]:
+        assert now == _riyadh(11, 9, 0)  # the second argument is the tick's instant
+        return [Notice("custom", "x", date(2026, 11, 10), "نص", "/")]
+
+    monkeypatch.setattr(notices_module, "PROVIDERS", [provider])
+    assert await _tick(backend, sender, _riyadh(11, 9, 0)) == 1
+    assert await _tick(backend, sender, _riyadh(11, 9, 0)) == 0  # claimed for the 10th
+
+
+async def test_a_failing_provider_does_not_stop_the_others(
+    backend: Backend, sender: FakeSender, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def broken(ctx: NoticeContext, now: datetime) -> list[Notice]:
+        raise RuntimeError("boom")
+
+    async def fine(ctx: NoticeContext, now: datetime) -> list[Notice]:
+        return [Notice("custom", "y", date(2026, 11, 11), "نص", "/")]
+
+    monkeypatch.setattr(notices_module, "PROVIDERS", [broken, fine])
+    assert await _tick(backend, sender, _riyadh(11, 9, 0)) == 1
+
+
+@pytest.mark.parametrize("bad", [None, "x", 5, {"evening": "21:00"}])
+async def test_a_stored_bad_day_reminders_row_does_not_stop_the_tick(
+    backend: Backend, sender: FakeSender, bad: Any
+) -> None:
+    await backend.plant("day_reminders", bad)
+    await backend.plant("digits", None)
+    assert await _tick(backend, sender, _riyadh(10, 21, 5)) == 0  # no reminder is set: no send
+    await backend.prefs.patch({"day_reminders": {"evening": {"time": "21:00", "days_mask": 127}}})
+    assert await _tick(backend, sender, _riyadh(10, 21, 5)) == 1

@@ -952,10 +952,8 @@ def test_a_per_period_kpi_prefills_its_own_target_when_the_periods_match(frequen
         ("دقيقة", ("duration", "min")),  # english_minutes: 285 دقيقة في الأسبوع
         (" دقيقة ", ("duration", "min")),
         ("جلسة", ("count", "session")),  # strength_sessions, english_speaking
-        ("ليلة", ("count", "")),  # لا وحدة عادة تقابلها
-        ("يوم", ("count", "")),
+        # «يوم» و«ليلة» و«نعم/لا» حكمها بالهدف والفترة، في `test_kpi_habit_shape_m4_d067_ruling`
         ("مبادرة", ("count", "")),
-        ("نعم/لا", ("count", "")),
         ("", ("count", "")),
         (None, ("count", "")),
     ],
@@ -964,23 +962,33 @@ def test_a_per_period_draft_takes_its_kind_and_unit_from_the_kpi_unit(unit, shap
     assert kpi_habit_shape(unit) == shape
 
 
-def test_kpi_habit_shape_m4_d067_ruling():
-    """D-067 item 5 ruling:
+@pytest.mark.parametrize(
+    ("unit", "target", "period", "shape"),
+    [
+        ("يوم", 5, "week", ("boolean", "")),  # meditation_days
+        ("ليلة", 5, "week", ("boolean", "")),  # sleep_7h_nights
+        ("نعم/لا", 1, "week", ("boolean", "")),  # family_halfday
+        ("دقيقة", 285, "week", ("duration", "min")),  # english_minutes stays a duration
+        ("يوم", 7, "week", ("boolean", "")),
+        ("يوم", 28, "month", ("boolean", "")),
+        ("يوم", 1, "day", ("boolean", "")),
+        ("يوم", 8, "week", ("count", "")),  # past `BOOLEAN_MAX_TARGET` of the period
+        ("يوم", 2, "day", ("count", "")),
+        ("يوم", 29, "month", ("count", "")),
+        ("يوم", 1.5, "week", ("count", "")),  # not a whole number
+        ("يوم", None, "week", ("count", "")),  # no target
+        ("يوم", 5, None, ("count", "")),  # no period
+        ("ليلة", 5, "cycle", ("count", "")),
+    ],
+)
+def test_kpi_habit_shape_m4_d067_ruling(unit, target, period, shape):
+    """D-067 بند 5: «مؤشرات الأيام والليالي تُقترح «نعم/لا» بهدف أسبوعي كعادات البذرة (M-4)».
 
-    «مؤشرات الأيام والليالي تُقترح «نعم/لا» بهدف أسبوعي كعادات البذرة (M-4)»
+    This replaces the old rows that expected «ليلة» and «يوم» and «نعم/لا» to be `count`
+    (with the comment «لا وحدة عادة تقابلها»): a whole-number target within the period's
+    boolean maximum makes them yes/no; anything else stays a count.
     """
-    # meditation_days: unit "يوم", target 5, period "week" -> ("boolean", "")
-    assert kpi_habit_shape("يوم", 5, "week") == ("boolean", "")
-    # sleep_7h_nights: unit "ليلة", target 5, period "week" -> ("boolean", "")
-    assert kpi_habit_shape("ليلة", 5, "week") == ("boolean", "")
-    # family_halfday: unit "نعم/لا", target 1, period "week" -> ("boolean", "")
-    assert kpi_habit_shape("نعم/لا", 1, "week") == ("boolean", "")
-    # english_minutes: stays ("duration", "min")
-    assert kpi_habit_shape("دقيقة", 285, "week") == ("duration", "min")
-    # Target exceeding BOOLEAN_MAX_TARGET reverts to count
-    assert kpi_habit_shape("يوم", 8, "week") == ("count", "")
-    assert kpi_habit_shape("يوم", 2, "day") == ("count", "")
-    assert kpi_habit_shape("يوم", 1.5, "week") == ("count", "")
+    assert kpi_habit_shape(unit, target, period) == shape
 
 
 @pytest.mark.parametrize(

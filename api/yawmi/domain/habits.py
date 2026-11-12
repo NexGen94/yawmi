@@ -539,13 +539,6 @@ RATE_OR_AVERAGE_KPIS: frozenset[str] = frozenset(
     }
 )
 
-# وحدة المؤشر ← شكل مسودة العادة لمؤشر عدّ في الفترة: الدقائق مدة بوحدة `min`، والجلسات عدّ بوحدة
-# `session`، وما سواهما عدّ بلا وحدة (وحدات العادة: `''` و`session` للعدّ، و`min` و`hour` للمدة).
-_KPI_UNIT_SHAPE: dict[str, tuple[HabitKind, str]] = {
-    "دقيقة": ("duration", "min"),
-    "جلسة": ("count", "session"),
-}
-
 # تواتر المؤشر وفترة العادة التي تقابله.
 KPI_FREQUENCY_PERIOD: dict[str, Period] = {"daily": "day", "weekly": "week", "monthly": "month"}
 

@@ -5,7 +5,7 @@ from typing import Any, Protocol
 
 import asyncpg
 
-from yawmi.prefs.models import SettingsOut, SettingsPatch
+from yawmi.prefs.models import SettingsOut, settings_from_stored, validated_changes
 
 SELECT_SETTINGS = "SELECT key, value FROM yawmi.user_settings"
 UPSERT_SETTING = """
@@ -19,7 +19,7 @@ ON CONFLICT (key) DO UPDATE SET
 
 class PrefsStore(Protocol):
     async def get(self) -> SettingsOut: ...
-    async def patch(self, changes: SettingsPatch | dict[str, Any]) -> SettingsOut: ...
+    async def patch(self, changes: dict[str, Any]) -> SettingsOut: ...
 
 
 class AsyncpgPrefsStore:
@@ -28,16 +28,13 @@ class AsyncpgPrefsStore:
 
     async def get(self) -> SettingsOut:
         rows = await self._pool.fetch(SELECT_SETTINGS)
-        data = SettingsOut().model_dump()
-        for r in rows:
-            val = json.loads(r["value"]) if isinstance(r["value"], str) else r["value"]
-            data[r["key"]] = val
-        return SettingsOut.model_validate(data)
+        stored = {
+            r["key"]: json.loads(r["value"]) if isinstance(r["value"], str) else r["value"]
+            for r in rows
+        }
+        return settings_from_stored(stored)
 
-    async def patch(self, changes: SettingsPatch | dict[str, Any]) -> SettingsOut:
-        if isinstance(changes, dict):
-            changes = SettingsPatch.model_validate(changes)
-        patch_data = changes.model_dump(exclude_unset=True, mode="json")
-        for k, v in patch_data.items():
-            await self._pool.execute(UPSERT_SETTING, k, json.dumps(v))
+    async def patch(self, changes: dict[str, Any]) -> SettingsOut:
+        for key, value in validated_changes(changes).items():
+            await self._pool.execute(UPSERT_SETTING, key, json.dumps(value))
         return await self.get()
