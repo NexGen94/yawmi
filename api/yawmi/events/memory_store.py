@@ -15,7 +15,10 @@ from yawmi.events.models import BatchResult, StoredEvent
 from yawmi.events.project import (
     BreathSession,
     FocusSession,
+    GoalTaskMark,
     HabitLog,
+    JournalEntry,
+    MoodLog,
     Planned,
     habit_codes,
 )
@@ -35,6 +38,9 @@ class InMemoryEventStore:
         self.habit_logs: dict[tuple[str, date], HabitLog] = {}
         self.focus_sessions: list[FocusSession] = []
         self.breath_sessions: list[BreathSession] = []
+        self.journal_entries: dict[tuple[date, str], JournalEntry] = {}
+        self.mood_logs: dict[date, MoodLog] = {}
+        self.goal_tasks: dict[UUID, tuple[datetime | None, datetime | None]] = {}
 
     async def ingest(self, device_id: UUID, planned: Sequence[Planned]) -> BatchResult:
         dump_payloads(planned)  # same rule as the Postgres store: no NaN / infinity
@@ -81,6 +87,22 @@ class InMemoryEventStore:
                 self.focus_sessions.append(intent)
             elif isinstance(intent, BreathSession):
                 self.breath_sessions.append(intent)
+            elif isinstance(intent, JournalEntry):
+                jkey = (intent.day, intent.part)
+                jcur = self.journal_entries.get(jkey)
+                if jcur is None or intent.logged_at >= jcur.logged_at:
+                    self.journal_entries[jkey] = intent
+            elif isinstance(intent, MoodLog):
+                mcur = self.mood_logs.get(intent.day)
+                if mcur is None or intent.logged_at >= mcur.logged_at:
+                    self.mood_logs[intent.day] = intent
+            elif isinstance(intent, GoalTaskMark) and intent.task_id in self.goal_tasks:
+                _, prev_logged = self.goal_tasks[intent.task_id]
+                if prev_logged is None or intent.logged_at >= prev_logged:
+                    self.goal_tasks[intent.task_id] = (
+                        intent.logged_at if intent.done else None,
+                        intent.logged_at,
+                    )
         return BatchResult(accepted=len(new), duplicates=len(planned) - len(new))
 
     async def pull(self, since: datetime | None, limit: int) -> list[StoredEvent]:

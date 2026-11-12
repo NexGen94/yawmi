@@ -30,7 +30,10 @@ from yawmi.events.models import BatchResult, PayloadNotJson, StoredEvent, dump_p
 from yawmi.events.project import (
     BreathSession,
     FocusSession,
+    GoalTaskMark,
     HabitLog,
+    JournalEntry,
+    MoodLog,
     Planned,
     habit_codes,
 )
@@ -151,6 +154,36 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $1)
 ON CONFLICT (id) DO NOTHING
 """
 
+_UPSERT_JOURNAL_ENTRY = """
+INSERT INTO yawmi.journal_entries (day, part, answers, event_id, logged_at)
+VALUES ($1, $2, $3::jsonb, $4, $5)
+ON CONFLICT (day, part) DO UPDATE
+SET answers = excluded.answers,
+    event_id = excluded.event_id,
+    logged_at = excluded.logged_at
+WHERE excluded.logged_at >= yawmi.journal_entries.logged_at
+"""
+
+_UPSERT_MOOD_LOG = """
+INSERT INTO yawmi.mood_logs (day, score, feelings, activities, event_id, logged_at)
+VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6)
+ON CONFLICT (day) DO UPDATE
+SET score = excluded.score,
+    feelings = excluded.feelings,
+    activities = excluded.activities,
+    event_id = excluded.event_id,
+    logged_at = excluded.logged_at
+WHERE excluded.logged_at >= yawmi.mood_logs.logged_at
+"""
+
+_MARK_GOAL_TASK = """
+UPDATE yawmi.goal_tasks
+SET done_at = $2,
+    done_logged_at = $3,
+    updated_at = now()
+WHERE id = $1 AND (done_logged_at IS NULL OR $3 >= done_logged_at)
+"""
+
 _PULL = """
 SELECT id, device_id, type, payload, occurred_at, tz, received_at
 FROM yawmi.events
@@ -209,6 +242,35 @@ def breath_args(intent: BreathSession, device_id: UUID) -> tuple[object, ...]:
         intent.breaths_per_min,
         intent.duration_seconds,
         intent.completed,
+    )
+
+
+def journal_entry_args(intent: JournalEntry) -> tuple[object, ...]:
+    return (
+        intent.day,
+        intent.part,
+        json.dumps(intent.answers, ensure_ascii=False),
+        intent.event_id,
+        intent.logged_at,
+    )
+
+
+def mood_log_args(intent: MoodLog) -> tuple[object, ...]:
+    return (
+        intent.day,
+        intent.score,
+        json.dumps(intent.feelings, ensure_ascii=False),
+        json.dumps(intent.activities, ensure_ascii=False),
+        intent.event_id,
+        intent.logged_at,
+    )
+
+
+def goal_task_mark_args(intent: GoalTaskMark) -> tuple[object, ...]:
+    return (
+        intent.task_id,
+        intent.logged_at if intent.done else None,
+        intent.logged_at,
     )
 
 
@@ -294,6 +356,18 @@ class AsyncpgEventStore:
                     for i in new
                     if isinstance(i.intent, BreathSession)
                 ],
+            )
+            await conn.executemany(
+                _UPSERT_JOURNAL_ENTRY,
+                [journal_entry_args(i.intent) for i in new if isinstance(i.intent, JournalEntry)],
+            )
+            await conn.executemany(
+                _UPSERT_MOOD_LOG,
+                [mood_log_args(i.intent) for i in new if isinstance(i.intent, MoodLog)],
+            )
+            await conn.executemany(
+                _MARK_GOAL_TASK,
+                [goal_task_mark_args(i.intent) for i in new if isinstance(i.intent, GoalTaskMark)],
             )
         return BatchResult(accepted=len(inserted), duplicates=len(planned) - len(inserted))
 

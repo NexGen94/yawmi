@@ -1,4 +1,4 @@
-"""Pairing, refresh-token rotation and revocation.
+"""Pairing, refresh-token rotation, logout and revocation.
 
 Pairing fails closed: `PairingGuard` counts failed pairings in memory, per process; when more
 than `MAX_PAIRING_FAILURES` fail within `PAIRING_FAILURE_WINDOW`, every unused code is expired and
@@ -10,6 +10,7 @@ it: it lives in the `yawmi_rt` cookie (HttpOnly, Strict, scoped to `/v1/auth`) a
 body carries `refresh_token: null`.
 """
 
+import hmac
 import logging
 import time
 from collections import deque
@@ -121,6 +122,15 @@ def refresh_cookie(device_id: UUID, raw: str, *, secure: bool, max_age: int) -> 
     return "; ".join(parts)
 
 
+def clear_refresh_cookie(*, secure: bool) -> str:
+    """`Set-Cookie` value that clears the web refresh token cookie."""
+    parts = [f"{COOKIE_NAME}=", "HttpOnly"]
+    if secure:
+        parts.append("Secure")
+    parts += ["SameSite=Strict", f"Path={COOKIE_PATH}", "Max-Age=0"]
+    return "; ".join(parts)
+
+
 def _token_pair(
     response: Response, settings: Settings, device_id: UUID, kind: str, raw_refresh: str
 ) -> TokenPair:
@@ -208,6 +218,38 @@ async def refresh_tokens(
     if not await devices.rotate_refresh(device_id, hash_refresh(raw), new_digest, max_age=max_age):
         raise unauthorized(bearer=False)
     return _token_pair(response, settings, device_id, device.kind, new_raw)
+
+
+@router.post(
+    "/auth/logout",
+    status_code=204,
+    summary="إنهاء جلسة الجهاز الحالي ومسح كوكي رمز التجديد",
+    responses={**INVALID},
+)
+async def logout(
+    devices: DevicesDep,
+    settings: SettingsDep,
+    body: RefreshRequest | None = None,
+    yawmi_rt: Annotated[str | None, Cookie()] = None,
+) -> Response:
+    try:
+        device_id, raw = _credentials(body, yawmi_rt)
+    except HTTPException:
+        device_id = None
+        raw = ""
+    if device_id is not None and raw:
+        device = await devices.get_device(device_id)
+        if (
+            device is not None
+            and device.revoked_at is None
+            and device.refresh_hash is not None
+            and hmac.compare_digest(device.refresh_hash, hash_refresh(raw))
+        ):
+            await devices.revoke(device_id)
+    res = Response(status_code=204)
+    res.headers["Cache-Control"] = "no-store"
+    res.headers.append("set-cookie", clear_refresh_cookie(secure=settings.cookie_secure))
+    return res
 
 
 @router.post(
