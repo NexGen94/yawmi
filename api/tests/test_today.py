@@ -275,8 +275,8 @@ class PostgresBackend:
                     await self.pool.execute(
                         "INSERT INTO yawmi.habits (code, title_ar, kind, unit, target_per_period,"
                         " period, schedule_kind, weekday_mask, every_n, anchor_day, start_day,"
-                        " end_day, goal_ref, outcome, anchor, created_by) VALUES"
-                        " ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'user')",
+                        " end_day, goal_ref, outcome, anchor, created_by, polarity) VALUES"
+                        " ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'user', $16)",
                         row.code,
                         row.title_ar,
                         row.kind,
@@ -292,6 +292,7 @@ class PostgresBackend:
                         row.goal_ref,
                         row.outcome,
                         row.anchor,
+                        row.polarity,
                     )
                 case LogRow():
                     await self.pool.execute(
@@ -495,6 +496,7 @@ async def test_today_brings_habits_health_and_plan_together(
                 "on_track": True,
                 "need_per_day": 0.0,
             },
+            "polarity": "build",
         }
     ]
     health = body["health"]
@@ -805,7 +807,8 @@ async def test_overview_links_outcome_habits_and_milestone_card_habits(
     assert [h["code"] for h in outcomes["O7"]["habits"] if h["code"].startswith(PREFIX)] == [
         PREFIX + "sys-o7"
     ]
-    assert outcomes["O7"]["habits"][0]["total_done"] == 1.0
+    sys_o7 = next(h for h in outcomes["O7"]["habits"] if h["code"] == PREFIX + "sys-o7")
+    assert sys_o7["total_done"] == 1.0
 
     cards = {c["page_id"]: c for c in body["cards"] if c["page_id"].startswith(PREFIX)}
     assert cards[card_c]["habits"] == [
@@ -816,3 +819,31 @@ async def test_overview_links_outcome_habits_and_milestone_card_habits(
             "total_done": 2.0,
         }
     ]
+
+
+async def test_today_abstain_habit_polarity_and_progress(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    # Abstain habit without slip
+    await backend.add(
+        habit("clean", title_ar="امتناع نقي", polarity="abstain", start_day=date(2026, 11, 1)),
+    )
+    res = await client.get("/v1/today", headers=auth())
+    assert res.status_code == 200, res.text
+    h = next(item for item in res.json()["habits_due"] if item["code"] == PREFIX + "clean")
+    assert h["polarity"] == "abstain"
+    assert h["done_today"] is False
+    assert h["period_progress"]["reached"] is True
+    assert h["period_progress"]["need_per_day"] is None  # meaningless for an abstain habit
+
+    # Now record a slip event today (status="done")
+    await backend.add(log("clean", day=DAY, status="done", value="1"))
+    res_slip = await client.get("/v1/today", headers=auth())
+    assert res_slip.status_code == 200, res_slip.text
+    h_slip = next(
+        item for item in res_slip.json()["habits_due"] if item["code"] == PREFIX + "clean"
+    )
+    assert h_slip["polarity"] == "abstain"
+    assert h_slip["done_today"] is True
+    assert h_slip["period_progress"]["reached"] is False
+    assert h_slip["period_progress"]["need_per_day"] is None

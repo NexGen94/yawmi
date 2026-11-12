@@ -63,6 +63,8 @@ class StoredHabit:
     system: bool
     created_by: str
     active: bool
+    polarity: str = "build"
+    identity_text: str | None = None
     reminders: tuple[Reminder, ...] = field(default=())
 
 
@@ -149,8 +151,10 @@ class MirrorReader(Protocol):
         """The KPI of `raqib.kpis`, or `None` if there is no KPI with that code."""
         ...
 
-    async def latest_reading(self, code: str, today: date) -> Decimal | None:
-        """The newest reading of the KPI on or before `today`, or `None`."""
+    async def latest_reading(
+        self, code: str, today: date, since: date | None = None
+    ) -> Decimal | None:
+        """The newest reading of the KPI on or before `today` (optionally on or after `since`), or `None`."""
         ...
 
 
@@ -174,6 +178,8 @@ HABIT_COLUMNS = (
     "system",
     "created_by",
     "active",
+    "polarity",
+    "identity_text",
 )
 # what an edit may write: never the code, nor who made the habit and whether it is a system one
 EDITED_COLUMNS = tuple(c for c in HABIT_COLUMNS if c not in ("code", "system", "created_by"))
@@ -225,6 +231,13 @@ WHERE kpi_code = $1 AND reading_date <= $2
 ORDER BY reading_date DESC, created_at DESC, id DESC
 LIMIT 1
 """
+LATEST_READING_SINCE = """
+SELECT value
+FROM raqib.kpi_readings
+WHERE kpi_code = $1 AND reading_date <= $2 AND reading_date >= $3
+ORDER BY reading_date DESC, created_at DESC, id DESC
+LIMIT 1
+"""
 
 ALL_SQL = (
     LIST_HABITS,
@@ -241,6 +254,7 @@ ALL_SQL = (
     OUTCOME_DEADLINE,
     KPI,
     LATEST_READING,
+    LATEST_READING_SINCE,
 )
 
 
@@ -336,5 +350,9 @@ class AsyncpgMirrorReader:
         row = await self._pool.fetchrow(KPI, code)
         return None if row is None else KpiRef(**dict(row))
 
-    async def latest_reading(self, code: str, today: date) -> Decimal | None:
-        return await self._pool.fetchval(LATEST_READING, code, today)
+    async def latest_reading(
+        self, code: str, today: date, since: date | None = None
+    ) -> Decimal | None:
+        if since is None:
+            return await self._pool.fetchval(LATEST_READING, code, today)
+        return await self._pool.fetchval(LATEST_READING_SINCE, code, today, since)

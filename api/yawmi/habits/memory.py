@@ -103,6 +103,12 @@ class InMemoryMirrorReader:
     async def kpi(self, code: str) -> KpiRef | None:
         return self.kpis.get(code)
 
-    async def latest_reading(self, code: str, today: date) -> Decimal | None:
-        past = [(day, value) for day, value in self.readings.get(code, []) if day <= today]
+    async def latest_reading(
+        self, code: str, today: date, since: date | None = None
+    ) -> Decimal | None:
+        past = [
+            (day, value)
+            for day, value in self.readings.get(code, [])
+            if day <= today and (since is None or day >= since)
+        ]
         return max(past, key=lambda r: r[0])[1] if past else None

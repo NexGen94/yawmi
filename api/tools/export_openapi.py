@@ -48,6 +48,9 @@ REQUIRED_PATHS: tuple[str, ...] = (
     "/v1/goals/{ref}/to-habit",
     "/v1/push/subscribe",
     "/v1/push/vapid-public-key",
+    "/v1/settings",
+    "/v1/indicators",
+    "/v1/indicators/{subject_kind}/{subject_ref}",
 )
 
 # Not built yet. The task that adds a route moves its path to REQUIRED_PATHS and regenerates

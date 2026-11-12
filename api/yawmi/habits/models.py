@@ -29,7 +29,7 @@ from typing import Annotated, Any, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, StrictInt
 from pydantic_core import PydanticCustomError
 
-from yawmi.domain.habits import HabitKind, HabitLog, ScheduleKind
+from yawmi.domain.habits import BOOLEAN_MAX_TARGET, HabitKind, HabitLog, ScheduleKind
 from yawmi.domain.periods import Period
 from yawmi.habits.store import Reminder, StoredHabit
 from yawmi.text import StorableText
@@ -39,12 +39,12 @@ MAX_REMINDERS = 3
 # the stored days (`start_day`, `end_day`, `anchor_day`): the range the service uses for instants
 FIRST_DAY = date(2000, 1, 1)
 LAST_DAY = date(2099, 12, 31)
-SYSTEM_EDITABLE = frozenset({"anchor", "reminders"})
-BOOLEAN_MAX_TARGET: dict[str, int] = {"day": 1, "week": 7, "month": 28}
+SYSTEM_EDITABLE = frozenset({"anchor", "reminders", "identity_text"})
 
 HabitUnit = Literal["", "session", "min", "hour"]
 Anchor = Literal["after_wake", "before_sleep", "free"]
 CreatedBy = Literal["seed", "user"]
+Polarity = Literal["build", "abstain"]
 
 _TITLE_BLANK = "العنوان مطلوب"
 _REF_BLANK = "المعرّف لا يكون فراغاً"
@@ -71,6 +71,7 @@ def _day(value: date) -> date:
 
 
 Title = Annotated[StorableText, Field(max_length=200), AfterValidator(_title)]
+ShortTitle = Annotated[StorableText, Field(max_length=80), AfterValidator(_title)]
 Ref = Annotated[StorableText, Field(min_length=1, max_length=128), AfterValidator(_ref)]
 Day = Annotated[date, AfterValidator(_day), Field(description="من 2000-01-01 إلى 2099-12-31")]
 OutcomeCode = Annotated[str, Field(pattern=r"^O([1-9]|1[0-2])$")]
@@ -79,6 +80,7 @@ DayMask = Annotated[StrictInt, Field(ge=1, le=127, description="بتّ 0 = ال�
 EveryN = Annotated[StrictInt, Field(ge=2, le=365)]
 # ASCII digits only: `\d` would also match Arabic-Indic and full-width digits
 Clock = Annotated[str, Field(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$", description="HH:mm محلياً")]
+IdentityText = Annotated[StorableText, Field(max_length=300)]
 
 
 class ReminderIO(BaseModel):
@@ -118,6 +120,8 @@ class HabitIn(BaseModel):
     anchor: Anchor = "free"
     start_day: Day | None = Field(default=None, description="الافتراضي اليوم بتوقيت الرياض")
     end_day: Day | None = None
+    polarity: Polarity = "build"
+    identity_text: IdentityText | None = None
     reminders: Reminders = Field(
         default_factory=list, description="تُرتَّب بالوقت ثم القناع، ويُحذف المكرر"
     )
@@ -147,6 +151,8 @@ class HabitPatch(BaseModel):
     anchor: Anchor = None  # type: ignore[assignment]
     start_day: Day = None  # type: ignore[assignment]
     end_day: Day | None = None
+    polarity: Polarity = None  # type: ignore[assignment]
+    identity_text: IdentityText | None = None
     reminders: Reminders = Field(  # type: ignore[assignment]
         default=None, description="تستبدل المجموعة؛ ما بقي منها يحتفظ بصفّه"
     )
@@ -175,6 +181,8 @@ class HabitOut(BaseModel):
     system: bool
     created_by: CreatedBy
     active: bool
+    polarity: Polarity
+    identity_text: str | None
     reminders: list[ReminderIO]
 
 
@@ -196,6 +204,8 @@ class HabitDraft(BaseModel):
     anchor: Anchor
     start_day: date
     end_day: date | None
+    polarity: Polarity = "build"
+    identity_text: str | None = None
     reminders: list[ReminderIO]
 
 
@@ -228,6 +238,8 @@ def to_api(habit: StoredHabit) -> dict[str, Any]:
         "system": habit.system,
         "created_by": habit.created_by,
         "active": habit.active,
+        "polarity": habit.polarity,
+        "identity_text": habit.identity_text,
         "reminders": [
             {"time": _clock(r.at_time), "days_mask": r.weekday_mask} for r in habit.reminders
         ],
@@ -271,6 +283,8 @@ def from_api(values: dict[str, Any]) -> StoredHabit:
         system=values["system"],
         created_by=values["created_by"],
         active=values["active"],
+        polarity=values.get("polarity", "build"),
+        identity_text=values.get("identity_text"),
         # sorted and without duplicates: the same order in every answer, one push per reminder
         reminders=tuple(
             sorted(
@@ -295,6 +309,16 @@ def habit_errors(values: dict[str, Any]) -> list[dict[str, Any]]:
     errors: list[dict[str, Any]] = []
     kind, unit, period = values["kind"], values["unit"], values["period"]
     target = float(values["target_per_period"])
+    polarity = values.get("polarity", "build")
+
+    if polarity == "abstain" and (kind != "boolean" or period != "day" or target != 1):
+        errors.append(
+            _error(
+                "polarity",
+                "abstain_daily_boolean",
+                "عادة الامتناع تقتصر على نعم/لا يومية بهدف 1",
+            )
+        )
 
     if kind == "boolean":
         if target != int(target):

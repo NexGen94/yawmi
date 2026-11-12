@@ -1,0 +1,249 @@
+{
+  "cases": [
+    {
+      "id": "S1",
+      "habit": {
+        "kind": "boolean",
+        "unit": "",
+        "target_per_period": 1.0,
+        "period": "day",
+        "schedule_kind": "every_day",
+        "weekday_mask": null,
+        "every_n": null,
+        "anchor_day": null,
+        "start_day": "2026-11-01",
+        "end_day": null,
+        "polarity": "build",
+        "active": true
+      },
+      "logs": [
+        {
+          "day": "2026-11-08",
+          "value": 1.0,
+          "status": "done"
+        },
+        {
+          "day": "2026-11-09",
+          "value": 1.0,
+          "status": "done"
+        }
+      ],
+      "today": "2026-11-10",
+      "week_start": "sun",
+      "expect": "active"
+    },
+    {
+      "id": "S2",
+      "habit": {
+        "kind": "boolean",
+        "unit": "",
+        "target_per_period": 1.0,
+        "period": "day",
+        "schedule_kind": "every_day",
+        "weekday_mask": null,
+        "every_n": null,
+        "anchor_day": null,
+        "start_day": "2026-11-01",
+        "end_day": null,
+        "polarity": "build",
+        "active": true
+      },
+      "logs": [
+        {
+          "day": "2026-11-08",
+          "value": 1.0,
+          "status": "done"
+        }
+      ],
+      "today": "2026-11-10",
+      "week_start": "sun",
+      "expect": "late"
+    },
+    {
+      "id": "S2-done",
+      "habit": {
+        "kind": "boolean",
+        "unit": "",
+        "target_per_period": 1.0,
+        "period": "day",
+        "schedule_kind": "every_day",
+        "weekday_mask": null,
+        "every_n": null,
+        "anchor_day": null,
+        "start_day": "2026-11-01",
+        "end_day": null,
+        "polarity": "build",
+        "active": true
+      },
+      "logs": [
+        {
+          "day": "2026-11-08",
+          "value": 1.0,
+          "status": "done"
+        },
+        {
+          "day": "2026-11-10",
+          "value": 1.0,
+          "status": "done"
+        }
+      ],
+      "today": "2026-11-10",
+      "week_start": "sun",
+      "expect": "done"
+    },
+    {
+      "id": "S3",
+      "habit": {
+        "kind": "duration",
+        "unit": "min",
+        "target_per_period": 285.0,
+        "period": "week",
+        "schedule_kind": "every_day",
+        "weekday_mask": null,
+        "every_n": null,
+        "anchor_day": null,
+        "start_day": "2026-11-01",
+        "end_day": null,
+        "polarity": "build",
+        "active": true
+      },
+      "logs": [
+        {
+          "day": "2026-11-08",
+          "value": 60.0,
+          "status": "done"
+        },
+        {
+          "day": "2026-11-10",
+          "value": 25.0,
+          "status": "done"
+        }
+      ],
+      "today": "2026-11-10",
+      "week_start": "sun",
+      "expect": "late"
+    },
+    {
+      "id": "S4",
+      "habit": {
+        "kind": "boolean",
+        "unit": "",
+        "target_per_period": 5.0,
+        "period": "week",
+        "schedule_kind": "every_day",
+        "weekday_mask": null,
+        "every_n": null,
+        "anchor_day": null,
+        "start_day": "2026-11-01",
+        "end_day": null,
+        "polarity": "build",
+        "active": true
+      },
+      "logs": [
+        {
+          "day": "2026-11-08",
+          "value": 1.0,
+          "status": "done"
+        },
+        {
+          "day": "2026-11-09",
+          "value": 1.0,
+          "status": "done"
+        }
+      ],
+      "today": "2026-11-10",
+      "week_start": "sun",
+      "expect": "active"
+    },
+    {
+      "id": "S5",
+      "habit": {
+        "kind": "boolean",
+        "unit": "",
+        "target_per_period": 1.0,
+        "period": "day",
+        "schedule_kind": "every_day",
+        "weekday_mask": null,
+        "every_n": null,
+        "anchor_day": null,
+        "start_day": "2026-10-01",
+        "end_day": "2026-10-30",
+        "polarity": "build",
+        "active": true
+      },
+      "logs": [],
+      "today": "2026-11-10",
+      "week_start": "sun",
+      "expect": "ended"
+    },
+    {
+      "id": "S6",
+      "habit": {
+        "kind": "boolean",
+        "unit": "",
+        "target_per_period": 1.0,
+        "period": "day",
+        "schedule_kind": "every_day",
+        "weekday_mask": null,
+        "every_n": null,
+        "anchor_day": null,
+        "start_day": "2026-11-15",
+        "end_day": null,
+        "polarity": "build",
+        "active": true
+      },
+      "logs": [],
+      "today": "2026-11-10",
+      "week_start": "sun",
+      "expect": "upcoming"
+    },
+    {
+      "id": "S7",
+      "habit": {
+        "kind": "boolean",
+        "unit": "",
+        "target_per_period": 1.0,
+        "period": "day",
+        "schedule_kind": "every_day",
+        "weekday_mask": null,
+        "every_n": null,
+        "anchor_day": null,
+        "start_day": "2026-11-01",
+        "end_day": null,
+        "polarity": "abstain",
+        "active": true
+      },
+      "logs": [
+        {
+          "day": "2026-11-09",
+          "value": 1.0,
+          "status": "done"
+        }
+      ],
+      "today": "2026-11-10",
+      "week_start": "sun",
+      "expect": "late"
+    },
+    {
+      "id": "S7-clean",
+      "habit": {
+        "kind": "boolean",
+        "unit": "",
+        "target_per_period": 1.0,
+        "period": "day",
+        "schedule_kind": "every_day",
+        "weekday_mask": null,
+        "every_n": null,
+        "anchor_day": null,
+        "start_day": "2026-11-01",
+        "end_day": null,
+        "polarity": "abstain",
+        "active": true
+      },
+      "logs": [],
+      "today": "2026-11-10",
+      "week_start": "sun",
+      "expect": "active"
+    }
+  ]
+}
