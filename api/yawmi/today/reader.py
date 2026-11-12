@@ -36,6 +36,8 @@ class HabitRow:
     start_day: date
     end_day: date | None
     goal_ref: str | None = None
+    outcome: str | None = None
+    anchor: str | None = None
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,7 @@ class MilestoneRow:
     cycle_no: int | None
     due_date: date | None
     done: bool
+    card_page_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -79,6 +82,7 @@ class GoalRow:
     title: str
     target_date: date
     status: str
+    track: str = "مسار"
 
 
 @dataclass(frozen=True)
@@ -98,8 +102,14 @@ class TodayReader(Protocol):
         """Habit logs with `day` in `[first, last]`: at most one per habit and day (I-10)."""
         ...
 
+    async def habit_logs_range(
+        self, first: date, last: date, code: str | None = None
+    ) -> list[LogRow]:
+        """Habit logs in `[first, last]`, optionally filtered to `code`, ordered by `(day, habit_code)`."""
+        ...
+
     async def linked_habits(self) -> list[HabitRow]:
-        """Active habits that serve a goal (`goal_ref` set), whatever their window, by code."""
+        """Active habits that serve a goal (`goal_ref` or `outcome` set), whatever their window, by code."""
         ...
 
     async def habit_logs_of(self, codes: list[str], first: date, last: date) -> list[LogRow]:
@@ -121,7 +131,7 @@ class TodayReader(Protocol):
 
 ACTIVE_HABITS = """
 SELECT code, title_ar, kind, unit, target_per_period, period, schedule_kind,
-       weekday_mask, every_n, anchor_day, start_day, end_day, goal_ref
+       weekday_mask, every_n, anchor_day, start_day, end_day, goal_ref, outcome, anchor
 FROM yawmi.habits
 WHERE active AND start_day <= $1 AND (end_day IS NULL OR end_day >= $1)
 ORDER BY code
@@ -129,9 +139,9 @@ ORDER BY code
 
 LINKED_HABITS = """
 SELECT code, title_ar, kind, unit, target_per_period, period, schedule_kind,
-       weekday_mask, every_n, anchor_day, start_day, end_day, goal_ref
+       weekday_mask, every_n, anchor_day, start_day, end_day, goal_ref, outcome, anchor
 FROM yawmi.habits
-WHERE active AND goal_ref IS NOT NULL
+WHERE active AND (goal_ref IS NOT NULL OR outcome IS NOT NULL)
 ORDER BY code
 """
 
@@ -139,6 +149,13 @@ HABIT_LOGS = """
 SELECT habit_code, day, value, status
 FROM yawmi.habit_logs
 WHERE day BETWEEN $1 AND $2
+"""
+
+HABIT_LOGS_RANGE = """
+SELECT habit_code, day, value, status
+FROM yawmi.habit_logs
+WHERE day BETWEEN $1 AND $2 AND ($3::text IS NULL OR habit_code = $3)
+ORDER BY day, habit_code
 """
 
 HABIT_LOGS_OF = """
@@ -161,12 +178,12 @@ ORDER BY cycle_no
 """
 
 MILESTONES = """
-SELECT page_id, title, outcome_code, cycle_no, due_date, done
+SELECT page_id, title, outcome_code, cycle_no, due_date, done, card_page_ids
 FROM raqib.notion_milestones
 """
 
 GOALS = """
-SELECT code, title, target_date, status
+SELECT code, title, target_date, status, track
 FROM raqib.goals
 """
 
@@ -180,6 +197,7 @@ ALL_SQL = (
     ACTIVE_HABITS,
     LINKED_HABITS,
     HABIT_LOGS,
+    HABIT_LOGS_RANGE,
     HABIT_LOGS_OF,
     DAILY_METRICS,
     CYCLES,
@@ -190,7 +208,7 @@ ALL_SQL = (
 
 
 def _codes(raw: object) -> tuple[str, ...]:
-    """`outcome_codes` is `jsonb`: asyncpg returns its text unless a codec is set."""
+    """`outcome_codes` / `card_page_ids` are `jsonb`: asyncpg returns text unless a codec is set."""
     value = json.loads(raw) if isinstance(raw, str) else raw
     if not isinstance(value, list):
         return ()
@@ -207,6 +225,12 @@ class AsyncpgTodayReader:
     async def habit_logs(self, first: date, last: date) -> list[LogRow]:
         return [LogRow(**dict(r)) for r in await self._pool.fetch(HABIT_LOGS, first, last)]
 
+    async def habit_logs_range(
+        self, first: date, last: date, code: str | None = None
+    ) -> list[LogRow]:
+        rows = await self._pool.fetch(HABIT_LOGS_RANGE, first, last, code)
+        return [LogRow(**dict(r)) for r in rows]
+
     async def linked_habits(self) -> list[HabitRow]:
         return [HabitRow(**dict(r)) for r in await self._pool.fetch(LINKED_HABITS)]
 
@@ -221,7 +245,19 @@ class AsyncpgTodayReader:
         return [CycleRow(**dict(r)) for r in await self._pool.fetch(CYCLES)]
 
     async def milestones(self) -> list[MilestoneRow]:
-        return [MilestoneRow(**dict(r)) for r in await self._pool.fetch(MILESTONES)]
+        rows = await self._pool.fetch(MILESTONES)
+        return [
+            MilestoneRow(
+                page_id=r["page_id"],
+                title=r["title"],
+                outcome_code=r["outcome_code"],
+                cycle_no=r["cycle_no"],
+                due_date=r["due_date"],
+                done=r["done"],
+                card_page_ids=_codes(r["card_page_ids"]),
+            )
+            for r in rows
+        ]
 
     async def goals(self) -> list[GoalRow]:
         return [GoalRow(**dict(r)) for r in await self._pool.fetch(GOALS)]

@@ -699,6 +699,7 @@ async def test_progress_returns_the_six_indicators(
         "streak",
         "challenge",
         "adherence",
+        "total_done",
         "last_8_periods",
     }
     assert out["period_progress"] == {
@@ -712,9 +713,23 @@ async def test_progress_returns_the_six_indicators(
     }
     assert out["streak"] == 3
     assert out["adherence"] == 1.0
+    assert out["total_done"] == 3.0
     assert out["challenge"] == {"achieved": 3, "total": 7, "completion": 3 / 7, "remaining_days": 5}
     assert 0 < out["strength"] < 1
     assert out["last_8_periods"] == [1.0, 1.0, 1.0]
+
+
+async def test_progress_total_done_sums_duration_minutes(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    created = await create(
+        client, kind="duration", unit="min", target_per_period=30, start_day="2026-11-08"
+    )
+    code = created["code"]
+    await backend.add_log(code, date(2026, 11, 9), "done", "60")
+    await backend.add_log(code, DAY, "done", "25")
+    out = (await client.get(f"/v1/habits/{code}/progress", headers=auth())).json()
+    assert out["total_done"] == 85.0
 
 
 async def test_progress_of_a_weekly_habit_keeps_eight_periods(

@@ -50,6 +50,9 @@ class ProgressOut(BaseModel):
     streak: int
     challenge: ChallengeOut | None = Field(description="لعادة لها `end_day` فقط")
     adherence: float | None = Field(description="null قبل أول فترة منتهية")
+    total_done: float = Field(
+        description="مجموع قيم `done` منذ بداية العادة (عدد أيام الإنجاز للمنطقية)"
+    )
     last_8_periods: list[float] = Field(
         description=(
             "نسبة إنجاز آخر 8 فترات، الأقدم أولاً وآخرها الفترة الحالية؛ تُسقط الفترات المنتهية "
@@ -71,6 +74,15 @@ def spec_of(habit: StoredHabit) -> HabitSpec:
         start_day=habit.start_day,
         end_day=habit.end_day,
     )
+
+
+def total_done_of(spec: HabitSpec, logs: Sequence[HabitLog], today: date) -> float:
+    """Sum of `done` values in `[start_day, min(today, end_day)]` (count of `done` days for boolean)."""
+    last = today if spec.end_day is None else min(today, spec.end_day)
+    in_window = [lg for lg in logs if lg.status == "done" and spec.start_day <= lg.day <= last]
+    if spec.kind == "boolean":
+        return float(len({lg.day for lg in in_window}))
+    return float(sum(lg.value or 0.0 for lg in in_window))
 
 
 def last_periods(
@@ -123,5 +135,6 @@ def progress(
             remaining_days=challenge.remaining_days,
         ),
         adherence=adherence(spec, logs, today, week_start),
+        total_done=total_done_of(spec, logs, today),
         last_8_periods=last_periods(spec, logs, today, week_start),
     )

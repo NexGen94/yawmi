@@ -5,7 +5,8 @@ No I/O and no clock: the route reads rows through a `TodayReader` and hands them
 Habit indicators (task 10b) come from the pure rules of `yawmi.domain.habits`:
 * `HabitDue.period_progress`: how far the current period has come (`build_habits_due` receives
   the logs of `logs_window`: from the start of the current month or week to the day).
-* `CardOut.habits`: the active habits whose `goal_ref` is the card, each with its adherence, and
+* `CardOut.habits`: the active habits whose `goal_ref` is the card (or a milestone whose
+  `card_page_ids` includes the card), each with its adherence and `total_done`, and
   `CardOut.habits_adherence_avg`, the mean of the adherences that are not null.
 """
 
@@ -13,7 +14,7 @@ import re
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from datetime import date, timedelta
-from typing import cast
+from typing import Literal, cast
 
 from pydantic import BaseModel, Field
 
@@ -21,8 +22,8 @@ from yawmi.ai.schema import InsightResponse
 from yawmi.domain.habits import HabitKind, HabitLog, HabitSpec, adherence, period_progress
 from yawmi.domain.periods import Period, WeekStart, is_scheduled, period_bounds
 from yawmi.domain.scores import DataQuality
-from yawmi.habits.models import HabitUnit, domain_logs
-from yawmi.habits.progress import PeriodProgressOut
+from yawmi.habits.models import Anchor, HabitUnit, domain_logs
+from yawmi.habits.progress import PeriodProgressOut, total_done_of
 from yawmi.today.reader import (
     CardRow,
     CycleRow,
@@ -36,6 +37,8 @@ from yawmi.today.reader import (
 TREND_DAYS = 7
 _OUTCOME_CODE = re.compile(r"O([1-9]|1[0-2])")
 
+TodayStatus = Literal["done", "skip", "vacation"]
+
 
 # --- /v1/today ---------------------------------------------------------------------------------
 
@@ -47,7 +50,16 @@ class HabitDue(BaseModel):
     unit: HabitUnit = Field(description="`''` للعادة بلا وحدة، كما في `/v1/habits`")
     target_per_period: float
     period: Period
-    done_today: bool = Field(description="سُجّل لها إنجاز (`done`) اليوم من أي مصدر")
+    anchor: Anchor = Field(default="free", description="مرسى العادة في اليوم")
+    outcome: str | None = None
+    goal_ref: str | None = None
+    done_today: bool = Field(description="سجل اليوم (آخر ما كُتب له من أي جهاز) إنجاز (`done`)")
+    status_today: TodayStatus | None = Field(
+        default=None, description="حالة سجل اليوم (`done` أو `skip` أو `vacation` أو `null`)"
+    )
+    value_today: float | None = Field(
+        default=None, description="قيمة سجل اليوم إن كان `done` وله قيمة"
+    )
     period_progress: PeriodProgressOut = Field(
         description="تقدّم الفترة الحالية (يوم أو أسبوع أو شهر)"
     )
@@ -141,13 +153,23 @@ def build_habits_due(
     progress of the period holding `day` (it needs the logs of `logs_window`).
     """
     logs = list(logs)
-    done = {log.habit_code for log in logs if log.day == day and log.status == "done"}
+    today_log = {log.habit_code: log for log in logs if log.day == day}
     by_habit = _logs_by_habit(logs)
     due: list[HabitDue] = []
     for row in sorted(habits, key=lambda h: h.code):
         spec = habit_spec(row)
         if not is_scheduled(day, spec):
             continue
+        log_today = today_log.get(row.code)
+        raw_status = log_today.status if log_today is not None else None
+        status_today: TodayStatus | None = (
+            cast(TodayStatus, raw_status) if raw_status in ("done", "skip", "vacation") else None
+        )
+        value_today = (
+            float(log_today.value)
+            if log_today is not None and status_today == "done" and log_today.value is not None
+            else None
+        )
         due.append(
             HabitDue(
                 code=row.code,
@@ -156,7 +178,12 @@ def build_habits_due(
                 unit=cast(HabitUnit, row.unit or ""),
                 target_per_period=float(row.target_per_period),
                 period=cast(Period, row.period),
-                done_today=row.code in done,
+                anchor=cast(Anchor, row.anchor or "free"),
+                outcome=row.outcome,
+                goal_ref=row.goal_ref,
+                done_today=status_today == "done",
+                status_today=status_today,
+                value_today=value_today,
                 period_progress=_period_progress(spec, by_habit.get(row.code, []), day, week_start),
             )
         )
@@ -230,9 +257,17 @@ class MilestoneOut(BaseModel):
     cycle_no: int | None
 
 
+class CardHabit(BaseModel):
+    code: str
+    title_ar: str
+    adherence: float | None
+    total_done: float = 0.0
+
+
 class OutcomeOut(BaseModel):
     code: str
     title: str
+    track: str = ""
     target_date: date
     status: str
     milestones_total: int
@@ -241,12 +276,10 @@ class OutcomeOut(BaseModel):
     next_milestone: MilestoneOut | None = Field(
         description="أقرب محطة مفتوحة بموعدها (ثم بالدورة)، المتأخرة منها أولاً"
     )
-
-
-class CardHabit(BaseModel):
-    code: str
-    title_ar: str
-    adherence: float | None
+    habits: list[CardHabit] = Field(
+        default_factory=list,
+        description="العادات النشطة المرتبطة بالمخرج (`outcome`)، بالرمز، مع التزامها وإجمالي إنجازها",
+    )
 
 
 class CardOut(BaseModel):
@@ -255,7 +288,7 @@ class CardOut(BaseModel):
     status: str | None
     outcome_codes: list[str]
     habits: list[CardHabit] = Field(
-        description="العادات النشطة التي `goal_ref` فيها هذه البطاقة، بالرمز، مع التزام كل منها"
+        description="العادات النشطة التي `goal_ref` فيها هذه البطاقة أو إحدى محطاتها، بالرمز، مع التزام كل منها"
     )
     habits_adherence_avg: float | None = Field(
         description="متوسط الالتزام غير الفارغ لعادات البطاقة، أو null إن لم يوجد"
@@ -271,13 +304,39 @@ def _next_key(m: MilestoneRow) -> tuple[bool, date, int, str]:
     return (m.due_date is None, m.due_date or date.max, m.cycle_no or 0, m.title)
 
 
+def _card_habit(
+    row: HabitRow, logs: list[HabitLog], today: date, week_start: WeekStart
+) -> CardHabit:
+    spec = habit_spec(row)
+    return CardHabit(
+        code=row.code,
+        title_ar=row.title_ar,
+        adherence=adherence(spec, logs, today, week_start),
+        total_done=total_done_of(spec, logs, today),
+    )
+
+
 def build_outcomes(
-    goals: Iterable[GoalRow], milestones: Sequence[MilestoneRow]
+    goals: Iterable[GoalRow],
+    milestones: Sequence[MilestoneRow],
+    habits: Iterable[HabitRow] = (),
+    logs: Iterable[LogRow] = (),
+    today: date | None = None,
+    week_start: WeekStart = "sun",
 ) -> list[OutcomeOut]:
-    """O1..O12 from `raqib.goals`, each with its milestones' completion and the next open one.
+    """O1..O12 from `raqib.goals`, each with its milestones' completion, next open one, and habits.
 
     Completion counts milestones as Notion does (done ÷ all); the habits never change it.
     """
+    by_habit = _logs_by_habit(logs)
+    ref_day = today or date(2026, 11, 10)
+    by_outcome: dict[str, list[CardHabit]] = defaultdict(list)
+    for row in sorted(habits, key=lambda h: h.code):
+        if row.outcome is not None:
+            by_outcome[row.outcome].append(
+                _card_habit(row, by_habit.get(row.code, []), ref_day, week_start)
+            )
+
     outcomes: list[OutcomeOut] = []
     for goal in sorted(goals, key=lambda g: outcome_number(g.code) or 0):
         if outcome_number(goal.code) is None:
@@ -290,6 +349,7 @@ def build_outcomes(
             OutcomeOut(
                 code=goal.code,
                 title=goal.title,
+                track=goal.track,
                 target_date=goal.target_date,
                 status=goal.status,
                 milestones_total=len(mine),
@@ -305,6 +365,7 @@ def build_outcomes(
                     if nxt
                     else None
                 ),
+                habits=by_outcome.get(goal.code, []),
             )
         )
     return outcomes
@@ -316,24 +377,25 @@ def build_cards(
     logs: Iterable[LogRow],
     today: date,
     week_start: WeekStart,
+    milestones: Iterable[MilestoneRow] = (),
 ) -> list[CardOut]:
-    """Cards with the habits linked to them (`goal_ref` = the card's page id) and adherence.
+    """Cards with the habits linked to them (`goal_ref` = card page_id or a milestone of the card).
 
     `habits` are the linked habits to consider (the route passes the active ones) and `logs`
     their logs up to `today`. The average leaves out habits without a finished period yet.
     """
     by_habit = _logs_by_habit(logs)
+    milestone_cards: dict[str, tuple[str, ...]] = {
+        m.page_id: m.card_page_ids for m in milestones if m.card_page_ids
+    }
     linked: dict[str, list[CardHabit]] = defaultdict(list)
     for row in sorted(habits, key=lambda h: h.code):
         if row.goal_ref is None:
             continue
-        linked[row.goal_ref].append(
-            CardHabit(
-                code=row.code,
-                title_ar=row.title_ar,
-                adherence=adherence(habit_spec(row), by_habit.get(row.code, []), today, week_start),
-            )
-        )
+        ch = _card_habit(row, by_habit.get(row.code, []), today, week_start)
+        targets = {row.goal_ref, *milestone_cards.get(row.goal_ref, ())}
+        for target in targets:
+            linked[target].append(ch)
     out: list[CardOut] = []
     for c in sorted(cards, key=lambda c: (c.title, c.page_id)):
         mine = linked.get(c.page_id, [])

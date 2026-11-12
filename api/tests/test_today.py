@@ -92,8 +92,9 @@ def milestone(
     cycle: int | None = 1,
     due: date | None = None,
     done: bool = False,
+    card_page_ids: tuple[str, ...] = (),
 ) -> MilestoneRow:
-    return MilestoneRow(PREFIX + pid, "محطة " + pid, outcome, cycle, due, done)
+    return MilestoneRow(PREFIX + pid, "محطة " + pid, outcome, cycle, due, done, card_page_ids)
 
 
 # --- assembly (pure) ---------------------------------------------------------------------------
@@ -274,8 +275,8 @@ class PostgresBackend:
                     await self.pool.execute(
                         "INSERT INTO yawmi.habits (code, title_ar, kind, unit, target_per_period,"
                         " period, schedule_kind, weekday_mask, every_n, anchor_day, start_day,"
-                        " end_day, goal_ref, created_by) VALUES"
-                        " ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'user')",
+                        " end_day, goal_ref, outcome, anchor, created_by) VALUES"
+                        " ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'user')",
                         row.code,
                         row.title_ar,
                         row.kind,
@@ -289,6 +290,8 @@ class PostgresBackend:
                         row.start_day,
                         row.end_day,
                         row.goal_ref,
+                        row.outcome,
+                        row.anchor,
                     )
                 case LogRow():
                     await self.pool.execute(
@@ -326,20 +329,23 @@ class PostgresBackend:
                 case MilestoneRow():
                     await self.pool.execute(
                         "INSERT INTO raqib.notion_milestones (page_id, title, outcome_code,"
-                        " cycle_no, due_date, done) VALUES ($1, $2, $3, $4, $5, $6)",
+                        " cycle_no, due_date, done, card_page_ids) VALUES"
+                        " ($1, $2, $3, $4, $5, $6, $7::jsonb)",
                         row.page_id,
                         row.title,
                         row.outcome_code,
                         row.cycle_no,
                         row.due_date,
                         row.done,
+                        json.dumps(list(row.card_page_ids)),
                     )
                 case GoalRow():
                     await self.pool.execute(
                         "INSERT INTO raqib.goals (code, title, track, target_date, acceptance,"
-                        " status) VALUES ($1, $2, 'مسار', $3, 'معيار', $4)",
+                        " status) VALUES ($1, $2, $3, $4, 'معيار', $5)",
                         row.code,
                         row.title,
+                        row.track,
                         row.target_date,
                         row.status,
                     )
@@ -368,7 +374,7 @@ class PostgresBackend:
         await self.pool.execute("DELETE FROM raqib.notion_milestones WHERE page_id LIKE $1", like)
         await self.pool.execute("DELETE FROM raqib.notion_cards WHERE page_id LIKE $1", like)
         cycles = [*self.cycles, CYCLE1.cycle_no, CYCLE2.cycle_no]
-        goals = [*self.goals, "O1", "O2", "O3", "weight"]
+        goals = [*self.goals, "O1", "O2", "O3", "O7", "weight"]
         await self.pool.execute("DELETE FROM raqib.cycles WHERE cycle_no = ANY($1)", cycles)
         await self.pool.execute("DELETE FROM raqib.goals WHERE code = ANY($1)", goals)
 
@@ -474,7 +480,12 @@ async def test_today_brings_habits_health_and_plan_together(
             "unit": "min",
             "target_per_period": 20.0,
             "period": "day",
+            "anchor": "free",
+            "outcome": None,
+            "goal_ref": None,
             "done_today": True,
+            "status_today": "done",
+            "value_today": 25.0,
             "period_progress": {
                 "done": 25.0,
                 "target": 20.0,
@@ -552,6 +563,7 @@ async def test_overview_lists_outcomes_and_cards_without_private_text(
     assert outcomes["O1"] == {
         "code": "O1",
         "title": "الصحة الجسدية",
+        "track": "مسار",
         "target_date": "2031-12-14",
         "status": "active",
         "milestones_total": 2,
@@ -563,6 +575,7 @@ async def test_overview_lists_outcomes_and_cards_without_private_text(
             "due_date": "2027-02-01",
             "cycle_no": 2,
         },
+        "habits": [],
     }
     assert outcomes["O2"]["completion"] is None
     cards = [c for c in body["cards"] if c["page_id"].startswith(PREFIX)]
@@ -635,8 +648,8 @@ async def test_overview_cards_carry_their_habits_and_the_average_adherence(
     body = (await client.get("/v1/overview", headers=auth())).json()
     cards = {c["page_id"]: c for c in body["cards"] if c["page_id"].startswith(PREFIX)}
     assert cards[card]["habits"] == [
-        {"code": PREFIX + "a", "title_ar": "عادة a", "adherence": 2 / 3},
-        {"code": PREFIX + "b", "title_ar": "عادة b", "adherence": None},
+        {"code": PREFIX + "a", "title_ar": "عادة a", "adherence": 2 / 3, "total_done": 2.0},
+        {"code": PREFIX + "b", "title_ar": "عادة b", "adherence": None, "total_done": 0.0},
     ]
     assert cards[card]["habits_adherence_avg"] == 2 / 3
     assert (cards[PREFIX + "empty"]["habits"], cards[PREFIX + "empty"]["habits_adherence_avg"]) == (
@@ -727,3 +740,79 @@ def test_today_contract_carries_a_typed_insight_not_a_list_of_strings() -> None:
     }
     assert refs == {"#/components/schemas/InsightResponse", "null"}
     assert "insight" in today["required"]
+
+
+async def test_today_status_today_value_today_and_anchor(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    await backend.add(
+        habit(
+            "skip-me",
+            anchor="after_wake",
+            outcome="O1",
+            goal_ref=PREFIX + "card",
+        ),
+        habit(
+            "dur-25",
+            kind="duration",
+            unit="min",
+            target_per_period=Decimal(25),
+            anchor="before_sleep",
+        ),
+        log("skip-me", status="skip"),
+        log("dur-25", status="done", value="25"),
+    )
+    res = await client.get("/v1/today", headers=auth())
+    assert res.status_code == 200, res.text
+    due = {h["code"]: h for h in res.json()["habits_due"] if h["code"].startswith(PREFIX)}
+    skipped = due[PREFIX + "skip-me"]
+    assert skipped["status_today"] == "skip"
+    assert skipped["done_today"] is False
+    assert skipped["value_today"] is None
+    assert skipped["anchor"] == "after_wake"
+    assert skipped["outcome"] == "O1"
+    assert skipped["goal_ref"] == PREFIX + "card"
+
+    dur = due[PREFIX + "dur-25"]
+    assert dur["status_today"] == "done"
+    assert dur["done_today"] is True
+    assert dur["value_today"] == 25.0
+    assert dur["anchor"] == "before_sleep"
+
+
+async def test_overview_links_outcome_habits_and_milestone_card_habits(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    card_c = PREFIX + "C"
+    ms_m = PREFIX + "M"
+    await backend.add(
+        GoalRow("O7", "الاستقلال المالي", date(2031, 12, 14), "active", "المال"),
+        milestone("M", "O7", card_page_ids=(card_c,)),
+        habit("sys-o7", outcome="O7", start_day=date(2026, 11, 8)),
+        habit("ms-habit", goal_ref=ms_m, start_day=date(2026, 11, 8)),
+        log("sys-o7", day=date(2026, 11, 8), status="done"),
+        log("ms-habit", day=date(2026, 11, 8), status="done"),
+        log("ms-habit", day=date(2026, 11, 9), status="done"),
+    )
+    await backend.add_card(CardRow(card_c, "بطاقة C", "نشطة", ("O7",)), {})
+
+    res = await client.get("/v1/overview", headers=auth())
+    assert res.status_code == 200, res.text
+    body = res.json()
+
+    outcomes = {o["code"]: o for o in body["outcomes"]}
+    assert outcomes["O7"]["track"] == "المال"
+    assert [h["code"] for h in outcomes["O7"]["habits"] if h["code"].startswith(PREFIX)] == [
+        PREFIX + "sys-o7"
+    ]
+    assert outcomes["O7"]["habits"][0]["total_done"] == 1.0
+
+    cards = {c["page_id"]: c for c in body["cards"] if c["page_id"].startswith(PREFIX)}
+    assert cards[card_c]["habits"] == [
+        {
+            "code": PREFIX + "ms-habit",
+            "title_ar": "عادة ms-habit",
+            "adherence": 1.0,
+            "total_done": 2.0,
+        }
+    ]
