@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import viteConfig from '../vite.config';
@@ -51,15 +51,31 @@ describe('check-budget.mjs: only the home page may load first', () => {
     }
   });
 
-  it('passes with page-home and counts it', () => {
-    const home = 'export const home = 1;';
+  it('fails for any page- chunk in index.html, including page-home (home is eager and inlined, never a chunk)', () => {
     const result = run({
       'index.html': html(entry + '<link rel="modulepreload" crossorigin href="/assets/page-home-abc.js">'),
       'assets/index-abc.js': 'console.log(1)',
-      'assets/page-home-abc.js': home,
+      'assets/page-home-abc.js': 'export const home = 1;',
     });
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('page-home-abc.js');
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('page-home-abc.js');
+  });
+
+  it('fails when the static module graph from src/main.tsx reaches a non-home page (plants A, B, C)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'yawmi-budget-graph-'));
+    made.push(root);
+    mkdirSync(join(root, 'dist/assets'), { recursive: true });
+    mkdirSync(join(root, 'src/pages/home'), { recursive: true });
+    mkdirSync(join(root, 'src/pages/goals'), { recursive: true });
+    writeFileSync(join(root, 'dist/index.html'), html(entry));
+    writeFileSync(join(root, 'dist/assets/index-abc.js'), 'console.log(1)');
+    writeFileSync(join(root, 'src/main.tsx'), "import './pages/home';\n");
+    writeFileSync(join(root, 'src/pages/home/index.tsx'), "import '../goals';\nexport default function Home() { return null; }\n");
+    writeFileSync(join(root, 'src/pages/goals/index.tsx'), 'export default function Goals() { return null; }\n');
+
+    const result = spawnSync(process.execPath, [script, '--dist', join(root, 'dist')], { encoding: 'utf8' });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('pages/goals');
   });
 
   it('fails above 81920 bytes gzip', () => {
@@ -93,6 +109,18 @@ describe('check-budget.mjs counts what the first load really fetches', () => {
     });
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).not.toContain('page-goals-def.js');
+  });
+
+  it('counts and fails on a static import of a page chunk from the entry chunk (plant D)', () => {
+    const result = run({
+      'index.html': html(entry),
+      'assets/index-abc.js': 'import{a}from"./page-habits-abc.js";console.log(a)',
+      'assets/page-habits-abc.js': noise(90_000),
+    });
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('page-habits-abc.js');
+    expect(result.stderr).toContain('page-habits-abc.js');
+    expect(result.stderr).toContain('81920');
   });
 
   it('counts a chunk once even when two loaded files import it', () => {
@@ -136,6 +164,77 @@ describe('vite.config.ts names each page chunk page-<name>-[hash].js', () => {
     expect(namer?.(chunk('/w/web/src/lib/format.ts'))).toBe('assets/[name]-[hash].js');
     expect(namer?.(chunk(null))).toBe('assets/[name]-[hash].js');
   });
+
+  it('fails generateBundle when an entry or statically imported chunk contains a non-home page module', () => {
+    const plugins = (viteConfig.plugins ?? []).flat();
+    const guard = plugins.find(
+      (p): p is { name: string; generateBundle: (opts: unknown, bundle: Record<string, unknown>) => void } =>
+        Boolean(p && typeof p === 'object' && 'name' in p && p.name === 'first-load-pages'),
+    );
+    expect(guard).toBeDefined();
+
+    // Clean bundle: entry has home, lazy chunk has goals.
+    expect(() =>
+      guard?.generateBundle(
+        {},
+        {
+          'assets/index-abc.js': {
+            type: 'chunk',
+            fileName: 'assets/index-abc.js',
+            isEntry: true,
+            imports: [],
+            moduleIds: ['/w/web/src/main.tsx', '/w/web/src/pages/home/index.tsx'],
+          },
+          'assets/page-goals-def.js': {
+            type: 'chunk',
+            fileName: 'assets/page-goals-def.js',
+            isEntry: false,
+            imports: [],
+            moduleIds: ['/w/web/src/pages/goals/index.tsx'],
+          },
+        },
+      ),
+    ).not.toThrow();
+
+    // Plant B: home statically imported goals, so Rolldown inlined goals into the entry chunk.
+    expect(() =>
+      guard?.generateBundle(
+        {},
+        {
+          'assets/index-abc.js': {
+            type: 'chunk',
+            fileName: 'assets/index-abc.js',
+            isEntry: true,
+            imports: [],
+            moduleIds: ['/w/web/src/main.tsx', '/w/web/src/pages/home/index.tsx', '/w/web/src/pages/goals/index.tsx'],
+          },
+        },
+      ),
+    ).toThrow(/pages[\\/]goals/);
+
+    // Static import chain: entry statically imports a shared chunk that bundles a non-home page.
+    expect(() =>
+      guard?.generateBundle(
+        {},
+        {
+          'assets/index-abc.js': {
+            type: 'chunk',
+            fileName: 'assets/index-abc.js',
+            isEntry: true,
+            imports: ['assets/shared-xyz.js'],
+            moduleIds: ['/w/web/src/main.tsx', '/w/web/src/pages/home/index.tsx'],
+          },
+          'assets/shared-xyz.js': {
+            type: 'chunk',
+            fileName: 'assets/shared-xyz.js',
+            isEntry: false,
+            imports: [],
+            moduleIds: ['/w/web/src/pages/review/index.tsx'],
+          },
+        },
+      ),
+    ).toThrow(/pages[\\/]review/);
+  });
 });
 
 describe('app.tsx loads every page but home lazily', () => {
@@ -144,6 +243,36 @@ describe('app.tsx loads every page but home lazily', () => {
   it('imports only the home page statically', () => {
     const staticPages = [...app.matchAll(/^import[^;]*from\s+'(\.\/pages\/[^']+)'/gm)].map((m) => m[1]);
     expect(staticPages).toEqual(['./pages/home']);
+  });
+
+  it('reaches only src/pages/home/index.tsx across the entire static import graph from src/main.tsx', () => {
+    const staticImport =
+      /(?:^|[\r\n;])\s*(?:import|export)\b(?:(?!\btype\b)[^;\r\n])*?\bfrom\s*(['"])(\.{1,2}\/[^'"]+)\1|(?:^|[\r\n;])\s*import\s*(['"])(\.{1,2}\/[^'"]+)\3/g;
+    const resolveModule = (fromFile: string, spec: string): string | null => {
+      const base = resolve(dirname(fromFile), spec);
+      for (const suffix of ['', '.ts', '.tsx', '/index.ts', '/index.tsx']) {
+        const candidate = base + suffix;
+        if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+      }
+      return null;
+    };
+    const seen = new Set<string>();
+    const queue = [join(webRoot, 'src/main.tsx')];
+    const pages: string[] = [];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (seen.has(current)) continue;
+      seen.add(current);
+      const rel = relative(webRoot, current).replaceAll('\\', '/');
+      if (rel.startsWith('src/pages/')) pages.push(rel);
+      for (const match of readFileSync(current, 'utf8').matchAll(staticImport)) {
+        const spec = match[2] ?? match[4];
+        if (!spec) continue;
+        const target = resolveModule(current, spec);
+        if (target && !seen.has(target)) queue.push(target);
+      }
+    }
+    expect(pages).toEqual(['src/pages/home/index.tsx']);
   });
 
   it('loads the other twelve page modules through lazy(() => import(...))', () => {
