@@ -10,7 +10,9 @@ export function AskButton() {
         <path d="M9 9.5h6M9 12h3.5" />
       </svg>
       <span>اسأل</span>
-      <kbd class="ask-kbd" dir="ltr">Ctrl K</kbd>
+      {/* Drawn by CSS from data-keys: the keys are a hint for the eye (aria-keyshortcuts tells
+          assistive technology), not part of the button's name, so the visible text stays «اسأل». */}
+      <kbd class="ask-kbd" dir="ltr" aria-hidden="true" data-keys="Ctrl K" />
     </button>
   );
 }

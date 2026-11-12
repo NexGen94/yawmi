@@ -25,3 +25,8 @@ openapi/.cache/
 # OS
 .DS_Store
 Thumbs.db
+
+# End-to-end suite output (screenshots go to the CI artifact, never to Git)
+web/e2e/screenshots/
+web/test-results/
+web/playwright-report/
