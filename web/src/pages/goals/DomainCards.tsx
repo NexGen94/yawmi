@@ -1,6 +1,7 @@
 import { ProgressBar } from '../../charts/ProgressBar';
 import { DOMAINS } from '../../goals/domains';
 import { pctOrDash } from '../../goals/format';
+import { Iso } from '../../goals/Iso';
 import { Card } from '../../ui/Card';
 
 export interface DomainOutcome {
@@ -47,7 +48,9 @@ export function DomainCards({ outcomes }: DomainCardsProps) {
                   <li key={o.code}>
                     <span class="domain-outcome-head">
                       <span class="domain-code">{o.code}</span>
-                      <span class="domain-title">{o.title}</span>
+                      <span class="domain-title">
+                        <Iso text={o.title} />
+                      </span>
                       <span class="domain-pct">{pctOrDash(o.completion)}</span>
                     </span>
                     <ProgressBar value={o.completion ?? Number.NaN} label={o.title} />

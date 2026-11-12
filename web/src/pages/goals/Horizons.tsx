@@ -1,5 +1,6 @@
 import { useHabitsToday } from '../../habits/useHabitsToday';
 import { horizonLines } from '../../goals/horizons';
+import { Iso } from '../../goals/Iso';
 import type { GoalsOut } from '../../goals/types';
 import type { Day } from '../../domain/types';
 import { useDayEntries } from '../home/useDayEntries';
@@ -35,7 +36,7 @@ export function Horizons({ goals, today }: { goals: GoalsOut; today: Day }) {
                 <strong class="horizon-label">{`${line.label}:`}</strong>{' '}
               </>
             )}
-            {text}
+            <Iso text={text} />
           </li>
         );
       })}

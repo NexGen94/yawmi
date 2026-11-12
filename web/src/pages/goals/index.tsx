@@ -78,7 +78,9 @@ export default function GoalsPage() {
           <div class="goals-body">
             <CycleCard goals={data} today={today} />
             <DomainCards outcomes={data.outcomes} />
-            <Segmented label="العرض" options={VIEWS} value={view} onChange={(value) => choose({ view: value })} />
+            <div class="goals-switch">
+              <Segmented label="العرض" options={VIEWS} value={view} onChange={(value) => choose({ view: value })} />
+            </div>
             <div class="goals-view">
               {view === 'tree' && <OutcomeTree goals={data} today={today} />}
               {view === 'table' && (

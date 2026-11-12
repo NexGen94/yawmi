@@ -2,6 +2,7 @@ import type { Day } from '../../domain/types';
 import { toOrdinal } from '../../domain/days';
 import { relativeDays } from '../../goals/due';
 import { DASH, pctOrDash } from '../../goals/format';
+import { Iso } from '../../goals/Iso';
 import type { GoalOutcome, GoalsOut, MilestoneFull } from '../../goals/types';
 import { fmt } from '../../lib/format';
 import { Badge } from '../../ui/Badge';
@@ -33,10 +34,14 @@ function Outcome({ outcome, goals, today }: { outcome: GoalOutcome; goals: Goals
     <>
       <span class="tree-head">
         <Badge>{outcome.code}</Badge>
-        <span class="tree-title">{outcome.title}</span>
+        <span class="tree-title">
+          <Iso text={outcome.title} />
+        </span>
         <span class="tree-pct">{pctOrDash(outcome.completion)}</span>
       </span>
-      <span class="tree-acceptance">{outcome.acceptance}</span>
+      <span class="tree-acceptance">
+        <Iso text={outcome.acceptance} />
+      </span>
     </>
   );
   return (

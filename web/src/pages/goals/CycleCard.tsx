@@ -12,8 +12,10 @@ export function CycleCard({ goals, today }: { goals: GoalsOut; today: Day }) {
   const { cycle, index, length } = current;
   return (
     <Card title={`الدورة ${fmt.num(cycle.cycle_no)}`} class="cycle-card">
-      <p class="cycle-theme">{cycle.theme}</p>
-      <p class="cycle-day">{`اليوم ${fmt.num(index)} من ${fmt.num(length)}`}</p>
+      <div class="cycle-row">
+        <p class="cycle-theme">{cycle.theme}</p>
+        <p class="cycle-day">{`اليوم ${fmt.num(index)} من ${fmt.num(length)}`}</p>
+      </div>
       <ProgressBar value={index / length} label="تقدّم الدورة" />
       <p class="cycle-dates">{`${fmt.day(cycle.start_date)} إلى ${fmt.day(cycle.end_date)}`}</p>
     </Card>
