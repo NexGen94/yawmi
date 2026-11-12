@@ -1,0 +1,9 @@
+{
+  // The Playwright config and the end-to-end suite (e2e/): Node, plus the DOM lib because the
+  // helpers pass functions to `page.evaluate`.
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": ["playwright.config.ts", "e2e/**/*.ts"]
+}

@@ -1,0 +1,109 @@
+name: e2e
+
+on:
+  pull_request:
+    paths:
+      - "web/**"
+      - "api/**"
+      - "openapi/**"
+      - ".github/workflows/e2e.yml"
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "api/**"
+      - "openapi/**"
+      - ".github/workflows/e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      # Throwaway Postgres for the test API (api/tools/e2e_server.py). The database is named raqib
+      # because the yawmi schema lives inside the Raqib database in production. `trust` keeps any
+      # password out of the repository; the container is only reachable from this job.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: raqib
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d raqib"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      CI: "true"
+      # The test server resets this database on start, and refuses one that is not local.
+      YAWMI_E2E_DATABASE_URL: postgresql://postgres@localhost:5432/raqib
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install the API
+        working-directory: api
+        run: uv sync --locked
+
+      # Like the Dockerfile: no package's install script runs in CI.
+      - name: Install the web app
+        working-directory: web
+        run: npm ci --ignore-scripts
+
+      # The browser is installed here, in the job: nothing is installed on a developer machine
+      # (locally the suite uses the installed Edge through PW_CHANNEL=msedge).
+      - name: Install Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      # Playwright starts the test API (port 8000) and `vite preview` on the build (port 4173),
+      # then runs the journeys at 1280 and 390 pixels with axe and screenshots.
+      - name: End-to-end tests
+        working-directory: web
+        run: npm run e2e
+
+      # Screenshots are the material of the design review: an artifact, never committed.
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-screenshots
+          path: web/e2e/screenshots
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload the Playwright report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report
+            web/test-results
+          if-no-files-found: ignore
+          retention-days: 14
