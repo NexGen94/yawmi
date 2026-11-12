@@ -3,18 +3,34 @@
 A provider is `async (ctx, now) -> list[Notice]`. Each `tick` calls every provider in
 `PROVIDERS`; a notice is sent once per `(kind, ref, day)`, `day` being the day it belongs to (a
 reminder at 23:55 still due at 00:02 belongs to the day before), claimed in `notice_sends`.
-This module holds the day reminders (morning, evening, weekly review); the late summary and the
-goal indicators add theirs to the list.
+This module holds the day reminders (morning, evening, weekly review), the goal indicator
+reminders and the daily late summary.
+
+The last two need the goals: `NoticeContext.goal_sources` (a `GoalSources`) carries the mirror,
+the habits and logs, the tasks and the stored indicators; without it they say nothing.
 """
 
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from yawmi.domain.periods import WeekStart, weekday_bit
-from yawmi.habits.models import ReminderIO
+from yawmi.goals.service import GoalSources, load_goals
+from yawmi.habits.models import ReminderIO, domain_logs
+from yawmi.habits.state import habit_state
+from yawmi.indicators.compute import indicator_value
+from yawmi.indicators.models import IndicatorIO
 from yawmi.prefs.models import SettingsOut
+from yawmi.today.assemble import habit_spec
+from yawmi.today.reader import LogRow
+
+log = logging.getLogger("yawmi.push")
+
+# how far back the logs of a habit are read to judge it late: the longest `every_n_days` gap
+LOG_LOOKBACK = timedelta(days=370)
+EVERY_DAY = 127
 
 WINDOW = timedelta(minutes=10)
 _ONE_DAY = timedelta(days=1)
@@ -35,6 +51,7 @@ class NoticeContext:
     prefs: Any  # PrefsStore
     journal: Any  # JournalReader
     week_start: WeekStart
+    goal_sources: GoalSources | None = None
 
 
 NoticeProvider = Callable[[NoticeContext, datetime], Awaitable[list[Notice]]]
@@ -88,4 +105,121 @@ async def day_reminder_notices(ctx: NoticeContext, now: datetime) -> list[Notice
     return notices
 
 
-PROVIDERS: list[NoticeProvider] = [day_reminder_notices]
+def count_items_ar(n: int) -> str:
+    """«بند واحد» · «بندان» · «3 بنود» حتى 10 · «11 بنداً» فأكثر."""
+    if n == 1:
+        return "بند واحد"
+    if n == 2:
+        return "بندان"
+    return f"{n} بنود" if n <= 10 else f"{n} بنداً"
+
+
+def _plain(number: float) -> str:
+    """A number as the notice shows it: no trailing `.0`, one decimal at most."""
+    return f"{round(number, 1):g}"
+
+
+async def goal_indicator_notices(ctx: NoticeContext, now: datetime) -> list[Notice]:
+    """The reminder of each goal indicator that has one, while its goal is not finished.
+
+    The body is «{العنوان}: {القيمة} من {الهدف}», quoting the indicator the screen shows
+    (`load_goals`). A goal that is complete, or has nothing to measure yet, is not reminded.
+    A goal that is not in the mirror (it is empty before the sync) is measured by its tasks.
+    """
+    sources = ctx.goal_sources
+    if sources is None:
+        return []
+    due: list[tuple[IndicatorIO, date]] = []
+    for item in await sources.indicators.list():
+        day = _due_day(item.reminder, ctx.local) if item.subject_kind == "goal" else None
+        if day is not None:
+            due.append((item, day))
+    if not due:
+        return []
+    goals = await load_goals(sources, ctx.local.date(), ctx.week_start)
+    known = {o.code: (o.title, o.indicator) for o in goals.outcomes}
+    known.update({c.page_id: (c.title, c.indicator) for c in goals.cards})
+    counts = await sources.tasks.counts()
+    notices: list[Notice] = []
+    for item, day in due:
+        if item.subject_ref in known:
+            title, value = known[item.subject_ref]
+        else:
+            tasks = counts.get(item.subject_ref)
+            title = item.subject_ref
+            value = indicator_value(
+                item.source,
+                milestones_done=0,
+                milestones_total=0,
+                habit_completions=[],
+                tasks_done=tasks.done if tasks else 0,
+                tasks_total=tasks.total if tasks else 0,
+                target=item.target,
+            )
+        if value.completion is None or value.completion >= 1 or value.value is None:
+            continue
+        body = f"{item.title_ar or title}: {_plain(value.value)} من {_plain(value.target or 0)}"
+        notices.append(
+            Notice("goal_indicator", item.subject_ref, day, body, f"/goals/{item.subject_ref}")
+        )
+    return notices
+
+
+async def _late_titles(sources: GoalSources, day: date, week_start: WeekStart) -> list[str]:
+    """Titles of what is late on `day`: open milestones past their due day (oldest first), then
+    the habits whose state is `late` (by code)."""
+    overdue = sorted(
+        (
+            m
+            for m in await sources.goals.milestones()
+            if not m.done and m.due_date and m.due_date < day
+        ),
+        key=lambda m: (m.due_date, m.title, m.page_id),
+    )
+    titles = [m.title for m in overdue]
+    habits = await sources.today.active_habits(day)
+    if habits:
+        by_habit: dict[str, list[LogRow]] = {}
+        for row in await sources.today.habit_logs(day - LOG_LOOKBACK, day):
+            by_habit.setdefault(row.habit_code, []).append(row)
+        for habit in habits:  # already by code
+            try:
+                state = habit_state(
+                    habit_spec(habit), domain_logs(by_habit.get(habit.code, [])), day, week_start
+                )
+            except Exception as exc:  # noqa: BLE001  # one bad habit row must not stop the others
+                log.warning("habit %s skipped: %s", habit.code, type(exc).__name__)
+                continue
+            if state == "late":
+                titles.append(habit.title_ar)
+    return titles
+
+
+async def late_summary_notices(ctx: NoticeContext, now: datetime) -> list[Notice]:
+    """One notice a day at `late_notice_time`, when something is late (design §9.2).
+
+    It counts the open milestones past their day and the habits `habit_state` calls `late`,
+    and is switched off by `late_notice_enabled`.
+    """
+    sources = ctx.goal_sources
+    if sources is None or ctx.prefs is None:
+        return []
+    settings: SettingsOut = await ctx.prefs.get()
+    if not settings.late_notice_enabled:
+        return []
+    hour, minute = map(int, settings.late_notice_time.split(":"))
+    days = due_days(time(hour, minute), EVERY_DAY, ctx.local)
+    if not days:
+        return []
+    titles = await _late_titles(sources, days[0], ctx.week_start)
+    if not titles:
+        return []
+    body = f"متأخر اليوم: {count_items_ar(len(titles))}. أولها: {titles[0]}."
+    return [Notice("late_summary", "daily", days[0], body, "/")]
+
+
+PROVIDERS: list[NoticeProvider] = [
+    day_reminder_notices,
+    goal_indicator_notices,
+    late_summary_notices,
+]

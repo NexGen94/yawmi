@@ -14,6 +14,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic_core import PydanticCustomError
 
 from yawmi.auth.deps import SettingsDep, require_kind
@@ -43,6 +44,7 @@ CODE_ATTEMPTS = 5
 
 NOT_FOUND_MESSAGE = "العادة غير موجودة"
 SYSTEM_LOCKED_MESSAGE = "عادة نظامية: يُعدَّل المرسى والتذكيرات فقط"
+POLARITY_LOCKED_MESSAGE = "لا يمكن تغيير نوع العادة بعد تسجيلها"
 _DAY_AHEAD = "اليوم يلي اليوم الحالي بأكثر من يوم"
 _DAY_TOO_OLD = "اليوم خارج النطاق المعقول"
 
@@ -125,19 +127,45 @@ async def create_habit(body: HabitIn, store: HabitStoreDep) -> HabitOut:
     raise RuntimeError("could not pick a free habit code")  # 48 random bits: not expected
 
 
+async def _polarity_locked(store: HabitStore, code: str, sent: dict[str, Any]) -> bool:
+    """A new `polarity` for a habit that already has a log of any status.
+
+    The log is read before the edit, outside its lock: a log written in between is the one
+    case that can slip through, and it only changes the kind of a habit with a single log.
+    """
+    if "polarity" not in sent or not is_storable(code):
+        return False
+    stored = await store.get(code)
+    if stored is None or sent["polarity"] == stored.polarity:
+        return False
+    return bool(await store.logs(code, date.min, date.max))
+
+
 @router.patch(
     "/{code}",
+    response_model=HabitOut,
     summary="تعديل عادة أو أرشفتها",
     description=(
         "تعديل جزئي: تتغير الحقول المرسلة وحدها، و`null` يفرغ الحقل الذي يقبل الفراغ. "
         "`reminders` يستبدل التذكيرات كلها. الأرشفة `active = false`، ولا حذف. العادة النظامية "
         "يُعدَّل فيها `anchor` و`reminders` فقط (409 لغيرهما إن اختلفت قيمته). التذكير الباقي "
-        "بوقته وقناعه يحتفظ بصفّه، والمحذوف يُعطَّل، والجديد يُضاف."
+        "بوقته وقناعه يحتفظ بصفّه، والمحذوف يُعطَّل، والجديد يُضاف. و`polarity` لا يتغيّر بعد "
+        "أول سجل للعادة، أياً كانت حالته: 422 بالرسالة «لا يمكن تغيير نوع العادة بعد تسجيلها»."
     ),
     responses={**NOT_FOUND, **CONFLICT, **INVALID},
 )
-async def patch_habit(code: Code, body: HabitPatch, store: HabitStoreDep) -> HabitOut:
+async def patch_habit(
+    code: Code, body: HabitPatch, store: HabitStoreDep
+) -> HabitOut | JSONResponse:
     sent = body.model_dump(include=body.model_fields_set)
+    if await _polarity_locked(store, code, sent):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": POLARITY_LOCKED_MESSAGE,
+                "errors": [{"loc": ["body", "polarity"], "type": "polarity_locked"}],
+            },
+        )
 
     def change(stored: StoredHabit) -> StoredHabit:
         """Merge the patch into the locked habit; a 409 or 422 here aborts with nothing written."""

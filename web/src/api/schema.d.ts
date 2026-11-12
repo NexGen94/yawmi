@@ -299,7 +299,7 @@ export interface paths {
         head?: never;
         /**
          * تعديل عادة أو أرشفتها
-         * @description تعديل جزئي: تتغير الحقول المرسلة وحدها، و`null` يفرغ الحقل الذي يقبل الفراغ. `reminders` يستبدل التذكيرات كلها. الأرشفة `active = false`، ولا حذف. العادة النظامية يُعدَّل فيها `anchor` و`reminders` فقط (409 لغيرهما إن اختلفت قيمته). التذكير الباقي بوقته وقناعه يحتفظ بصفّه، والمحذوف يُعطَّل، والجديد يُضاف.
+         * @description تعديل جزئي: تتغير الحقول المرسلة وحدها، و`null` يفرغ الحقل الذي يقبل الفراغ. `reminders` يستبدل التذكيرات كلها. الأرشفة `active = false`، ولا حذف. العادة النظامية يُعدَّل فيها `anchor` و`reminders` فقط (409 لغيرهما إن اختلفت قيمته). التذكير الباقي بوقته وقناعه يحتفظ بصفّه، والمحذوف يُعطَّل، والجديد يُضاف. و`polarity` لا يتغيّر بعد أول سجل للعادة، أياً كانت حالته: 422 بالرسالة «لا يمكن تغيير نوع العادة بعد تسجيلها».
          */
         patch: operations["patch_habit_v1_habits__code__patch"];
         trace?: never;
@@ -1071,7 +1071,10 @@ export interface components {
             /** Planned Minutes */
             planned_minutes: number;
         };
-        /** GoalColumnsIO */
+        /**
+         * GoalColumnsIO
+         * @description The columns each goals table shows, in order. A column appears once in a list.
+         */
         GoalColumnsIO: {
             /** Cards */
             cards?: ("page_id" | "title" | "status" | "outcome_codes" | "target_date" | "next_step" | "notion_edited_at" | "habits" | "habits_adherence_avg" | "milestones_total" | "milestones_done" | "tasks_total" | "tasks_done" | "indicator" | "pending")[];

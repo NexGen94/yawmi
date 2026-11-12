@@ -60,13 +60,18 @@ async def open_goals_pool() -> asyncpg.Pool:
             pytest.fail("CI is set but TEST_DATABASE_URL is not: the database tests must run")
         pytest.skip("TEST_DATABASE_URL is not set (the Postgres tests run in CI)")
     pool = await create_pool(url)
+    await ensure_schema(pool)
+    return pool
+
+
+async def ensure_schema(pool: asyncpg.Pool) -> None:
+    """The raqib stub and migrations 0001 to 0003, applied only where missing."""
     await pool.execute(STUB_SQL.read_text(encoding="utf-8"))
     if not await pool.fetchval("SELECT to_regclass('yawmi.events') IS NOT NULL"):
         await pool.execute((MIGRATIONS / "0001_yawmi_schema.sql").read_text(encoding="utf-8"))
     if not await pool.fetchval("SELECT to_regclass('yawmi.journal_entries') IS NOT NULL"):
         await pool.execute((MIGRATIONS / "0002_yawmi_role.sql").read_text(encoding="utf-8"))
         await pool.execute((MIGRATIONS / "0003_yawmi_web.sql").read_text(encoding="utf-8"))
-    return pool
 
 
 def habit_row(code: str, **extra: Any) -> HabitRow:
