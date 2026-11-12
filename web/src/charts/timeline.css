@@ -1,0 +1,121 @@
+/* The timeline of the plan (task 15). Colors only through the tokens. Marks differ by shape and by
+   text, not by colour alone. */
+
+.timeline-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-inline-size: 0;
+}
+
+/* The chart keeps a readable width and scrolls by itself on a phone; the page never scrolls sideways. */
+.timeline-scroll {
+  max-inline-size: 100%;
+  overflow-x: auto;
+  padding: var(--sp-3);
+  border: 1px solid var(--c-blue-pale);
+  border-radius: var(--radius-card);
+  background: var(--c-surface);
+}
+
+.timeline-scroll:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--focus);
+}
+
+.timeline-scroll .timeline {
+  inline-size: 960px;
+  max-inline-size: none;
+  block-size: auto;
+}
+
+.timeline-year,
+.timeline-hijri,
+.timeline-lane-label,
+.timeline-cycle-no {
+  fill: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.timeline-year {
+  font-weight: 600;
+}
+
+.timeline-grid {
+  stroke: var(--c-blue-pale);
+  stroke-width: 1;
+}
+
+.timeline-lane {
+  stroke: var(--c-blue-pale);
+  stroke-width: 1;
+}
+
+.timeline-cycle {
+  fill: var(--c-blue-pale);
+  stroke: var(--c-blue);
+  stroke-width: 1;
+}
+
+.timeline-cycle-now {
+  fill: var(--c-ink);
+  stroke: var(--c-ink);
+}
+
+.timeline-cycle-no-now {
+  fill: var(--c-bg);
+  font-weight: 600;
+}
+
+.tl-done {
+  fill: var(--c-blue);
+}
+
+.tl-open {
+  stroke: var(--c-blue);
+  stroke-width: 2;
+}
+
+.tl-late {
+  stroke: var(--c-signal);
+  stroke-width: 2;
+}
+
+.timeline-today {
+  stroke: var(--c-ink);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+.timeline-today-label {
+  fill: var(--c-ink);
+  font-size: var(--fs-note);
+  font-weight: 600;
+}
+
+.timeline-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.timeline-key li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.timeline-key .tl-done {
+  fill: var(--c-blue);
+}
+
+.timeline-note {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}

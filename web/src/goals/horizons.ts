@@ -57,17 +57,24 @@ function dueIn(goals: GoalsOut, today: Day, period: 'week' | 'month') {
   return dueReport(goals.milestones, today).upcoming.filter((i) => i.milestone.due_date !== null && i.milestone.due_date <= end);
 }
 
-function cycleLine(goals: GoalsOut, today: Day): string {
+/** The cycle the day falls in, with the day's number in it and the cycle's length. */
+export function currentCycle(
+  goals: GoalsOut,
+  today: Day,
+): { cycle: GoalsOut['cycles'][number]; index: number; length: number } | undefined {
   const now = toOrdinal(today);
-  const cycles = [...goals.cycles].sort((a, b) => a.start_date.localeCompare(b.start_date));
-  const first = cycles[0];
+  const cycle = goals.cycles.find((c) => now >= toOrdinal(c.start_date) && now <= toOrdinal(c.end_date));
+  if (cycle === undefined) return undefined;
+  return { cycle, index: now - toOrdinal(cycle.start_date) + 1, length: toOrdinal(cycle.end_date) - toOrdinal(cycle.start_date) + 1 };
+}
+
+function cycleLine(goals: GoalsOut, today: Day): string {
+  const first = [...goals.cycles].sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
   if (first === undefined) return NOTHING_DUE;
-  if (now < toOrdinal(first.start_date)) return `تبدأ الدورة ${fmt.num(first.cycle_no)} في ${fmt.day(first.start_date)}`;
-  const current = cycles.find((c) => now >= toOrdinal(c.start_date) && now <= toOrdinal(c.end_date));
+  if (toOrdinal(today) < toOrdinal(first.start_date)) return `تبدأ الدورة ${fmt.num(first.cycle_no)} في ${fmt.day(first.start_date)}`;
+  const current = currentCycle(goals, today);
   if (current === undefined) return NOTHING_DUE;
-  const length = toOrdinal(current.end_date) - toOrdinal(current.start_date) + 1;
-  const index = now - toOrdinal(current.start_date) + 1;
-  return `الدورة ${fmt.num(current.cycle_no)}: اليوم ${fmt.num(index)} من ${fmt.num(length)} · ${current.theme}`;
+  return `الدورة ${fmt.num(current.cycle.cycle_no)}: اليوم ${fmt.num(current.index)} من ${fmt.num(current.length)} · ${current.cycle.theme}`;
 }
 
 /** «1877 يوماً»: the count of days is written without a grouping comma, as the design's line is. */

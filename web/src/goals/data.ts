@@ -4,6 +4,9 @@
 
 import { useCallback, useEffect, useState } from 'preact/hooks';
 
+import type { Day } from '../domain/types';
+import { onDayChange, todayRiyadh } from '../lib/today';
+
 import { api } from '../api/client';
 import { unwrap } from '../api/unwrap';
 import { type QueryResult, useQuery } from '../data/query';
@@ -69,4 +72,11 @@ export function useGoalColumns(): GoalColumns {
   );
 
   return { columns, known, save };
+}
+
+/** The Riyadh day, moving to the next one at midnight without a reload. */
+export function useToday(): Day {
+  const [day, setDay] = useState<Day>(() => todayRiyadh());
+  useEffect(() => onDayChange(setDay), []);
+  return day;
 }

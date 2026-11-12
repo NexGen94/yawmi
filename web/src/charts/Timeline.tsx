@@ -1,9 +1,10 @@
+import './timeline.css';
 import { toOrdinal } from '../domain/days';
 import type { Day } from '../domain/types';
 import { fmt } from '../lib/format';
 import type { CycleOut, MilestoneFull } from '../goals/types';
 import { PLAN_END, PLAN_START } from '../goals/types';
-import { flip } from './rtl';
+import { x } from './rtl';
 import { emptyLabel } from './scale';
 
 export interface TimelineProps {
@@ -28,11 +29,11 @@ const TOP = AXIS_H + CYCLE_H + 14;
 const START = toOrdinal(PLAN_START);
 const SPAN = toOrdinal(PLAN_END) - START;
 
-/** The horizontal position of a day: 0 is the right edge of the plot, mirrored through rtl.ts. Days
- *  outside the plan are held at the nearest end. */
+/** The horizontal position of a day: every day of the plan is one slot of the plot, slot 0 at the
+ *  start (the right), through x() of rtl.ts. Days outside the plan are held at the nearest end. */
 function xOf(day: Day): number {
-  const frac = Math.min(1, Math.max(0, (toOrdinal(day) - START) / SPAN));
-  return flip(GUTTER + frac * PLOT, W);
+  const index = Math.min(SPAN, Math.max(0, toOrdinal(day) - START));
+  return PAD_END + x(index, SPAN + 1, PLOT);
 }
 
 type PointState = 'done' | 'open' | 'late';
