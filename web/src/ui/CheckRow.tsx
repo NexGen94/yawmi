@@ -5,8 +5,8 @@ export interface CheckRowProps {
   checked: boolean;
   /** The row's name (a habit, a priority). */
   label: string;
-  /** A second line under the label (the identity sentence, the period progress). */
-  note?: string;
+  /** A second line under the label (the identity sentence, the period progress): text or markup. */
+  note?: ComponentChildren;
   /** Read aloud with the row, never drawn: what a press will do (the state alone cannot say). */
   hint?: string;
   /** Shown at the end of the row, usually a Badge with the outcome code. */

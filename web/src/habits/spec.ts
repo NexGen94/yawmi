@@ -7,7 +7,7 @@ import type { HabitIn, HabitOut } from './types';
 
 /** The fields the rules read. Optional ones may be missing on a habit that is not saved yet. */
 export type HabitSpecSource = Pick<HabitOut, 'kind' | 'unit' | 'target_per_period' | 'period' | 'schedule_kind'> &
-  Partial<Pick<HabitIn, 'weekday_mask' | 'every_n' | 'anchor_day' | 'start_day' | 'end_day'>>;
+  Partial<Pick<HabitIn, 'weekday_mask' | 'every_n' | 'anchor_day' | 'start_day' | 'end_day' | 'polarity'>>;
 
 /**
  * The rule input for a stored habit (`HabitOut`, whose `start_day` the server always sets), a draft,
@@ -34,6 +34,8 @@ export function habitSpecOf(h: HabitSpecSource, today?: Day): HabitSpec {
     startDay,
     endDay: h.end_day ?? null,
   };
+  // The rules read a missing polarity as build, so only an abstain habit carries the field.
+  if (h.polarity === 'abstain') spec.polarity = 'abstain';
   checkHabitSpec(spec);
   return spec;
 }

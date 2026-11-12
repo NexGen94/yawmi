@@ -339,6 +339,36 @@ describe('CheckRow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'المشي' }));
     expect(onToggle).toHaveBeenCalledWith(false);
   });
+
+  it('reads its hint aloud with the row and never draws it: a visually hidden span named by aria-describedby', () => {
+    render(<CheckRow checked label="المشي" hint="التسجيل لم يُرسل بعد؛ النقر يتراجع عنه" onToggle={() => undefined} />);
+    const row = screen.getByRole('button', { name: 'المشي' });
+    const ids = (row.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean);
+    expect(ids).toHaveLength(1);
+    const hint = document.getElementById(ids[0] ?? '');
+    expect(hint?.textContent).toBe('التسجيل لم يُرسل بعد؛ النقر يتراجع عنه');
+    expect(hint?.classList.contains('visually-hidden')).toBe(true);
+  });
+
+  it('describes the note, the hint and the badge together, in that order', () => {
+    render(<CheckRow checked={false} label="المشي" note="بعد الاستيقاظ" hint="تلميح" badge={<Badge>O1</Badge>} onToggle={() => undefined} />);
+    const row = screen.getByRole('button', { name: 'المشي' });
+    const text = (row.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent)
+      .join('|');
+    expect(text).toBe('بعد الاستيقاظ|تلميح|O1');
+  });
+
+  it('adds no description for a hint that is not given', () => {
+    render(<CheckRow checked={false} label="المشي" onToggle={() => undefined} />);
+    expect(screen.getByRole('button', { name: 'المشي' }).hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('a note may be markup, not only text', () => {
+    render(<CheckRow checked={false} label="المشي" note={<span class="lead">جملة</span>} onToggle={() => undefined} />);
+    expect(document.querySelector('.check-note .lead')?.textContent).toBe('جملة');
+  });
 });
 
 describe('Segmented', () => {
