@@ -51,7 +51,7 @@ from yawmi.today.reader import CardRow, GoalRow, HabitRow, LogRow, MilestoneRow
 NO_TASKS = TaskCounts(0, 0)
 
 
-def overlay[MirrorRow: (MilestoneFullRow, CardFullRow)](
+def overlay[MirrorRow: (MilestoneFullRow, CardFullRow, MilestoneRow, CardRow)](
     mirror_rows: Sequence[MirrorRow], edits: Sequence[GoalEditOut]
 ) -> tuple[list[MirrorRow], dict[str, list[str]]]:
     """The mirror rows with the edits laid over them, and the pending fields of each page.
@@ -60,8 +60,11 @@ def overlay[MirrorRow: (MilestoneFullRow, CardFullRow)](
     value and the field is pending; else the latest applied edit shows while the mirror row's
     `notion_edited_at` is empty or not after `applied_at`; else the mirror's value. Only the
     edits of the rows' kind count, and an edit of a field outside `EDITABLE` is ignored.
+
+    Every reader of milestones and cards goes through here (the goals, the pace, the late notice,
+    `/v1/today` and `/v1/overview`), so no screen counts a value another one does not show.
     """
-    kind = "milestone" if mirror_rows and isinstance(mirror_rows[0], MilestoneFullRow) else "card"
+    kind = "milestone" if mirror_rows and hasattr(mirror_rows[0], "done") else "card"
     by_key: dict[tuple[str, str], list[GoalEditOut]] = defaultdict(list)
     for e in edits:
         if e.target_kind == kind and e.field in EDITABLE[kind]:

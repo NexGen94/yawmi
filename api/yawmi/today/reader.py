@@ -12,7 +12,7 @@ and what an outcome's completion is are decided in `yawmi.today.assemble`, witho
 
 import json
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Protocol
 
@@ -75,6 +75,8 @@ class MilestoneRow:
     due_date: date | None
     done: bool
     card_page_ids: tuple[str, ...] = ()
+    # when Notion last edited the page: decides whether an applied goal edit still shows
+    notion_edited_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -92,6 +94,7 @@ class CardRow:
     title: str
     status: str | None
     outcome_codes: tuple[str, ...]
+    notion_edited_at: datetime | None = None
 
 
 class TodayReader(Protocol):
@@ -180,7 +183,7 @@ ORDER BY cycle_no
 """
 
 MILESTONES = """
-SELECT page_id, title, outcome_code, cycle_no, due_date, done, card_page_ids
+SELECT page_id, title, outcome_code, cycle_no, due_date, done, card_page_ids, notion_edited_at
 FROM raqib.notion_milestones
 """
 
@@ -191,7 +194,7 @@ FROM raqib.goals
 
 # column-level grant: never `props`
 CARDS = """
-SELECT page_id, title, status, outcome_codes
+SELECT page_id, title, status, outcome_codes, notion_edited_at
 FROM raqib.notion_cards
 """
 
@@ -257,6 +260,7 @@ class AsyncpgTodayReader:
                 due_date=r["due_date"],
                 done=r["done"],
                 card_page_ids=_codes(r["card_page_ids"]),
+                notion_edited_at=r["notion_edited_at"],
             )
             for r in rows
         ]
@@ -272,6 +276,7 @@ class AsyncpgTodayReader:
                 title=r["title"],
                 status=r["status"],
                 outcome_codes=_codes(r["outcome_codes"]),
+                notion_edited_at=r["notion_edited_at"],
             )
             for r in rows
         ]

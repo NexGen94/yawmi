@@ -43,8 +43,17 @@ from yawmi.goals.tasks_store import AsyncpgGoalTaskStore
 from yawmi.indicators.memory import InMemoryIndicatorStore
 from yawmi.indicators.models import IndicatorIO
 from yawmi.indicators.store import AsyncpgIndicatorStore
+from yawmi.notion.changes import GoalEditOut, build_edit
 from yawmi.today.memory import InMemoryTodayReader
-from yawmi.today.reader import AsyncpgTodayReader, HabitRow, LogRow
+from yawmi.today.reader import (
+    AsyncpgTodayReader,
+    CardRow,
+    CycleRow,
+    GoalRow,
+    HabitRow,
+    LogRow,
+    MilestoneRow,
+)
 
 PREFIX = "t13_"
 IN_CI = bool(os.environ.get("CI"))
@@ -60,6 +69,7 @@ KPI_CODES = [
 ]
 OUTCOMES = [f"O{n}" for n in range(1, 13)]
 LONG_AGO = datetime(2026, 1, 1, tzinfo=UTC)
+EDIT_TIME = datetime(2026, 11, 11, 8, 0, tzinfo=UTC)
 
 
 async def open_goals_pool() -> asyncpg.Pool:
@@ -177,6 +187,23 @@ class GoalsBackend:
         """A `goal_task_set` event reaches the task, by the rule of the events projection."""
         raise NotImplementedError
 
+    async def edit(
+        self,
+        kind: str,
+        page_id: str,
+        field: str,
+        old: object,
+        new: object,
+        *,
+        applied_at: datetime | None = None,
+    ) -> GoalEditOut:
+        """A goal edit, pending, or applied at `applied_at` (as `apply_pending` records it)."""
+        made = build_edit(kind, page_id, field, old, new, date(2026, 11, 11))
+        row = await self.edits.record(page_id, field, made, None, EDIT_TIME)
+        if applied_at is not None:
+            row = await self.edits.finish(row.id, "applied", applied_at, None)
+        return row
+
     async def task(self, goal_ref: str, title: str, *, done: bool = False) -> str:
         created = await self.tasks.create(goal_ref, title, None, LONG_AGO)
         if done:
@@ -202,11 +229,15 @@ class MemoryGoals(GoalsBackend):
         app.state.goal_edits = self.edits
 
     async def sync(self, kind: str, page_id: str, **values: Any) -> None:
-        rows = self.goals.milestone_rows if kind == "milestone" else self.goals.card_rows
         changes = {("notion_edited_at" if k == "edited" else k): v for k, v in values.items()}
-        for i, row in enumerate(rows):
-            if row.page_id == page_id:
-                rows[i] = replace(row, **changes)
+        if kind == "milestone":
+            lists: list[list[Any]] = [self.goals.milestone_rows, self.today.milestone_rows]
+        else:
+            lists = [self.goals.card_rows, self.today.card_rows]
+        for rows in lists:
+            for i, row in enumerate(rows):
+                if row.page_id == page_id:
+                    rows[i] = replace(row, **changes)
 
     async def mark_from_event(self, task_id: UUID, done: bool, logged_at: datetime) -> None:
         await self.tasks.mark_from_event(task_id, done, logged_at)
@@ -222,9 +253,23 @@ class MemoryGoals(GoalsBackend):
                 status=kw.get("status", "active"),
             )
         )
+        o = self.goals.outcome_rows[-1]
+        self.today.goal_rows.append(GoalRow(o.code, o.title, o.target_date, o.status, o.track))
 
     async def milestone(self, key: str, outcome: str | None, **kw: Any) -> str:
         page_id = PREFIX + key
+        self.today.milestone_rows.append(
+            MilestoneRow(
+                page_id=page_id,
+                title=kw.get("title", "محطة " + key),
+                outcome_code=outcome,
+                cycle_no=kw.get("cycle"),
+                due_date=kw.get("due"),
+                done=kw.get("done", False),
+                card_page_ids=tuple(PREFIX + c for c in kw.get("cards", ())),
+                notion_edited_at=kw.get("edited"),
+            )
+        )
         self.goals.milestone_rows.append(
             MilestoneFullRow(
                 page_id=page_id,
@@ -243,6 +288,15 @@ class MemoryGoals(GoalsBackend):
 
     async def card(self, key: str, **kw: Any) -> str:
         page_id = PREFIX + key
+        self.today.card_rows.append(
+            CardRow(
+                page_id=page_id,
+                title=kw.get("title", "بطاقة " + key),
+                status=kw.get("status"),
+                outcome_codes=tuple(kw.get("outcomes", ())),
+                notion_edited_at=kw.get("edited"),
+            )
+        )
         self.goals.card_rows.append(
             CardFullRow(
                 page_id=page_id,
@@ -269,6 +323,7 @@ class MemoryGoals(GoalsBackend):
         self.goals.cycle_rows.append(
             CycleFullRow(no, 1, start, end, end, review_end, "موضوع", "بوابة")
         )
+        self.today.cycle_rows.append(CycleRow(no, start, end, review_end))
 
     async def kpi(self, code: str, goal_code: str | None, **kw: Any) -> None:
         self.goals.kpi_rows.append(

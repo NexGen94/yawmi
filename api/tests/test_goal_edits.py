@@ -556,3 +556,18 @@ async def test_an_applier_that_raises_marks_the_edit_failed(
     assert summary == ApplySummary(applied=0, failed=1, conflicts=0)
     [row] = await edits(client)
     assert row["status"] == "failed" and row["error"] and "boom" not in row["error"]
+
+
+async def test_blank_evidence_is_no_value_and_evidence_is_trimmed(
+    client: httpx.AsyncClient, goals_backend: GoalsBackend
+) -> None:
+    page = await milestone_0711(goals_backend)
+    resp = await edit_milestone(client, page, evidence="   ")
+    assert resp.status_code == 200
+    assert resp.json()["pending"] == []
+    assert await edits(client) == []
+    resp = await edit_milestone(client, page, evidence="  رابط  ")
+    assert resp.json()["evidence"] == "رابط"
+    [row] = await edits(client)
+    assert row["new_value"] == "رابط"
+    assert row["note"].endswith("من «—» إلى «رابط»")

@@ -4,7 +4,7 @@ An edit is a row over the Notion mirror, never a write into it (`yawmi_api` only
 At most one edit per page and field is `pending` (a partial unique index): a new edit supersedes
 the pending one under a transaction-scoped advisory lock on `(page_id, field)`, so two concurrent
 edits of the same field serialise instead of failing on the index. Nothing is ever deleted (the
-role has no `DELETE` on the table): a cancelled edit becomes `superseded`.
+role has no `DELETE` on the table): a cancelled edit becomes `cancelled`.
 
 Only a pending edit takes a result: `finish` (to `applied`, `conflict` or `failed`) is a
 conditional update that returns `None` for an edit that is not pending, so a late result never

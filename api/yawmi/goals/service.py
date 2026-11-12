@@ -11,13 +11,14 @@ from datetime import date
 
 from yawmi.domain.habits import kpi_prefill_kind
 from yawmi.domain.periods import WeekStart
-from yawmi.goals.assemble import build_goals
+from yawmi.goals.assemble import build_goals, overlay
 from yawmi.goals.edits_store import EditStore
 from yawmi.goals.models import GoalsOut, PaceOut, PaceReading
 from yawmi.goals.pace import pace_line
-from yawmi.goals.reader import GoalsReader, KpiRow
+from yawmi.goals.reader import GoalsReader, KpiRow, MilestoneFullRow
 from yawmi.goals.tasks_store import GoalTaskStore
 from yawmi.indicators.store import IndicatorStore
+from yawmi.notion.changes import GoalEditOut
 from yawmi.today.reader import TodayReader
 
 # the plan began on 2026-10-31 (D-043): the start of every pace line
@@ -33,6 +34,17 @@ class GoalSources:
     tasks: GoalTaskStore
     indicators: IndicatorStore
     edits: EditStore | None = None
+
+
+async def current_edits(edits: EditStore | None) -> list[GoalEditOut]:
+    """The edits every reader lays over the mirror (none without a store)."""
+    return await edits.current() if edits is not None else []
+
+
+async def shown_milestones(goals: GoalsReader, edits: EditStore | None) -> list[MilestoneFullRow]:
+    """The mirror's milestones as `GET /v1/goals` shows them: the goal edits laid over them."""
+    rows, _ = overlay(await goals.milestones(), await current_edits(edits))
+    return rows
 
 
 async def load_goals(sources: GoalSources, today: date, week_start: WeekStart) -> GoalsOut:
@@ -62,7 +74,7 @@ async def load_goals(sources: GoalSources, today: date, week_start: WeekStart) -
         stored=stored,
         today=today,
         week_start=week_start,
-        edits=await sources.edits.current() if sources.edits is not None else (),
+        edits=await current_edits(sources.edits),
     )
 
 
@@ -88,14 +100,19 @@ def _line_span(kpi: KpiRow, due_day: date, today: date) -> tuple[date, date]:
 
 
 async def load_pace(
-    goals: GoalsReader, ref: str, kpi_code: str | None, today: date
+    goals: GoalsReader,
+    ref: str,
+    kpi_code: str | None,
+    today: date,
+    edits: EditStore | None = None,
 ) -> PaceOut | None:
     """The pace of outcome `ref`, or `None` if the mirror has no such outcome.
 
     The basis is a cumulative KPI of the outcome (`kpi_code` if it names one, else the first by
     code) or, with none, the milestones: done over all, from the plan's start. With nothing to
     measure (no usable KPI and no milestone) the current value, the projection and `on_pace` are
-    `None`: an empty mirror is never reported as on pace.
+    `None`: an empty mirror is never reported as on pace. The milestones are the shown ones, with
+    the goal edits laid over the mirror (`shown_milestones`).
     """
     outcome = next((o for o in await goals.outcomes() if o.code == ref), None)
     if outcome is None:
@@ -118,7 +135,7 @@ async def load_pace(
         current = readings[-1].value if readings else None
         target, unit = float(chosen.target), chosen.unit
     else:
-        mine = [m for m in await goals.milestones() if m.outcome_code == ref]
+        mine = [m for m in await shown_milestones(goals, edits) if m.outcome_code == ref]
         current = float(sum(1 for m in mine if m.done)) if mine else None
         target = float(len(mine))
     expected, projected, on_pace = pace_line(start_day, 0.0, due_day, target, today, current)

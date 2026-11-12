@@ -75,7 +75,8 @@ def _due(day: date) -> date:
 
 
 DueDate = Annotated[date, AfterValidator(_due)]
-Evidence = Annotated[StorableText, Field(max_length=MAX_EVIDENCE)]
+# trimmed: blank evidence is no evidence, so «  » never becomes an edit
+Evidence = Annotated[StorableText, AfterValidator(str.strip), Field(max_length=MAX_EVIDENCE)]
 
 # Unknown keys are let through the model and refused by the rules (`check_editable`), so a 422
 # names the field (`field_not_editable`, not the generic `extra_forbidden`); the schema still

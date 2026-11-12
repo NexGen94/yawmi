@@ -550,7 +550,7 @@ export interface paths {
         put?: never;
         /**
          * نتيجة تطبيق تغيير (رمز الخدمة فقط)
-         * @description `ok: true` يجعله `applied` ويملأ `applied_at`، و`ok: false` مع `conflict: true` يجعله `conflict`، و`ok: false` وحده `failed` بنص `error`. غير موجود 404، وغير معلّق 409.
+         * @description `ok: true` يجعله `applied` ويملأ `applied_at`، و`ok: false` مع `conflict: true` يجعله `conflict`، و`ok: false` وحده `failed` بنص `error`. غير موجود 404، وغير معلّق 409: ومنه نتيجة ثانية لتغيير سُجّلت نتيجته من قبل، فالحالة المسجَّلة باقية ولا يُعاد إرسالها.
          */
         post: operations["post_result_v1_notion_changes__change_id__result_post"];
         delete?: never;

@@ -5,7 +5,9 @@ The applier (a later, owner-approved workflow that holds the Notion credential, 
 service) reads the pending changes oldest first, writes each one only if the live value is the
 change's `old_value`, and reports back: `ok` (applied, `applied_at` is now), `conflict` (the live
 value differed: nothing was written) or a failure with its error. Only a pending change takes a
-result, so a result for one cancelled or superseded meanwhile is a 409.
+result, so a result for one cancelled or superseded meanwhile is a 409, and so is a repeated
+result: an applier that retries after a lost response reads 409 as «already recorded» (the stored
+state is kept). Whether a repeat equal to the stored state should be a 204 is for the live binding.
 """
 
 from typing import Annotated, Any, Self
@@ -80,7 +82,8 @@ async def list_changes(
     summary="نتيجة تطبيق تغيير (رمز الخدمة فقط)",
     description=(
         "`ok: true` يجعله `applied` ويملأ `applied_at`، و`ok: false` مع `conflict: true` يجعله "
-        "`conflict`، و`ok: false` وحده `failed` بنص `error`. غير موجود 404، وغير معلّق 409."
+        "`conflict`، و`ok: false` وحده `failed` بنص `error`. غير موجود 404، وغير معلّق 409: "
+        "ومنه نتيجة ثانية لتغيير سُجّلت نتيجته من قبل، فالحالة المسجَّلة باقية ولا يُعاد إرسالها."
     ),
     responses={**RESULT_RESPONSES, **INVALID},
 )
