@@ -128,11 +128,14 @@ public struct EventType: RawRepresentable, Hashable, Sendable, Codable, CustomSt
     public static let moodLogged = EventType(rawValue: "mood_logged")
     public static let confounderTagged = EventType(rawValue: "confounder_tagged")
     public static let appOpened = EventType(rawValue: "app_opened")
+    public static let journalSaved = EventType(rawValue: "journal_saved")
+    public static let goalTaskSet = EventType(rawValue: "goal_task_set")
 
     /// The types the server accepts, in its order.
     public static let allKnown: [EventType] = [
         .habitLogged, .habitSkipped, .habitVacation, .dayClosed, .focusStarted,
         .focusEnded, .breathEnded, .moodLogged, .confounderTagged, .appOpened,
+        .journalSaved, .goalTaskSet,
     ]
 
     /// Whether the server accepts this type in `POST /v1/events`.

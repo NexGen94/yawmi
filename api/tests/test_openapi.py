@@ -40,11 +40,12 @@ def test_export_writes_every_required_path(exporter: ModuleType, tmp_path: Path)
         assert path in spec["paths"], path
 
 
-def test_required_and_pending_paths_are_the_final_list_of_task_1(exporter: ModuleType) -> None:
-    """Together they are the 18 paths of the spec (§ 6.1); none is listed twice."""
+def test_required_and_pending_paths_are_the_final_list(exporter: ModuleType) -> None:
+    """Together they are the 22 paths of the spec; none is listed twice."""
     final = {
         "/v1/devices/pair",
         "/v1/auth/refresh",
+        "/v1/auth/logout",
         "/v1/devices/{device_id}/revoke",
         "/v1/events",
         "/v1/health/live",
@@ -58,12 +59,15 @@ def test_required_and_pending_paths_are_the_final_list_of_task_1(exporter: Modul
         "/v1/habits",
         "/v1/habits/{code}",
         "/v1/habits/{code}/progress",
+        "/v1/habit-logs",
+        "/v1/journal",
+        "/v1/mood",
         "/v1/goals/{ref}/to-habit",
         "/v1/push/subscribe",
         "/v1/push/vapid-public-key",
     }
     required, pending = exporter.REQUIRED_PATHS, exporter.PENDING_PATHS
-    assert len(final) == 18
+    assert len(final) == 22
     assert set(required).isdisjoint(pending)
     assert len(set(required)) == len(required) and len(set(pending)) == len(pending)
     assert set(required) | set(pending) == final
@@ -187,3 +191,23 @@ def test_health_bodies_refuse_unknown_fields(exporter: ModuleType) -> None:
     assert schemas["DailyMetricsIn"]["additionalProperties"] is False
     assert schemas["ExertionSegment"]["additionalProperties"] is False
     assert "hrv_samples" in schemas["DailyMetricsIn"]["required"]
+
+
+def test_event_types_and_named_payload_schemas_in_components(exporter: ModuleType) -> None:
+    schemas = exporter.build_spec()["components"]["schemas"]
+    event_in = schemas["EventIn"]["properties"]
+    assert event_in["type"]["enum"][-2:] == ["journal_saved", "goal_task_set"]
+    assert event_in["payload"]["type"] == "object"
+    for name in (
+        "HabitLoggedPayload",
+        "HabitMarkPayload",
+        "FocusStartedPayload",
+        "FocusEndedPayload",
+        "BreathEndedPayload",
+        "JournalSavedPayload",
+        "MorningAnswers",
+        "EveningAnswers",
+        "MoodLoggedPayload",
+        "GoalTaskSetPayload",
+    ):
+        assert name in schemas, name

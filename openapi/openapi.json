@@ -77,6 +77,80 @@
         "title": "BatchResult",
         "type": "object"
       },
+      "BreathEndedPayload": {
+        "properties": {
+          "breaths_per_min": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 1000,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Breaths Per Min"
+          },
+          "completed": {
+            "default": true,
+            "title": "Completed",
+            "type": "boolean"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "maximum": 10000000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Duration Seconds"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ended At"
+          },
+          "pattern": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Pattern",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          }
+        },
+        "required": [
+          "pattern"
+        ],
+        "title": "BreathEndedPayload",
+        "type": "object"
+      },
       "CardHabit": {
         "properties": {
           "adherence": {
@@ -97,6 +171,11 @@
           "title_ar": {
             "title": "Title Ar",
             "type": "string"
+          },
+          "total_done": {
+            "default": 0.0,
+            "title": "Total Done",
+            "type": "number"
           }
         },
         "required": [
@@ -110,7 +189,7 @@
       "CardOut": {
         "properties": {
           "habits": {
-            "description": "العادات النشطة التي `goal_ref` فيها هذه البطاقة، بالرمز، مع التزام كل منها",
+            "description": "العادات النشطة التي `goal_ref` فيها هذه البطاقة أو إحدى محطاتها، بالرمز، مع التزام كل منها",
             "items": {
               "$ref": "#/components/schemas/CardHabit"
             },
@@ -638,6 +717,169 @@
         "title": "ErrorDetail",
         "type": "object"
       },
+      "EveningAnswers": {
+        "additionalProperties": false,
+        "properties": {
+          "calm": {
+            "anyOf": [
+              {
+                "maximum": 10,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Calm"
+          },
+          "distraction": {
+            "anyOf": [
+              {
+                "maximum": 10,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Distraction"
+          },
+          "gratitude": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Gratitude",
+            "type": "array"
+          },
+          "learned": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Learned"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          },
+          "one_minute": {
+            "default": false,
+            "title": "One Minute",
+            "type": "boolean"
+          },
+          "presence": {
+            "anyOf": [
+              {
+                "maximum": 10,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Presence"
+          },
+          "priorities": {
+            "items": {
+              "$ref": "#/components/schemas/EveningPriority"
+            },
+            "maxItems": 3,
+            "title": "Priorities",
+            "type": "array"
+          },
+          "win": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Win"
+          },
+          "win_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "O1",
+                  "O2",
+                  "O3",
+                  "O4",
+                  "O5",
+                  "O6",
+                  "O7",
+                  "O8",
+                  "O9",
+                  "O10",
+                  "O11",
+                  "O12"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Win Outcome"
+          }
+        },
+        "title": "EveningAnswers",
+        "type": "object"
+      },
+      "EveningPriority": {
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "enum": [
+              "done",
+              "open",
+              "moved"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "state"
+        ],
+        "title": "EveningPriority",
+        "type": "object"
+      },
       "EventBatch": {
         "description": "`POST /v1/events` body: at most 500 events (more is a 422, like any other bad body).",
         "properties": {
@@ -685,7 +927,9 @@
               "breath_ended",
               "mood_logged",
               "confounder_tagged",
-              "app_opened"
+              "app_opened",
+              "journal_saved",
+              "goal_task_set"
             ],
             "title": "Type",
             "type": "string"
@@ -727,6 +971,197 @@
           "hr_reserve"
         ],
         "title": "ExertionSegment",
+        "type": "object"
+      },
+      "FocusEndedPayload": {
+        "properties": {
+          "actual_minutes": {
+            "anyOf": [
+              {
+                "maximum": 100000,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Actual Minutes"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ended At"
+          },
+          "focus_rating": {
+            "anyOf": [
+              {
+                "maximum": 5,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Focus Rating"
+          },
+          "goal_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Goal Ref"
+          },
+          "habit_code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Habit Code"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Next Step"
+          },
+          "planned_minutes": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 2147483647,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Planned Minutes"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          }
+        },
+        "title": "FocusEndedPayload",
+        "type": "object"
+      },
+      "FocusStartedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "goal_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Goal Ref"
+          },
+          "habit_code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Habit Code"
+          },
+          "plan_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Plan Id"
+          },
+          "planned_minutes": {
+            "exclusiveMinimum": 0,
+            "maximum": 2147483647,
+            "title": "Planned Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "planned_minutes"
+        ],
+        "title": "FocusStartedPayload",
+        "type": "object"
+      },
+      "GoalTaskSetPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "done"
+        ],
+        "title": "GoalTaskSetPayload",
         "type": "object"
       },
       "HabitDraft": {
@@ -894,14 +1329,36 @@
       },
       "HabitDue": {
         "properties": {
+          "anchor": {
+            "default": "free",
+            "description": "مرسى العادة في اليوم",
+            "enum": [
+              "after_wake",
+              "before_sleep",
+              "free"
+            ],
+            "title": "Anchor",
+            "type": "string"
+          },
           "code": {
             "title": "Code",
             "type": "string"
           },
           "done_today": {
-            "description": "سُجّل لها إنجاز (`done`) اليوم من أي مصدر",
+            "description": "سجل اليوم (آخر ما كُتب له من أي جهاز) إنجاز (`done`)",
             "title": "Done Today",
             "type": "boolean"
+          },
+          "goal_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Ref"
           },
           "kind": {
             "enum": [
@@ -911,6 +1368,17 @@
             ],
             "title": "Kind",
             "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
           },
           "period": {
             "enum": [
@@ -924,6 +1392,23 @@
           "period_progress": {
             "$ref": "#/components/schemas/PeriodProgressOut",
             "description": "تقدّم الفترة الحالية (يوم أو أسبوع أو شهر)"
+          },
+          "status_today": {
+            "anyOf": [
+              {
+                "enum": [
+                  "done",
+                  "skip",
+                  "vacation"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "حالة سجل اليوم (`done` أو `skip` أو `vacation` أو `null`)",
+            "title": "Status Today"
           },
           "target_per_period": {
             "title": "Target Per Period",
@@ -943,6 +1428,18 @@
             ],
             "title": "Unit",
             "type": "string"
+          },
+          "value_today": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "قيمة سجل اليوم إن كان `done` وله قيمة",
+            "title": "Value Today"
           }
         },
         "required": [
@@ -1145,6 +1642,138 @@
           "period"
         ],
         "title": "HabitIn",
+        "type": "object"
+      },
+      "HabitLogList": {
+        "properties": {
+          "logs": {
+            "items": {
+              "$ref": "#/components/schemas/HabitLogOut"
+            },
+            "title": "Logs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "logs"
+        ],
+        "title": "HabitLogList",
+        "type": "object"
+      },
+      "HabitLogOut": {
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "habit_code": {
+            "title": "Habit Code",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "habit_code",
+          "day",
+          "value",
+          "status"
+        ],
+        "title": "HabitLogOut",
+        "type": "object"
+      },
+      "HabitLoggedPayload": {
+        "properties": {
+          "day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Day"
+          },
+          "habit_code": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Habit Code",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "done",
+              "skip",
+              "vacation"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Value"
+          }
+        },
+        "required": [
+          "habit_code",
+          "status"
+        ],
+        "title": "HabitLoggedPayload",
+        "type": "object"
+      },
+      "HabitMarkPayload": {
+        "properties": {
+          "day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Day"
+          },
+          "habit_code": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Habit Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "habit_code"
+        ],
+        "title": "HabitMarkPayload",
         "type": "object"
       },
       "HabitOut": {
@@ -1642,6 +2271,100 @@
         "title": "InsightResponse",
         "type": "object"
       },
+      "JournalEntryOut": {
+        "properties": {
+          "answers": {
+            "additionalProperties": true,
+            "title": "Answers",
+            "type": "object"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "logged_at": {
+            "format": "date-time",
+            "title": "Logged At",
+            "type": "string"
+          },
+          "part": {
+            "enum": [
+              "morning",
+              "evening"
+            ],
+            "title": "Part",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "part",
+          "answers",
+          "logged_at"
+        ],
+        "title": "JournalEntryOut",
+        "type": "object"
+      },
+      "JournalList": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/JournalEntryOut"
+            },
+            "title": "Entries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "title": "JournalList",
+        "type": "object"
+      },
+      "JournalSavedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "answers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MorningAnswers"
+              },
+              {
+                "$ref": "#/components/schemas/EveningAnswers"
+              }
+            ],
+            "title": "Answers"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Day"
+          },
+          "part": {
+            "enum": [
+              "morning",
+              "evening"
+            ],
+            "title": "Part",
+            "type": "string"
+          }
+        },
+        "required": [
+          "part",
+          "answers"
+        ],
+        "title": "JournalSavedPayload",
+        "type": "object"
+      },
       "Live": {
         "properties": {
           "ok": {
@@ -1698,6 +2421,215 @@
         "title": "MilestoneOut",
         "type": "object"
       },
+      "MoodList": {
+        "properties": {
+          "logs": {
+            "items": {
+              "$ref": "#/components/schemas/MoodLogOut"
+            },
+            "title": "Logs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "logs"
+        ],
+        "title": "MoodList",
+        "type": "object"
+      },
+      "MoodLogOut": {
+        "properties": {
+          "activities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Activities",
+            "type": "array"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "feelings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Feelings",
+            "type": "array"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "score",
+          "feelings",
+          "activities"
+        ],
+        "title": "MoodLogOut",
+        "type": "object"
+      },
+      "MoodLoggedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "activities": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Activities",
+            "type": "array"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Day"
+          },
+          "feelings": {
+            "items": {
+              "maxLength": 24,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 6,
+            "title": "Feelings",
+            "type": "array"
+          },
+          "score": {
+            "maximum": 5,
+            "minimum": 1,
+            "title": "Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "score"
+        ],
+        "title": "MoodLoggedPayload",
+        "type": "object"
+      },
+      "MorningAnswers": {
+        "additionalProperties": false,
+        "properties": {
+          "enthusiasm": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Enthusiasm"
+          },
+          "gratitude": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Gratitude",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          },
+          "planned_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Planned Minutes"
+          },
+          "priorities": {
+            "items": {
+              "$ref": "#/components/schemas/MorningPriority"
+            },
+            "maxItems": 3,
+            "title": "Priorities",
+            "type": "array"
+          }
+        },
+        "title": "MorningAnswers",
+        "type": "object"
+      },
+      "MorningPriority": {
+        "additionalProperties": false,
+        "properties": {
+          "goal_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Goal Ref"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Id"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "MorningPriority",
+        "type": "object"
+      },
       "OutcomeOut": {
         "properties": {
           "code": {
@@ -1715,6 +2647,14 @@
             ],
             "description": "المحطات المنجزة ÷ كل المحطات، أو null بلا محطات",
             "title": "Completion"
+          },
+          "habits": {
+            "description": "العادات النشطة المرتبطة بالمخرج (`outcome`)، بالرمز، مع التزامها وإجمالي إنجازها",
+            "items": {
+              "$ref": "#/components/schemas/CardHabit"
+            },
+            "title": "Habits",
+            "type": "array"
           },
           "milestones_done": {
             "title": "Milestones Done",
@@ -1746,6 +2686,11 @@
           },
           "title": {
             "title": "Title",
+            "type": "string"
+          },
+          "track": {
+            "default": "",
+            "title": "Track",
             "type": "string"
           }
         },
@@ -1928,6 +2873,11 @@
             "description": "0–1، وتُعرض ×100",
             "title": "Strength",
             "type": "number"
+          },
+          "total_done": {
+            "description": "مجموع قيم `done` منذ بداية العادة (عدد أيام الإنجاز للمنطقية)",
+            "title": "Total Done",
+            "type": "number"
           }
         },
         "required": [
@@ -1936,6 +2886,7 @@
           "streak",
           "challenge",
           "adherence",
+          "total_done",
           "last_8_periods"
         ],
         "title": "ProgressOut",
@@ -2541,6 +3492,65 @@
         ]
       }
     },
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "logout_v1_auth_logout_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "yawmi_rt",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Yawmi Rt"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RefreshRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "summary": "إنهاء جلسة الجهاز الحالي ومسح كوكي رمز التجديد",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
     "/v1/auth/refresh": {
       "post": {
         "operationId": "refresh_tokens_v1_auth_refresh_post",
@@ -3048,6 +4058,109 @@
         ]
       }
     },
+    "/v1/habit-logs": {
+      "get": {
+        "description": "سجلات العادات بين `from` و`to` (400 يوم على الأكثر)، مع حصر اختياري برمز العادة `code`.",
+        "operationId": "list_habit_logs_v1_habit_logs_get",
+        "parameters": [
+          {
+            "description": "أول يوم في المدى",
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "description": "أول يوم في المدى",
+              "format": "date",
+              "title": "From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "آخر يوم في المدى",
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "description": "آخر يوم في المدى",
+              "format": "date",
+              "title": "To",
+              "type": "string"
+            }
+          },
+          {
+            "description": "رمز العادة",
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "رمز العادة",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HabitLogList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "سجلات العادات في مدى زمني",
+        "tags": [
+          "habits"
+        ]
+      }
+    },
     "/v1/habits": {
       "get": {
         "description": "مرتبة بالرمز، ومع كل عادة تذكيراتها النشطة. المؤرشفة `active = false`.",
@@ -3450,6 +4563,172 @@
         "summary": "فحص الحياة (بلا مصادقة)",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/v1/journal": {
+      "get": {
+        "description": "الصفوف المسقطة من أحداث `journal_saved` بين `from` و`to` (400 يوم على الأكثر).",
+        "operationId": "list_journal_v1_journal_get",
+        "parameters": [
+          {
+            "description": "أول يوم في المدى",
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "description": "أول يوم في المدى",
+              "format": "date",
+              "title": "From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "آخر يوم في المدى",
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "description": "آخر يوم في المدى",
+              "format": "date",
+              "title": "To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "يوميات الصباح والمساء في مدى زمني",
+        "tags": [
+          "journal"
+        ]
+      }
+    },
+    "/v1/mood": {
+      "get": {
+        "description": "الصفوف المسقطة من أحداث `mood_logged` بين `from` و`to` (400 يوم على الأكثر).",
+        "operationId": "list_mood_v1_mood_get",
+        "parameters": [
+          {
+            "description": "أول يوم في المدى",
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "description": "أول يوم في المدى",
+              "format": "date",
+              "title": "From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "آخر يوم في المدى",
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "description": "آخر يوم في المدى",
+              "format": "date",
+              "title": "To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoodList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "سجلات المزاج في مدى زمني",
+        "tags": [
+          "journal"
         ]
       }
     },

@@ -73,6 +73,8 @@ const EVENT_TYPE_SET = {
   mood_logged: true,
   confounder_tagged: true,
   app_opened: true,
+  journal_saved: true,
+  goal_task_set: true,
 } as const satisfies Record<EventType, true>;
 
 /**

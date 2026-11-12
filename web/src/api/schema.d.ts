@@ -24,6 +24,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** إنهاء جلسة الجهاز الحالي ومسح كوكي رمز التجديد */
+        post: operations["logout_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/refresh": {
         parameters: {
             query?: never;
@@ -139,6 +156,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/habit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * سجلات العادات في مدى زمني
+         * @description سجلات العادات بين `from` و`to` (400 يوم على الأكثر)، مع حصر اختياري برمز العادة `code`.
+         */
+        get: operations["list_habit_logs_v1_habit_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/habits": {
         parameters: {
             query?: never;
@@ -232,6 +269,46 @@ export interface paths {
         };
         /** فحص الحياة (بلا مصادقة) */
         get: operations["health_live_v1_health_live_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/journal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * يوميات الصباح والمساء في مدى زمني
+         * @description الصفوف المسقطة من أحداث `journal_saved` بين `from` و`to` (400 يوم على الأكثر).
+         */
+        get: operations["list_journal_v1_journal_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mood": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * سجلات المزاج في مدى زمني
+         * @description الصفوف المسقطة من أحداث `mood_logged` بين `from` و`to` (400 يوم على الأكثر).
+         */
+        get: operations["list_mood_v1_mood_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -384,6 +461,36 @@ export interface components {
             /** Duplicates */
             duplicates: number;
         };
+        /** BreathEndedPayload */
+        BreathEndedPayload: {
+            /**
+             * Breaths Per Min
+             * @default null
+             */
+            breaths_per_min: number | null;
+            /**
+             * Completed
+             * @default true
+             */
+            completed: boolean;
+            /**
+             * Duration Seconds
+             * @default null
+             */
+            duration_seconds: number | null;
+            /**
+             * Ended At
+             * @default null
+             */
+            ended_at: string | null;
+            /** Pattern */
+            pattern: string;
+            /**
+             * Started At
+             * @default null
+             */
+            started_at: string | null;
+        };
         /** CardHabit */
         CardHabit: {
             /** Adherence */
@@ -392,12 +499,17 @@ export interface components {
             code: string;
             /** Title Ar */
             title_ar: string;
+            /**
+             * Total Done
+             * @default 0
+             */
+            total_done: number;
         };
         /** CardOut */
         CardOut: {
             /**
              * Habits
-             * @description العادات النشطة التي `goal_ref` فيها هذه البطاقة، بالرمز، مع التزام كل منها
+             * @description العادات النشطة التي `goal_ref` فيها هذه البطاقة أو إحدى محطاتها، بالرمز، مع التزام كل منها
              */
             habits: components["schemas"]["CardHabit"][];
             /**
@@ -559,6 +671,63 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /** EveningAnswers */
+        EveningAnswers: {
+            /**
+             * Calm
+             * @default null
+             */
+            calm: number | null;
+            /**
+             * Distraction
+             * @default null
+             */
+            distraction: number | null;
+            /** Gratitude */
+            gratitude?: string[];
+            /**
+             * Learned
+             * @default null
+             */
+            learned: string | null;
+            /**
+             * Note
+             * @default null
+             */
+            note: string | null;
+            /**
+             * One Minute
+             * @default false
+             */
+            one_minute: boolean;
+            /**
+             * Presence
+             * @default null
+             */
+            presence: number | null;
+            /** Priorities */
+            priorities?: components["schemas"]["EveningPriority"][];
+            /**
+             * Win
+             * @default null
+             */
+            win: string | null;
+            /**
+             * Win Outcome
+             * @default null
+             */
+            win_outcome: ("O1" | "O2" | "O3" | "O4" | "O5" | "O6" | "O7" | "O8" | "O9" | "O10" | "O11" | "O12") | null;
+        };
+        /** EveningPriority */
+        EveningPriority: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "done" | "open" | "moved";
+            /** Title */
+            title: string;
+        };
         /**
          * EventBatch
          * @description `POST /v1/events` body: at most 500 events (more is a 422, like any other bad body).
@@ -593,7 +762,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "habit_logged" | "habit_skipped" | "habit_vacation" | "day_closed" | "focus_started" | "focus_ended" | "breath_ended" | "mood_logged" | "confounder_tagged" | "app_opened";
+            type: "habit_logged" | "habit_skipped" | "habit_vacation" | "day_closed" | "focus_started" | "focus_ended" | "breath_ended" | "mood_logged" | "confounder_tagged" | "app_opened" | "journal_saved" | "goal_task_set";
             /**
              * Tz
              * @default Asia/Riyadh
@@ -609,6 +778,79 @@ export interface components {
             hr_reserve: number;
             /** Minutes */
             minutes: number;
+        };
+        /** FocusEndedPayload */
+        FocusEndedPayload: {
+            /**
+             * Actual Minutes
+             * @default null
+             */
+            actual_minutes: number | null;
+            /**
+             * Ended At
+             * @default null
+             */
+            ended_at: string | null;
+            /**
+             * Focus Rating
+             * @default null
+             */
+            focus_rating: number | null;
+            /**
+             * Goal Ref
+             * @default null
+             */
+            goal_ref: string | null;
+            /**
+             * Habit Code
+             * @default null
+             */
+            habit_code: string | null;
+            /**
+             * Next Step
+             * @default null
+             */
+            next_step: string | null;
+            /**
+             * Planned Minutes
+             * @default null
+             */
+            planned_minutes: number | null;
+            /**
+             * Started At
+             * @default null
+             */
+            started_at: string | null;
+        };
+        /** FocusStartedPayload */
+        FocusStartedPayload: {
+            /**
+             * Goal Ref
+             * @default null
+             */
+            goal_ref: string | null;
+            /**
+             * Habit Code
+             * @default null
+             */
+            habit_code: string | null;
+            /**
+             * Plan Id
+             * @default null
+             */
+            plan_id: string | null;
+            /** Planned Minutes */
+            planned_minutes: number;
+        };
+        /** GoalTaskSetPayload */
+        GoalTaskSetPayload: {
+            /** Done */
+            done: boolean;
+            /**
+             * Task Id
+             * Format: uuid
+             */
+            task_id: string;
         };
         /**
          * HabitDraft
@@ -668,18 +910,29 @@ export interface components {
         };
         /** HabitDue */
         HabitDue: {
+            /**
+             * Anchor
+             * @description مرسى العادة في اليوم
+             * @default free
+             * @enum {string}
+             */
+            anchor: "after_wake" | "before_sleep" | "free";
             /** Code */
             code: string;
             /**
              * Done Today
-             * @description سُجّل لها إنجاز (`done`) اليوم من أي مصدر
+             * @description سجل اليوم (آخر ما كُتب له من أي جهاز) إنجاز (`done`)
              */
             done_today: boolean;
+            /** Goal Ref */
+            goal_ref?: string | null;
             /**
              * Kind
              * @enum {string}
              */
             kind: "boolean" | "count" | "duration";
+            /** Outcome */
+            outcome?: string | null;
             /**
              * Period
              * @enum {string}
@@ -687,6 +940,11 @@ export interface components {
             period: "day" | "week" | "month";
             /** @description تقدّم الفترة الحالية (يوم أو أسبوع أو شهر) */
             period_progress: components["schemas"]["PeriodProgressOut"];
+            /**
+             * Status Today
+             * @description حالة سجل اليوم (`done` أو `skip` أو `vacation` أو `null`)
+             */
+            status_today?: ("done" | "skip" | "vacation") | null;
             /** Target Per Period */
             target_per_period: number;
             /** Title Ar */
@@ -697,6 +955,11 @@ export interface components {
              * @enum {string}
              */
             unit: "" | "session" | "min" | "hour";
+            /**
+             * Value Today
+             * @description قيمة سجل اليوم إن كان `done` وله قيمة
+             */
+            value_today?: number | null;
         };
         /**
          * HabitIn
@@ -768,6 +1031,55 @@ export interface components {
             unit: "" | "session" | "min" | "hour";
             /** Weekday Mask */
             weekday_mask?: number | null;
+        };
+        /** HabitLogList */
+        HabitLogList: {
+            /** Logs */
+            logs: components["schemas"]["HabitLogOut"][];
+        };
+        /** HabitLogOut */
+        HabitLogOut: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Habit Code */
+            habit_code: string;
+            /** Status */
+            status: string;
+            /** Value */
+            value: number | null;
+        };
+        /** HabitLoggedPayload */
+        HabitLoggedPayload: {
+            /**
+             * Day
+             * @default null
+             */
+            day: string | null;
+            /** Habit Code */
+            habit_code: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "done" | "skip" | "vacation";
+            /**
+             * Value
+             * @default null
+             */
+            value: number | null;
+        };
+        /** HabitMarkPayload */
+        HabitMarkPayload: {
+            /**
+             * Day
+             * @default null
+             */
+            day: string | null;
+            /** Habit Code */
+            habit_code: string;
         };
         /** HabitOut */
         HabitOut: {
@@ -967,6 +1279,48 @@ export interface components {
              */
             source_ids: string[];
         };
+        /** JournalEntryOut */
+        JournalEntryOut: {
+            /** Answers */
+            answers: {
+                [key: string]: unknown;
+            };
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /**
+             * Logged At
+             * Format: date-time
+             */
+            logged_at: string;
+            /**
+             * Part
+             * @enum {string}
+             */
+            part: "morning" | "evening";
+        };
+        /** JournalList */
+        JournalList: {
+            /** Entries */
+            entries: components["schemas"]["JournalEntryOut"][];
+        };
+        /** JournalSavedPayload */
+        JournalSavedPayload: {
+            /** Answers */
+            answers: components["schemas"]["MorningAnswers"] | components["schemas"]["EveningAnswers"];
+            /**
+             * Day
+             * @default null
+             */
+            day: string | null;
+            /**
+             * Part
+             * @enum {string}
+             */
+            part: "morning" | "evening";
+        };
         /** Live */
         Live: {
             /** Ok */
@@ -983,6 +1337,76 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** MoodList */
+        MoodList: {
+            /** Logs */
+            logs: components["schemas"]["MoodLogOut"][];
+        };
+        /** MoodLogOut */
+        MoodLogOut: {
+            /** Activities */
+            activities: string[];
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Feelings */
+            feelings: string[];
+            /** Score */
+            score: number;
+        };
+        /** MoodLoggedPayload */
+        MoodLoggedPayload: {
+            /** Activities */
+            activities?: string[];
+            /**
+             * Day
+             * @default null
+             */
+            day: string | null;
+            /** Feelings */
+            feelings?: string[];
+            /** Score */
+            score: number;
+        };
+        /** MorningAnswers */
+        MorningAnswers: {
+            /**
+             * Enthusiasm
+             * @default null
+             */
+            enthusiasm: string | null;
+            /** Gratitude */
+            gratitude?: string[];
+            /**
+             * Note
+             * @default null
+             */
+            note: string | null;
+            /**
+             * Planned Minutes
+             * @default null
+             */
+            planned_minutes: number | null;
+            /** Priorities */
+            priorities?: components["schemas"]["MorningPriority"][];
+        };
+        /** MorningPriority */
+        MorningPriority: {
+            /**
+             * Goal Ref
+             * @default null
+             */
+            goal_ref: string | null;
+            /**
+             * Source Id
+             * @default null
+             */
+            source_id: string | null;
+            /** Title */
+            title: string;
+        };
         /** OutcomeOut */
         OutcomeOut: {
             /** Code */
@@ -992,6 +1416,11 @@ export interface components {
              * @description المحطات المنجزة ÷ كل المحطات، أو null بلا محطات
              */
             completion: number | null;
+            /**
+             * Habits
+             * @description العادات النشطة المرتبطة بالمخرج (`outcome`)، بالرمز، مع التزامها وإجمالي إنجازها
+             */
+            habits?: components["schemas"]["CardHabit"][];
             /** Milestones Done */
             milestones_done: number;
             /** Milestones Total */
@@ -1007,6 +1436,11 @@ export interface components {
             target_date: string;
             /** Title */
             title: string;
+            /**
+             * Track
+             * @default
+             */
+            track: string;
         };
         /** OverviewOut */
         OverviewOut: {
@@ -1082,6 +1516,11 @@ export interface components {
              * @description 0–1، وتُعرض ×100
              */
             strength: number;
+            /**
+             * Total Done
+             * @description مجموع قيم `done` منذ بداية العادة (عدد أيام الإنجاز للمنطقية)
+             */
+            total_done: number;
         };
         /** PullResult */
         PullResult: {
@@ -1361,6 +1800,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    logout_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                yawmi_rt?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
             };
         };
     };
@@ -1725,6 +2197,60 @@ export interface operations {
             };
         };
     };
+    list_habit_logs_v1_habit_logs_get: {
+        parameters: {
+            query: {
+                /** @description أول يوم في المدى */
+                from: string;
+                /** @description آخر يوم في المدى */
+                to: string;
+                /** @description رمز العادة */
+                code?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HabitLogList"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
     list_habits_v1_habits_get: {
         parameters: {
             query?: never;
@@ -2015,6 +2541,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Live"];
+                };
+            };
+        };
+    };
+    list_journal_v1_journal_get: {
+        parameters: {
+            query: {
+                /** @description أول يوم في المدى */
+                from: string;
+                /** @description آخر يوم في المدى */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JournalList"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    list_mood_v1_mood_get: {
+        parameters: {
+            query: {
+                /** @description أول يوم في المدى */
+                from: string;
+                /** @description آخر يوم في المدى */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoodList"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };
