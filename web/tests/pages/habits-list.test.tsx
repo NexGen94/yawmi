@@ -150,9 +150,18 @@ describe('habits list: what each row says', () => {
   it('«الكل» holds all six states: an upcoming habit says when it starts, an archived one says so', async () => {
     await open('/habits?status=all');
     expect(titles()).toHaveLength(10);
-    expect(row('عادة قادمة').querySelector('.check-note')?.textContent).toBe('تبدأ في 2026-11-15');
+    expect(within(row('عادة قادمة')).getByText('تبدأ في الأحد، 15 نوفمبر 2026')).toBeTruthy();
     expect(within(row('عادة قديمة')).getByText('مؤرشفة')).toBeTruthy();
     expect(within(row('مراجعة الخطة')).getByText('متأخرة')).toBeTruthy();
+    // a weekly habit is behind its pace, not late against a day
+    expect(within(row('الإنجليزية الأسبوعية')).getByText('دون وتيرة الأسبوع')).toBeTruthy();
+    expect(within(row('الإنجليزية الأسبوعية')).queryByText('متأخرة')).toBeNull();
+  });
+
+  it('writes the start of an upcoming habit in the digits setting', async () => {
+    setDigits('arab');
+    await open('/habits?status=all');
+    expect(within(row('عادة قادمة')).getByText(/تبدأ في .*٢٠٢٦/)).toBeTruthy();
   });
 
   it('upcoming and archived habits are in «الكل» only', async () => {
@@ -300,6 +309,18 @@ describe('habits list: the scope switch', () => {
     fireEvent.click(chip(/^فعّالة/));
     await waitFor(() => expect(location.search).toContain('status=active'));
     expect(location.search).toContain('scope=cycle');
+  });
+});
+
+describe('habits list: the scope switch says what it shows', () => {
+  it('writes one line under the switch for the choice, and says what the switch never hides', async () => {
+    await open();
+    expect(screen.getByText(/العادات المجدولة اليوم\./)).toBeTruthy();
+    expect(screen.getByText(/القادمة والمنتهية والمؤرشفة تتبع الحالة وحدها/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: 'الدورة' }));
+    await screen.findByText(/كل عادة سارية، مجدولة اليوم أو لا\./);
+    fireEvent.click(screen.getByRole('radio', { name: 'الأسبوع' }));
+    await screen.findByText(/العادات الأسبوعية السارية\./);
   });
 });
 

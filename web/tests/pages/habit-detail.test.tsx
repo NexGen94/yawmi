@@ -32,7 +32,8 @@ const ENGLISH = habit('english', 'الإنجليزية', {
   anchor: 'free',
   kind: 'duration',
   unit: 'min',
-  target_per_period: 45,
+  period: 'week',
+  target_per_period: 285,
   start_day: '2026-11-01',
   outcome: 'O7',
   identity_text: 'أنا شخص يتقن الإنجليزية',
@@ -147,28 +148,115 @@ describe('habit detail: the last eight periods', () => {
   });
 });
 
-describe('habit detail: the 56 days', () => {
-  const grid = () => screen.getByRole('img', { name: /آخر 56 يوماً/ });
+describe('habit detail: the 56 days of the cycle', () => {
+  const grid = () => screen.getByRole('img', { name: /أيام الدورة/ });
 
-  it('draws 56 days, each with its symbol', async () => {
+  it('is titled «أيام الدورة» and draws 56 days from day 1 of the cycle, with today inside', async () => {
     await open();
-    expect(grid().querySelectorAll('g[data-state]')).toHaveLength(56);
+    expect(screen.getByRole('heading', { name: 'أيام الدورة' })).toBeTruthy();
+    const cells = [...grid().querySelectorAll('g[data-state]')];
+    expect(cells).toHaveLength(56);
+    // day 11 of the cycle is today (2026-11-10): the first cell is 2026-10-31, the last 2026-12-25
+    expect(cells[0]?.querySelector('title')?.textContent).toContain('31 أكتوبر');
+    expect(cells[10]?.querySelector('title')?.textContent).toContain('10 نوفمبر');
+    expect(cells[55]?.querySelector('title')?.textContent).toContain('25 ديسمبر');
   });
 
-  it('counts the four states in its name, and each one has a word in the key', async () => {
+  it('days after today are empty future cells', async () => {
     await open();
-    // done: the 8th and 9th. skipped: the 7th and the vacation of the 6th. missed: the 1st to 5th.
-    // off: the 46 days before the start, and today, which has no log yet.
+    const cells = [...grid().querySelectorAll('g[data-state]')];
+    expect(cells.slice(11).every((c) => c.getAttribute('data-state') === 'future')).toBe(true);
+    expect(cells.slice(0, 11).some((c) => c.getAttribute('data-state') === 'future')).toBe(false);
+  });
+
+  it('falls back to the last 56 days, titled so, when the plan has no day in the cycle', async () => {
+    const habits = [ENGLISH];
+    serve({ today: todayOut(habits, { plan: { cycle: null, day_in_cycle: null, focus_outcomes: [] } }) });
+    mount();
+    await screen.findByRole('img', { name: /آخر 56 يوماً/ });
+    expect(screen.getByRole('heading', { name: 'آخر 56 يوماً' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: /أيام الدورة/ })).toBeNull();
+  });
+
+  it('counts the states in its name, and each one has a word in the key', async () => {
+    await open();
+    // a weekly habit: done the 8th and 9th, skipped the 7th, a vacation the 6th. The days with nothing
+    // logged (the 1st to the 5th, and today) are «لا تسجيل», never a miss.
     const label = grid().getAttribute('aria-label') ?? '';
     expect(label).toContain('منجز 2');
+    expect(label).toContain('لم يُنجز 0');
     expect(label).toContain('متخطّى 2');
-    expect(label).toContain('لم يُنجز 5');
-    expect(label).toContain('غير مجدول 47');
+    expect(label).toContain('غير مجدول 1');
+    expect(label).toContain('لا تسجيل 6');
+    expect(label).toContain('قادم 45');
     const key = grid().closest('.heatmap')?.querySelector('.heat-key') as HTMLElement;
-    for (const word of ['منجز', 'لم يُنجز', 'متخطّى', 'غير مجدول']) expect(within(key).getByText(word)).toBeTruthy();
+    for (const word of ['منجز', 'لم يُنجز', 'متخطّى', 'غير مجدول', 'لا تسجيل', 'قادم']) expect(within(key).getByText(word)).toBeTruthy();
   });
 
-  it('a slip is a missed day for an abstain habit, and a day without one is kept', async () => {
+  it('a daily habit has a ✕ only on its scheduled past days that were missed', async () => {
+    const walk = habit('walk', 'المشي', { start_day: '2026-11-01' });
+    serve({ habits: [walk], logs: [{ habit_code: 'walk', day: '2026-11-08', status: 'done', value: null }], progress: { walk: PROGRESS } });
+    mount('walk');
+    const label = (await screen.findByRole('img', { name: /أيام الدورة/ })).getAttribute('aria-label') ?? '';
+    expect(label).toContain('لم يُنجز 8'); // the 1st to the 7th and the 9th
+    expect(label).toContain('لا تسجيل 1'); // today
+  });
+
+  it('a weekly habit whose weeks are met shows no miss though most days are empty, and a mark for each week', async () => {
+    const weekWalk = habit('week_walk', 'مشي أسبوعي', { period: 'week', target_per_period: 2, start_day: '2026-11-01' });
+    const logs = ['2026-11-01', '2026-11-03', '2026-11-08', '2026-11-09'].map((day) => ({
+      habit_code: 'week_walk',
+      day,
+      status: 'done' as const,
+      value: null,
+    }));
+    serve({ habits: [weekWalk], logs, progress: { week_walk: PROGRESS } });
+    mount('week_walk');
+    const label = (await screen.findByRole('img', { name: /أيام الدورة/ })).getAttribute('aria-label') ?? '';
+    expect(label).toContain('لم يُنجز 0');
+    expect(label).toContain('منجز 4');
+    const marks = screen.getByRole('list', { name: 'نتيجة كل أسبوع' });
+    const items = within(marks)
+      .getAllByRole('listitem')
+      .map((li) => li.textContent);
+    expect(items).toEqual(['الأسبوع 1تحقق', 'الأسبوع 2تحقق']);
+  });
+
+  it('marks a week that fell short «لم يتحقق» and the open one «جارٍ»', async () => {
+    serve();
+    mount();
+    await screen.findByRole('img', { name: /أيام الدورة/ });
+    const items = within(screen.getByRole('list', { name: 'نتيجة كل أسبوع' }))
+      .getAllByRole('listitem')
+      .map((li) => li.textContent);
+    expect(items).toEqual(['الأسبوع 1لم يتحقق', 'الأسبوع 2جارٍ']);
+  });
+
+  it('a daily habit has no week marks', async () => {
+    const walk = habit('walk', 'المشي', { start_day: '2026-11-01' });
+    serve({ habits: [walk], progress: { walk: PROGRESS }, logs: [] });
+    mount('walk');
+    await screen.findByRole('img', { name: /أيام الدورة/ });
+    expect(screen.queryByRole('list', { name: /نتيجة كل/ })).toBeNull();
+  });
+
+  it('today with nothing logged says so in its own words, with a ring, and the note explains it', async () => {
+    const walk = habit('walk', 'المشي', { start_day: '2026-11-01' });
+    serve({ habits: [walk], progress: { walk: PROGRESS }, logs: [] });
+    mount('walk');
+    const img = await screen.findByRole('img', { name: /أيام الدورة/ });
+    expect(img.querySelector('.heat-today')).toBeTruthy();
+    const titles = [...img.querySelectorAll('title')].map((t) => t.textContent);
+    expect(titles.some((t) => t?.includes('اليوم: لم يُسجَّل بعد'))).toBe(true);
+    expect(screen.getByText('اليوم يظهر «لا تسجيل» حتى يُسجَّل.')).toBeTruthy();
+  });
+
+  it('a weekly habit explains that the period is judged, not the day', async () => {
+    await open();
+    expect(screen.getByText(/يُحكم عليها بفترتها كلها لا بأيامها/)).toBeTruthy();
+  });
+
+  it('a slip is a missed day for an abstain habit, and a day without one is kept (no note about today)', async () => {
     const abstain = habit('no_sugar', 'ترك السكر', { polarity: 'abstain', start_day: '2026-11-01' });
     serve({
       habits: [abstain],
@@ -177,10 +265,11 @@ describe('habit detail: the 56 days', () => {
     });
     mount('no_sugar');
     await screen.findByRole('heading', { level: 1, name: 'ترك السكر' });
-    const label = (await screen.findByRole('img', { name: /آخر 56 يوماً/ })).getAttribute('aria-label') ?? '';
+    const label = (await screen.findByRole('img', { name: /أيام الدورة/ })).getAttribute('aria-label') ?? '';
     // the 1st to the 8th and today are kept; the 9th is the slip
     expect(label).toContain('منجز 9');
     expect(label).toContain('لم يُنجز 1');
+    expect(screen.queryByText(/حتى يُسجَّل/)).toBeNull();
   });
 
   it('shows a log that is still in the outbox', async () => {
@@ -191,11 +280,18 @@ describe('habit detail: the 56 days', () => {
 });
 
 describe('habit detail: the total', () => {
-  it('writes 85 minutes since the start: «85 دقيقة منذ 2026-11-01»', async () => {
+  it('writes 85 minutes since the start, with the date through fmt.day', async () => {
     await open();
-    expect(document.querySelector('.votes-total')?.textContent).toBe('85 دقيقة منذ 2026-11-01');
-    // the day is isolated and set left to right, or it would read 01-11-2026 after Arabic letters
-    expect(document.querySelector('.votes-total bdi')?.getAttribute('dir')).toBe('ltr');
+    expect(screen.getByRole('heading', { name: 'إجمالي التكرارات' })).toBeTruthy();
+    expect(document.querySelector('.votes-total')?.textContent).toBe('85 دقيقة منذ الأحد، 1 نوفمبر 2026');
+  });
+
+  it('writes the date in the digits setting', async () => {
+    setDigits('arab');
+    serve();
+    mount();
+    await screen.findByRole('img', { name: /أيام الدورة/ });
+    expect(document.querySelector('.votes-total')?.textContent).toMatch(/٢٠٢٦/);
   });
 
   it('counts the days of a yes/no habit', async () => {
@@ -203,7 +299,7 @@ describe('habit detail: the total', () => {
     serve({ habits: [walk], progress: { walk: { ...PROGRESS, total_done: 12 } }, logs: [] });
     mount('walk');
     await screen.findByText(/12 يوماً منذ/);
-    expect(document.querySelector('.votes-total')?.textContent).toBe('12 يوماً منذ 2026-11-01');
+    expect(document.querySelector('.votes-total')?.textContent).toBe('12 يوماً منذ الأحد، 1 نوفمبر 2026');
   });
 
   it('counts times for a count habit without a unit', async () => {
@@ -211,7 +307,16 @@ describe('habit detail: the total', () => {
     serve({ habits: [pages], progress: { pushups: { ...PROGRESS, total_done: 40 } }, logs: [] });
     mount('pushups');
     await screen.findByText(/40 مرة منذ/);
-    expect(document.querySelector('.votes-total')?.textContent).toBe('40 مرة منذ 2026-11-01');
+    expect(document.querySelector('.votes-total')?.textContent).toBe('40 مرة منذ الأحد، 1 نوفمبر 2026');
+  });
+
+  it('for an abstain habit it is «أيام نظيفة», the clean days the server counts, not repetitions', async () => {
+    const abstain = habit('no_sugar', 'ترك السكر', { polarity: 'abstain', start_day: '2026-11-01' });
+    serve({ habits: [abstain], logs: [], progress: { no_sugar: { ...PROGRESS, total_done: 7 } } });
+    mount('no_sugar');
+    await screen.findByRole('heading', { name: 'أيام نظيفة' });
+    expect(screen.queryByRole('heading', { name: 'إجمالي التكرارات' })).toBeNull();
+    expect(document.querySelector('.votes-total')?.textContent).toBe('7 أيام منذ الأحد، 1 نوفمبر 2026');
   });
 });
 
@@ -236,10 +341,10 @@ describe('habit detail: the rest of the page', () => {
 
   it('shows the streak, the adherence and the progress of the period', async () => {
     await open();
-    expect(screen.getByText('3 أيام')).toBeTruthy();
+    expect(screen.getByText('3 أسابيع')).toBeTruthy();
     expect(screen.getByText('80%')).toBeTruthy();
-    // from the logs with the outbox over them, not from the server's copy: nothing is logged today
-    expect(screen.getByText(/0 من 45 دقيقة اليوم/)).toBeTruthy();
+    // from the logs with the outbox over them, not from the server's copy: 60 + 45 minutes this week
+    expect(screen.getByText(/105 من 285 دقيقة هذا الأسبوع/)).toBeTruthy();
   });
 
   it('draws the challenge when the habit has an end day', async () => {
@@ -256,6 +361,23 @@ describe('habit detail: the rest of the page', () => {
     expect(link.getAttribute('href')).toBe('/habits/english/edit');
     expect(document.querySelectorAll('.btn-primary')).toHaveLength(1);
     expect(link.classList.contains('btn-primary')).toBe(true);
+  });
+
+  it('a weekly habit behind its pace carries «دون وتيرة الأسبوع», not «متأخرة»', async () => {
+    // 60 of 285 minutes after two days of the week: behind the pace (81)
+    serve({ logs: [{ habit_code: 'english', day: '2026-11-08', status: 'done', value: 60 }] });
+    mount();
+    await screen.findByRole('img', { name: /درجة القوة/ });
+    expect(screen.getByText('دون وتيرة الأسبوع')).toBeTruthy();
+    expect(screen.queryByText('متأخرة')).toBeNull();
+  });
+
+  it('an abstain habit says «نظيف اليوم» for today, not a build target', async () => {
+    const abstain = habit('no_sugar', 'ترك السكر', { polarity: 'abstain', start_day: '2026-11-01' });
+    serve({ habits: [abstain], logs: [], progress: { no_sugar: PROGRESS } });
+    mount('no_sugar');
+    await screen.findByText('نظيف اليوم');
+    expect(screen.queryByText(/من 1 مرة/)).toBeNull();
   });
 
   it('leaves no stand-in for the indicator card of a later task', async () => {
@@ -297,6 +419,15 @@ describe('habit detail: skip and vacation', () => {
     await clearOutbox();
     fireEvent.click(screen.getByRole('button', { name: 'تراجع' }));
     await screen.findByText('أُرسل التسجيل؛ التصحيح بتخطي اليوم');
+  });
+
+  it('on a day the habit is not scheduled the two buttons are off, as on the list', async () => {
+    const saturdays = habit('sat', 'يوم السبت', { schedule_kind: 'weekdays', weekday_mask: 64, start_day: '2026-11-01' });
+    serve({ habits: [saturdays], today: todayOut([]), progress: { sat: PROGRESS }, logs: [] });
+    mount('sat');
+    await screen.findByRole('heading', { level: 1, name: 'يوم السبت' });
+    expect(((await screen.findByRole('button', { name: 'تخطي اليوم' })) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'إجازة' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('an archived habit cannot be logged', async () => {

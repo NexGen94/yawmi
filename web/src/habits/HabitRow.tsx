@@ -3,8 +3,7 @@ import type { ComponentChildren } from 'preact';
 import { CheckRow } from '../ui/CheckRow';
 import { Badge } from '../ui/Badge';
 import { fmt } from '../lib/format';
-import { amount, PERIOD_WORD } from './amount';
-import { IsoDay } from './IsoDay';
+import { amount, lateWord, PERIOD_WORD } from './amount';
 import { isCleanToday, isDoneToday, polarityOf, roundUpNeed, type HabitTodayItem } from './useHabitsToday';
 import type { HabitUnit } from './types';
 import './habit-row.css';
@@ -53,22 +52,24 @@ function buildNote(item: HabitTodayItem): string | undefined {
   return parts.join(' · ');
 }
 
-/** A habit that is not in force today has no actions: the row only says why. */
-function staticNote(item: HabitTodayItem): ComponentChildren {
+/** A habit that is not in force today has no actions: the row says why. Upcoming and archived say it
+ *  in a badge (design 9.1); the rest in the note. */
+function staticNote(item: HabitTodayItem): string | undefined {
   switch (item.state) {
     case 'archived':
-      return 'مؤرشفة';
     case 'upcoming':
-      return (
-        <>
-          تبدأ في <IsoDay day={item.habit.start_day} />
-        </>
-      );
+      return undefined;
     case 'ended':
       return 'انتهت مدتها';
     default:
       return 'غير مجدولة اليوم';
   }
+}
+
+function stateBadge(item: HabitTodayItem): string | undefined {
+  if (item.state === 'archived') return 'مؤرشفة';
+  if (item.state === 'upcoming') return `تبدأ في ${fmt.day(item.habit.start_day)}`;
+  return undefined;
 }
 
 /** Whether the habit can be logged today: in force, and scheduled today. */
@@ -90,18 +91,22 @@ function withIdentity(item: HabitTodayItem, text: string | undefined): Component
 
 function badgesOf(item: HabitTodayItem, showState: boolean): ComponentChildren | undefined {
   const outcome = item.habit.outcome ? <Badge>{item.habit.outcome}</Badge> : null;
-  const late = showState && item.state === 'late' ? <Badge tone="signal">متأخرة</Badge> : null;
-  if (!outcome && !late) return undefined;
+  // A weekly habit is «late» against its pace, not against a day: «دون وتيرة الأسبوع».
+  const late = showState && item.state === 'late' ? <Badge tone="signal">{lateWord(item.habit.period)}</Badge> : null;
+  const word = stateBadge(item);
+  const dormant = word ? <Badge>{word}</Badge> : null;
+  if (!outcome && !late && !dormant) return undefined;
   return (
     <span class="habit-badges">
       {late}
+      {dormant}
       {outcome}
     </span>
   );
 }
 
 /** The second line of an abstain habit. No need per day: it has nothing to reach. */
-function abstainNote(item: HabitTodayItem): string {
+export function abstainNote(item: HabitTodayItem): string {
   if (item.statusToday === 'done') return 'انزلاق مسجَّل اليوم';
   if (item.statusToday === 'skip') return 'متخطّاة اليوم';
   if (item.statusToday === 'vacation') return 'إجازة اليوم';

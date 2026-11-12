@@ -4,11 +4,15 @@ import { fmt } from '../lib/format';
 import { x } from './rtl';
 import { emptyLabel } from './scale';
 
-export type DayState = 'done' | 'missed' | 'skipped' | 'off';
+/** The four states of a scheduled or unscheduled day, and two more for habits judged by period:
+ *  `none` is a past day with nothing logged that is not a miss (a weekly habit is judged on its
+ *  week), and `future` is a day that has not come. The key and the sentence name a state only when a
+ *  day has it, so a grid of the four base states reads as it always did. */
+export type DayState = 'done' | 'missed' | 'skipped' | 'off' | 'none' | 'future';
 
 export interface HeatmapProps {
   /** The days in order (ISO day and state), laid out as a calendar: rows of 7 from the right. */
-  days: { day: string; state: DayState }[];
+  days: { day: string; state: DayState; /** Replaces the word of the state in the cell's tooltip. */ note?: string; /** Marks today with a ring. */ current?: boolean }[];
   /** What the grid shows, in Arabic. */
   label: string;
 }
@@ -19,8 +23,11 @@ const WORDS: Record<DayState, string> = {
   missed: 'لم يُنجز',
   skipped: 'متخطّى',
   off: 'غير مجدول',
+  none: 'لا تسجيل',
+  future: 'قادم',
 };
-const ORDER: DayState[] = ['done', 'missed', 'skipped', 'off'];
+const ORDER: DayState[] = ['done', 'missed', 'skipped', 'off', 'none', 'future'];
+const BASE = 4;
 
 const CELL = 24;
 const GAP = 4;
@@ -54,6 +61,10 @@ function DaySymbol(props: { state: DayState; cx: number; cy: number; size: numbe
       return <rect class="heat-skipped" fill={`url(#${hatch})`} x={start} y={top} width={size} height={size} rx="4" />;
     case 'off':
       return <circle class="heat-off" cx={cx} cy={cy} r={size * 0.14} />;
+    case 'none':
+      return <circle class="heat-none" fill="none" cx={cx} cy={cy} r={size * 0.28} />;
+    case 'future':
+      return <rect class="heat-future" fill="none" x={start + 1} y={top + 1} width={size - 2} height={size - 2} rx="4" />;
   }
 }
 
@@ -65,13 +76,15 @@ export function Heatmap({ days, label }: HeatmapProps) {
   const slot = CELL + GAP;
   const width = COLS * slot - GAP;
   const height = rows * slot - GAP;
-  const counts: Record<DayState, number> = { done: 0, missed: 0, skipped: 0, off: 0 };
+  const counts: Record<DayState, number> = { done: 0, missed: 0, skipped: 0, off: 0, none: 0, future: 0 };
   for (const d of days) counts[d.state] += 1;
+  // The four base states are always named; the others only when a day has them.
+  const shown = ORDER.filter((s, i) => i < BASE || counts[s] > 0);
   const sentence =
     n === 0
       ? emptyLabel(label)
       : `${label}، ${fmt.count(n, 'day')}: ` +
-        ORDER.map((s, i) => `${i === 0 ? '' : 'و'}${WORDS[s]} ${fmt.num(counts[s])}`).join('، ');
+        shown.map((s, i) => `${i === 0 ? '' : 'و'}${WORDS[s]} ${fmt.num(counts[s])}`).join('، ');
 
   return (
     <div class="heatmap">
@@ -96,14 +109,17 @@ export function Heatmap({ days, label }: HeatmapProps) {
           const cy = Math.floor(i / COLS) * slot + CELL / 2;
           return (
             <g key={d.day} data-state={d.state} data-x={cx} data-y={cy}>
-              <title>{`${fmt.day(d.day)}: ${WORDS[d.state]}`}</title>
+              <title>{`${fmt.day(d.day)}: ${d.note ?? WORDS[d.state]}`}</title>
               <DaySymbol state={d.state} cx={cx} cy={cy} size={CELL} hatch={hatch} />
+              {d.current && (
+                <rect class="heat-today" fill="none" x={cx - CELL / 2 - 2} y={cy - CELL / 2 - 2} width={CELL + 4} height={CELL + 4} rx="6" />
+              )}
             </g>
           );
         })}
       </svg>
       <ul class="heat-key">
-        {ORDER.map((s) => (
+        {shown.map((s) => (
           <li key={s}>
             <svg class="heat-key-symbol" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
               <g data-state={s}>

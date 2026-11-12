@@ -19,6 +19,15 @@ const SCOPE_OPTIONS: readonly { value: Scope; label: string }[] = [
   { value: 'cycle', label: 'الدورة' },
 ];
 
+/** What each choice of the scope switch shows, said under it. A habit that is not in force (upcoming,
+ *  ended, archived) is never hidden by it: only the status filter hides it. */
+const SCOPE_NOTE: Record<Scope, string> = {
+  today: 'العادات المجدولة اليوم.',
+  week: 'العادات الأسبوعية السارية.',
+  cycle: 'كل عادة سارية، مجدولة اليوم أو لا.',
+};
+const SCOPE_NOTE_TAIL = 'القادمة والمنتهية والمؤرشفة تتبع الحالة وحدها.';
+
 /** What a filter with nothing in it says. */
 const NOTHING: Record<StatusFilterValue, string> = {
   active: 'لا عادة فعّالة في هذا العرض.',
@@ -96,6 +105,7 @@ export default function HabitsPage() {
           <Segmented label="العرض" options={SCOPE_OPTIONS} value={scope} onChange={(value) => choose({ scope: value })} />
           <StatusFilter value={status} counts={counts} onChange={(value) => choose({ status: value })} />
         </div>
+        <p class="habits-scope-note">{`${SCOPE_NOTE[scope]} ${SCOPE_NOTE_TAIL}`}</p>
         {shown.length === 0 ? (
           <p class="habits-none">{NOTHING[status]}</p>
         ) : (

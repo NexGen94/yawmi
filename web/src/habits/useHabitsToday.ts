@@ -76,7 +76,7 @@ export function isCleanToday(item: HabitTodayItem): boolean {
 
 /** Done for today. A daily habit is done when its day target is reached; a weekly or monthly one
  *  also when it was logged done today (its period target is for the whole period). An abstain habit
- *  is done for the day unless a slip is logged today (the controller's ruling for the ring). */
+ *  is kept for the day unless a slip is logged today (the ring does not count it: `countsInRing`). */
 export function isDoneToday(item: HabitTodayItem): boolean {
   if (polarityOf(item.habit) === 'abstain') return item.statusToday !== 'done';
   if (item.habit.period === 'day') return item.progress.reached;

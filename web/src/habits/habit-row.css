@@ -122,3 +122,26 @@
     padding-inline-start: calc(var(--sp-2) + var(--hit) + var(--sp-3));
   }
 }
+
+@media (width < 560px) {
+  /* The badges (a state, the outcome) drop under the title, in line with the text, so a long word
+     such as «دون وتيرة الأسبوع» never squeezes the title into a narrow column. */
+  .habit-row .check-row {
+    flex-wrap: wrap;
+  }
+
+  .habit-row .check-badge {
+    order: 3;
+    flex-basis: 100%;
+    padding-inline-start: calc(var(--hit) + var(--sp-3));
+  }
+
+  .habit-abstain-body {
+    flex-wrap: wrap;
+  }
+
+  .habit-abstain-body > .habit-badges {
+    flex-basis: 100%;
+    padding-inline-start: calc(var(--sp-5) + 3 * var(--sp-3));
+  }
+}

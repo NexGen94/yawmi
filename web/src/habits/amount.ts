@@ -12,3 +12,9 @@ export function amount(n: number, unit: HabitUnit): string {
 
 /** Where a period progress is placed in a sentence: 25 من 45 دقيقة اليوم. */
 export const PERIOD_WORD = { day: 'اليوم', week: 'هذا الأسبوع', month: 'هذا الشهر' } as const;
+
+/** What «late» is called for a habit: against a day for a daily one, against the pace of the week or
+ *  month for the others (design 9.1: «onTrack = false»). The filter keeps the name «متأخرة». */
+export function lateWord(period: keyof typeof PERIOD_WORD): string {
+  return { day: 'متأخرة', week: 'دون وتيرة الأسبوع', month: 'دون وتيرة الشهر' }[period];
+}

@@ -21,7 +21,7 @@ from yawmi.domain.habits import (
     streak,
     strength,
 )
-from yawmi.domain.periods import WeekStart, period_bounds
+from yawmi.domain.periods import WeekStart, is_scheduled, period_bounds
 from yawmi.habits.store import StoredHabit
 
 LAST_PERIODS = 8
@@ -67,7 +67,10 @@ class ProgressOut(BaseModel):
     challenge: ChallengeOut | None = Field(description="لعادة لها `end_day` فقط")
     adherence: float | None = Field(description="null قبل أول فترة منتهية")
     total_done: float = Field(
-        description="مجموع قيم `done` منذ بداية العادة (عدد أيام الإنجاز للمنطقية)"
+        description=(
+            "مجموع قيم `done` منذ بداية العادة (عدد أيام الإنجاز للمنطقية)؛ ولعادة الامتناع عدد "
+            "الأيام المجدولة النظيفة (بلا انزلاق ولا تخطٍّ ولا إجازة) حتى اليوم"
+        )
     )
     last_8_periods: list[float] = Field(
         description=(
@@ -94,8 +97,22 @@ def spec_of(habit: StoredHabit) -> HabitSpec:
 
 
 def total_done_of(spec: HabitSpec, logs: Sequence[HabitLog], today: date) -> float:
-    """Sum of `done` values in `[start_day, min(today, end_day)]` (count of `done` days for boolean)."""
+    """The habit's running total in `[start_day, min(today, end_day)]`.
+
+    A build habit: the sum of `done` values (the count of `done` days for a boolean). An abstain
+    habit: a `done` log is a slip, so the total is the scheduled days that are clean, with no slip,
+    no skip and no vacation (design 9.6): a slip lowers it, it never raises it.
+    """
     last = today if spec.end_day is None else min(today, spec.end_day)
+    if spec.polarity == "abstain":
+        logged = {lg.day for lg in logs if spec.start_day <= lg.day <= last}
+        clean = 0
+        day = spec.start_day
+        while day <= last:
+            if day not in logged and is_scheduled(day, spec):
+                clean += 1
+            day += timedelta(days=1)
+        return float(clean)
     in_window = [lg for lg in logs if lg.status == "done" and spec.start_day <= lg.day <= last]
     if spec.kind == "boolean":
         return float(len({lg.day for lg in in_window}))

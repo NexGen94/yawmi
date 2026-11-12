@@ -1694,7 +1694,7 @@ export interface components {
             strength: number;
             /**
              * Total Done
-             * @description مجموع قيم `done` منذ بداية العادة (عدد أيام الإنجاز للمنطقية)
+             * @description مجموع قيم `done` منذ بداية العادة (عدد أيام الإنجاز للمنطقية)؛ ولعادة الامتناع عدد الأيام المجدولة النظيفة (بلا انزلاق ولا تخطٍّ ولا إجازة) حتى اليوم
              */
             total_done: number;
         };

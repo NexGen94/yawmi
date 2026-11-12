@@ -166,10 +166,6 @@ describe('HabitRow: the identity sentence', () => {
   });
 });
 
-/** A text matcher on the whole text of an element, for text that has a nested `<bdi>` day. */
-const wholeText = (text: string) => (_: string, el: Element | null): boolean =>
-  el?.textContent === text && !Array.from(el.children).some((c) => c.textContent === text);
-
 describe('HabitRow: a habit that is not live today', () => {
   const staticItem = (state: HabitTodayItem['state'], over: Partial<HabitTodayItem['habit']> = {}, dueToday = false): HabitTodayItem => ({
     habit: habit('challenge', 'تحدٍّ', over),
@@ -189,9 +185,8 @@ describe('HabitRow: a habit that is not live today', () => {
 
   it('an upcoming habit says when it starts', () => {
     renderRow(staticItem('upcoming', { start_day: '2026-11-15' }));
-    expect(screen.getByText(wholeText('تبدأ في 2026-11-15'))).toBeTruthy();
-    // the day is isolated and set left to right, or it would read 15-11-2026 after Arabic letters
-    expect(document.querySelector('.check-note bdi')?.getAttribute('dir')).toBe('ltr');
+    // a badge (design 9.1), with the date through fmt.day (the digits setting applies)
+    expect(document.querySelector('.badge')?.textContent).toBe('تبدأ في الأحد، 15 نوفمبر 2026');
     expect(screen.queryByRole('button')).toBeNull();
   });
 
@@ -235,9 +230,19 @@ describe('HabitRow: the state words of the habits page (showState)', () => {
     expect(screen.getByText(/تحقق هدف الفترة/)).toBeTruthy();
   });
 
-  it('a late habit carries the badge «متأخرة»', () => {
+  it('a late daily habit carries the badge «متأخرة»', () => {
     renderShown(live('late'));
     expect(screen.getByText('متأخرة')).toBeTruthy();
+  });
+
+  it('a weekly or monthly habit behind its pace says «دون وتيرة الأسبوع» or «دون وتيرة الشهر», not «متأخرة»', () => {
+    const weekly = { ...live('late'), habit: habit('w', 'أسبوعية', { period: 'week', target_per_period: 3 }) };
+    const { unmount } = renderShown(weekly);
+    expect(screen.getByText('دون وتيرة الأسبوع')).toBeTruthy();
+    expect(screen.queryByText('متأخرة')).toBeNull();
+    unmount();
+    renderShown({ ...weekly, habit: habit('m', 'شهرية', { period: 'month', target_per_period: 3 }) });
+    expect(screen.getByText('دون وتيرة الشهر')).toBeTruthy();
   });
 
   it('the home list says neither (no showState)', () => {

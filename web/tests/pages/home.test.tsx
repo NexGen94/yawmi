@@ -464,6 +464,63 @@ describe('home: the note stays until the next action or a dismissal', () => {
     await screen.findByText('4 من 6');
   });
 
+  it('after «تراجع» used by the keyboard focus returns to the habit, never to the page body', async () => {
+    await renderStory();
+    const tick = within(row('إطفاء الشاشات')).getByRole('button', { pressed: false });
+    tick.focus();
+    fireEvent.keyDown(tick, { key: 'Enter' });
+    fireEvent.click(tick);
+    const undo = await screen.findByRole('button', { name: 'تراجع' });
+    undo.focus(); // Tab to the note
+    fireEvent.keyDown(undo, { key: 'Enter' });
+    fireEvent.click(undo);
+    await screen.findByText('3 من 6');
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'تراجع' })).toBeNull());
+    await waitFor(() => expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('after the close button of the note focus returns to the habit', async () => {
+    await renderStory();
+    const tick = within(row('إطفاء الشاشات')).getByRole('button', { pressed: false });
+    tick.focus();
+    fireEvent.keyDown(tick, { key: 'Enter' });
+    fireEvent.click(tick);
+    await screen.findByText('سُجّل: إطفاء الشاشات');
+    const close = document.querySelector('.toast .icon-btn') as HTMLElement;
+    close.focus();
+    fireEvent.click(close);
+    await waitFor(() => expect(screen.queryByText('سُجّل: إطفاء الشاشات')).toBeNull());
+    await waitFor(() => expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true));
+  });
+
+  it('after «تراجع» that finds the log already sent, the note says so and focus is on the habit', async () => {
+    await renderStory();
+    const tick = within(row('إطفاء الشاشات')).getByRole('button', { pressed: false });
+    tick.focus();
+    fireEvent.keyDown(tick, { key: 'Enter' });
+    fireEvent.click(tick);
+    const undo = await screen.findByRole('button', { name: 'تراجع' });
+    await clearOutbox();
+    undo.focus();
+    fireEvent.click(undo);
+    await screen.findByText('أُرسل التسجيل؛ التصحيح بتخطي اليوم');
+    await waitFor(() => expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true));
+  });
+
+  it('Escape pressed on the note itself returns focus to the habit', async () => {
+    await renderStory();
+    const tick = within(row('إطفاء الشاشات')).getByRole('button', { pressed: false });
+    tick.focus();
+    fireEvent.keyDown(tick, { key: 'Enter' });
+    fireEvent.click(tick);
+    const undo = await screen.findByRole('button', { name: 'تراجع' });
+    undo.focus();
+    fireEvent.keyDown(undo, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'تراجع' })).toBeNull());
+    await waitFor(() => expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true));
+  });
+
   it('Escape with no notice does nothing', async () => {
     await renderStory();
     fireEvent.keyDown(document.body, { key: 'Escape' });

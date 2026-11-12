@@ -302,6 +302,40 @@ describe('Heatmap', () => {
     expect(yOf(cells[7])).toBeGreaterThan(yOf(cells[0]));
   });
 
+  it('names «لا تسجيل» and «قادم» in the key and the sentence only when a day has them', () => {
+    const more = [
+      ...days,
+      { day: '2026-11-15', state: 'none' as const },
+      { day: '2026-11-16', state: 'future' as const },
+      { day: '2026-11-17', state: 'future' as const },
+    ];
+    const { container } = render(<Heatmap days={more} label="أيام الدورة" />);
+    const label = chart(container).getAttribute('aria-label') ?? '';
+    expect(label).toBe('أيام الدورة، 17 يوماً: منجز 4، ولم يُنجز 4، ومتخطّى 3، وغير مجدول 3، ولا تسجيل 1، وقادم 2');
+    const key = container.querySelector('.heat-key');
+    expect(key?.textContent).toContain('لا تسجيل');
+    expect(key?.textContent).toContain('قادم');
+    expect(key?.querySelectorAll('[data-state]')).toHaveLength(6);
+  });
+
+  it('draws the two new states with shapes of their own, not a colour alone', () => {
+    const { container } = render(
+      <Heatmap days={[{ day: '2026-11-01', state: 'none' }, { day: '2026-11-02', state: 'future' }, { day: '2026-11-03', state: 'off' }]} label="أ" />,
+    );
+    const cells = [...chart(container).querySelectorAll('[data-state]')];
+    expect(cells.map((c) => signature(c))).toEqual(['circle', 'rect', 'circle']);
+    expect(cells[0]?.querySelector('circle')?.getAttribute('fill')).toBe('none');
+    expect(cells[0]?.querySelector('circle')?.getAttribute('r')).not.toBe(cells[2]?.querySelector('circle')?.getAttribute('r'));
+  });
+
+  it('a day may carry its own words in the tooltip, and a ring when it is today', () => {
+    const { container } = render(
+      <Heatmap days={[{ day: '2026-11-10', state: 'none', note: 'اليوم: لم يُسجَّل بعد', current: true }]} label="أ" />,
+    );
+    expect(container.querySelector('title')?.textContent).toContain('اليوم: لم يُسجَّل بعد');
+    expect(container.querySelector('.heat-today')).toBeTruthy();
+  });
+
   it('says «لا بيانات بعد» when there are no days', () => {
     const { container } = render(<Heatmap days={[]} label="أيام الدورة" />);
     expect(chart(container).getAttribute('aria-label')).toBe('أيام الدورة: لا بيانات بعد');

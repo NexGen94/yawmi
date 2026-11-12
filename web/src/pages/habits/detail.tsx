@@ -8,8 +8,8 @@ import { Ring } from '../../charts/Ring';
 import { WeekBars } from '../../charts/WeekBars';
 import { combine } from '../../data/combine';
 import { useQuery } from '../../data/query';
-import { amount, PERIOD_WORD } from '../../habits/amount';
-import { IsoDay } from '../../habits/IsoDay';
+import { amount, lateWord, PERIOD_WORD } from '../../habits/amount';
+import { abstainNote } from '../../habits/HabitRow';
 import { type HabitTodayItem, useHabitsToday } from '../../habits/useHabitsToday';
 import { fmt } from '../../lib/format';
 import type { HabitState } from '../../progress/state';
@@ -20,7 +20,8 @@ import { Skeleton } from '../../ui/Skeleton';
 import { StateFrame } from '../../ui/StateFrame';
 import { Toast } from '../../ui/Toast';
 import { useLogNote } from '../home/useLogNote';
-import { dayStates } from './dayStates';
+import { dayStates, gridStart, periodMarks } from './dayStates';
+import { PeriodMarks } from './PeriodMarks';
 import { VotesCount } from './VotesCount';
 import './habits.css';
 
@@ -35,18 +36,21 @@ const ALL_DAYS = 0b1111111;
 function stateBadge(item: HabitTodayItem): { text: ComponentChildren; signal: boolean } | undefined {
   const words: Record<HabitState, ComponentChildren | undefined> = {
     archived: 'مؤرشفة',
-    upcoming: (
-      <>
-        تبدأ في <IsoDay day={item.habit.start_day} />
-      </>
-    ),
+    upcoming: `تبدأ في ${fmt.day(item.habit.start_day)}`,
     ended: 'انتهت مدتها',
     done: 'تحقق هدف الفترة',
-    late: 'متأخرة',
+    late: lateWord(item.habit.period),
     active: undefined,
   };
   const text = words[item.state];
   return text === undefined ? undefined : { text, signal: item.state === 'late' };
+}
+
+/** What to know about the grid, said once under it. */
+function gridNoteOf(habit: HabitTodayItem['habit']): string | undefined {
+  if (habit.polarity === 'abstain') return undefined;
+  if (habit.period === 'day') return 'اليوم يظهر «لا تسجيل» حتى يُسجَّل.';
+  return `العادة ${habit.period === 'week' ? 'الأسبوعية' : 'الشهرية'} يُحكم عليها بفترتها كلها لا بأيامها، فاليوم بلا تسجيل ليس تفويتاً.`;
 }
 
 function reminderDays(mask: number): string {
@@ -123,7 +127,10 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
   const missing = state === 'ready' && (item === undefined || indicators === undefined);
   const habit = item?.habit;
   const badge = item && stateBadge(item);
-  const live = item !== undefined && item.state !== 'archived' && item.state !== 'ended' && item.state !== 'upcoming';
+  const grid = gridStart(habits.day, habits.today?.plan.day_in_cycle);
+  const gridNote = habit && gridNoteOf(habit);
+  // Not on a day the habit is not scheduled, as on the list.
+  const live = item !== undefined && item.dueToday && item.state !== 'archived' && item.state !== 'ended' && item.state !== 'upcoming';
 
   return (
     <>
@@ -175,9 +182,12 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
                     values={indicators.last_8_periods.map((v) => Math.round(v * 100))}
                   />
                 </Card>
-                <Card title="آخر 56 يوماً">
-                  <Heatmap label="آخر 56 يوماً" days={dayStates(habit, habits.logs, habits.day)} />
-                  <p class="detail-note">اليوم يُحتسب بعد تسجيله.</p>
+                <Card title={grid.cycle ? 'أيام الدورة' : 'آخر 56 يوماً'}>
+                  <Heatmap label={grid.cycle ? 'أيام الدورة' : 'آخر 56 يوماً'} days={dayStates(habit, habits.logs, grid.first, habits.day)} />
+                  {habit.period !== 'day' && (
+                    <PeriodMarks period={habit.period} marks={periodMarks(habit, habits.logs, grid.first, habits.day)} />
+                  )}
+                  {gridNote && <p class="detail-note">{gridNote}</p>}
                 </Card>
               </div>
               <div class="detail-col">
@@ -185,9 +195,11 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
                 <Card title="التقدّم">
                   <dl class="facts">
                     <div>
-                      <dt>الفترة الحالية</dt>
+                      <dt>{habit.polarity === 'abstain' ? 'اليوم' : 'الفترة الحالية'}</dt>
                       <dd>
-                        {`${fmt.num(item.progress.done)} من ${amount(item.progress.target, habit.kind === 'boolean' ? '' : habit.unit)} ${PERIOD_WORD[habit.period]}`}
+                        {habit.polarity === 'abstain'
+                          ? abstainNote(item)
+                          : `${fmt.num(item.progress.done)} من ${amount(item.progress.target, habit.kind === 'boolean' ? '' : habit.unit)} ${PERIOD_WORD[habit.period]}`}
                       </dd>
                     </div>
                     <div>
