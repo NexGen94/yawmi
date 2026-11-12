@@ -116,13 +116,19 @@ const HABIT_KEYS = [
   'start_day',
   'end_day',
 ];
+// rulesVersion 2: `polarity` is present in the twenty abstain cases only; missing means 'build'.
+const OPTIONAL_HABIT_KEYS = ['polarity'];
 const LOG_KEYS = ['day', 'value', 'status'];
 
 const sortedKeys = (value: unknown): string[] => Object.keys(value as object).sort();
 
 function expectInputKeys(name: FunctionName, input: Record<string, unknown>): void {
   expect(sortedKeys(input), 'input keys').toEqual([...INPUT_KEYS[name]].sort());
-  if ('habit' in input) expect(sortedKeys(input.habit), 'habit keys').toEqual([...HABIT_KEYS].sort());
+  if ('habit' in input) {
+    const keys = sortedKeys(input.habit);
+    const optional = keys.filter((key) => OPTIONAL_HABIT_KEYS.includes(key));
+    expect(keys, 'habit keys').toEqual([...HABIT_KEYS, ...optional].sort());
+  }
   if ('logs' in input) {
     for (const log of input.logs as unknown[]) expect(sortedKeys(log), 'log keys').toEqual([...LOG_KEYS].sort());
   }
@@ -202,3 +208,21 @@ for (const name of FUNCTIONS) {
     });
   });
 }
+
+describe('rulesVersion 2', () => {
+  test('the habit files hold the 312 v1 cases and four abstain cases per affected function', () => {
+    const abstain = ['clean', 'slip-mid', 'slip-today', 'skip-neutral'];
+    const counts: Partial<Record<FunctionName, number>> = {
+      period_progress: 45,
+      strength: 39,
+      streak: 34,
+      challenge_progress: 24,
+      adherence: 26,
+    };
+    for (const [name, count] of Object.entries(counts) as [FunctionName, number][]) {
+      const ids = (FILES.get(name)?.cases ?? []).map((c) => c.id);
+      expect(ids.length, name).toBe(count);
+      for (const suffix of abstain) expect(ids, name).toContain(`${name}-abstain-${suffix}`);
+    }
+  });
+});

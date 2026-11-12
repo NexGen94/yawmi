@@ -1313,8 +1313,146 @@
         "week_start": "sun"
       },
       "source": "تحدٍّ يعبر 2028-02-29"
+    },
+    {
+      "expect": {
+        "value": {
+          "achieved": 10,
+          "completion": 0.3333333333333333,
+          "remaining_days": 20,
+          "total": 30
+        }
+      },
+      "id": "challenge_progress-abstain-clean",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-30",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "polarity": "abstain",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "الامتناع (§9.6) P1: بلا سجلات، كل الأيام العشرة محفوظة"
+    },
+    {
+      "expect": {
+        "value": {
+          "achieved": 9,
+          "completion": 0.3,
+          "remaining_days": 20,
+          "total": 30
+        }
+      },
+      "id": "challenge_progress-abstain-slip-mid",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-30",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "polarity": "abstain",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-05",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "الامتناع (§9.6) P2: انزلاق في 11-05"
+    },
+    {
+      "expect": {
+        "value": {
+          "achieved": 9,
+          "completion": 0.3,
+          "remaining_days": 20,
+          "total": 30
+        }
+      },
+      "id": "challenge_progress-abstain-slip-today",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-30",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "polarity": "abstain",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "الامتناع (§9.6) P3: انزلاق اليوم، فاليوم فوات لا معلّق"
+    },
+    {
+      "expect": {
+        "value": {
+          "achieved": 9,
+          "completion": 0.3,
+          "remaining_days": 20,
+          "total": 30
+        }
+      },
+      "id": "challenge_progress-abstain-skip-neutral",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": "2026-11-30",
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "polarity": "abstain",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-05",
+            "status": "skip",
+            "value": null
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "الامتناع (§9.6) P4: تخطٍّ في 11-05 محايد"
     }
   ],
   "function": "challenge_progress",
-  "rulesVersion": 1
+  "rulesVersion": 2
 }

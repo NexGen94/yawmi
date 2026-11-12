@@ -4,6 +4,22 @@
 هذه الملفات، وعلى TypeScript (Vitest) وSwift (Swift Testing) اجتياز الملفات نفسها. القواعد نفسها
 موثقة في المواصفة §2.6 (العادات) و§3.3 (الدرجات)، والأحكام الملزمة في D-062.
 
+## `rulesVersion` 2: عادة الامتناع
+
+الإصدار 2 (تصميم الويب §9.6، حكم المتحكم م6) أضاف `habit.polarity`: `build` (الافتراض، والمدخل بلا
+الحقل) أو `abstain`. الامتناع منطقي يومي هدفه 1 وحده، وسجل `done` فيه معناه **انزلاق**: كل يوم
+مجدول في النافذة حتى اليوم **شاملاً اليوم** محفوظ (قيمة 1) ما لم يُسجَّل فيه انزلاق، ويوم الانزلاق
+فوات (قيمة 0)، و`skip` و`vacation` محايدان كما هما. و`strength` و`streak` و`adherence`
+و`challenge_progress` لعادة امتناع عند `T` تساوي ناتج عادة بناء لها `done` في كل يوم محفوظ محسوبةً
+عند `T + 1`. و`period_progress` لليوم: `done = 1` و`reached = true` بلا انزلاق، و`done = 0`
+و`reached = false` بانزلاق، و`target = expected = 1`.
+
+لم يتغيّر أي توقع من الـ312 الملتزَمة في الإصدار 1: بصمة `expect` و`tol` لكل معرّف منها في
+`api/tests/fixtures/vectors_v1_expect.json`، ويفحصها `test_rules_v2_keeps_every_v1_expectation`
+(حارس المولّد يسكت بعد رفع الإصدار، فهذا الاختبار هو الدليل). وأُضيفت 20 حالة: أربع لكل دالة من
+الخمس بمعرّفات `<fn>-abstain-clean` و`-abstain-slip-mid` و`-abstain-slip-today`
+و`-abstain-skip-neutral`. المجموع 332.
+
 ## الملفات
 
 أربعة عشر ملفاً، ملف لكل دالة، باسم الدالة بصيغة `snake_case`:
@@ -37,7 +53,7 @@
 
 ```json
 {
-  "rulesVersion": 1,
+  "rulesVersion": 2,
   "function": "strength",
   "cases": [
     {
@@ -51,7 +67,7 @@
 }
 ```
 
-- `id`: `<fn>-NNN` فريد في كل الملفات.
+- `id`: `<fn>-NNN` فريد في كل الملفات، أو `<fn>-abstain-<حالة>` لحالات الامتناع العشرين.
 - `input`: بدائيات JSON وحدها بمفاتيح `snake_case`: تواريخ `YYYY-MM-DD`، ولحظات ISO 8601 بـ`Z`
   (وفي `day_key` حالة واحدة بأجزاء الثانية `20:59:59.999Z` هي `day_key-006`، وحالة واحدة بإزاحة
   صريحة `+03:00` هي `day_key-013`)، وأعداد، ونصوص تعداد، ومصفوفات وكائنات منها. محلل اللحظات في
@@ -59,7 +75,8 @@
   `.withFractionalSeconds` لقبول `day_key-006`.
   - `habit`: حقول `HabitSpec` العشرة دائماً (ولو `null`): `kind`، `unit`، `target_per_period`،
     `period`، `schedule_kind`، `weekday_mask` (بتّ 0 = الأحد ... 6 = السبت)، `every_n`،
-    `anchor_day`، `start_day`، `end_day`.
+    `anchor_day`، `start_day`، `end_day`. وحقل حادي عشر `polarity` (`abstain`) في حالات الامتناع
+    وحدها؛ غيابه يعني `build`، فعلى كل عميل أن يقبله اختيارياً.
   - `logs`: مصفوفة `{day, value, status}`، و`status` من `done` و`skip` و`vacation` و`missed`،
     و`value` عدد أو `null`. الترتيب لا يؤثر في الناتج (حالات مقصودة تثبت ذلك).
   - `week_start`: `sat` أو `sun` أو `mon` في كل حالة تمرّ به للدالة.

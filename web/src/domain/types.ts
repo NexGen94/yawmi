@@ -13,7 +13,7 @@ export type { HabitKind, HabitUnit, ScheduleKind };
 export type Period = HabitPeriod;
 
 /** The rules version these modules implement; must equal `rulesVersion` in the vector files. */
-export const RULES_VERSION = 1;
+export const RULES_VERSION = 2;
 
 /** A calendar day, `YYYY-MM-DD`. Always computed in pure UTC, never in the browser's zone. */
 export type Day = string;
@@ -21,6 +21,9 @@ export type Day = string;
 export type WeekStart = 'sat' | 'sun' | 'mon';
 
 export type LogStatus = 'done' | 'skip' | 'vacation' | 'missed';
+
+/** `abstain` (rulesVersion 2, design 9.6): a `done` log is a slip; see `../domain/habits`. */
+export type Polarity = 'build' | 'abstain';
 
 export interface HabitSpec {
   kind: HabitKind;
@@ -42,6 +45,11 @@ export interface HabitSpec {
   startDay: Day;
   /** Last day of a challenge; `null` for an open habit. */
   endDay: Day | null;
+  /**
+   * `build` when missing. An `abstain` habit is a daily boolean with target 1 whose `done` log is
+   * a slip: every scheduled day up to and including today is kept unless a slip is logged.
+   */
+  polarity?: Polarity;
 }
 
 export interface HabitLog {
