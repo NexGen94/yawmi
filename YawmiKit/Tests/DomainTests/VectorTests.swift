@@ -156,17 +156,18 @@ struct VectorTests {
     // MARK: Every case is run
 
     /// The cases each file holds. `@Test(arguments:)` over a file that failed to load would pass
-    /// with no case at all, so the counts are pinned here (312 in all, as the generator reports).
+    /// with no case at all, so the counts are pinned here (332 in all, as the generator reports:
+    /// the 312 of rulesVersion 1 and four abstain cases for each of five functions in version 2).
     static let caseCounts = [
-        "day_key": 14, "period_bounds": 23, "is_scheduled": 28, "end_day": 10, "period_progress": 41,
-        "strength": 35, "streak": 30, "challenge_progress": 20, "adherence": 22, "goal_prefill": 24,
+        "day_key": 14, "period_bounds": 23, "is_scheduled": 28, "end_day": 10, "period_progress": 45,
+        "strength": 39, "streak": 34, "challenge_progress": 24, "adherence": 26, "goal_prefill": 24,
         "baseline": 29, "recovery": 17, "trimp": 11, "strain": 8,
     ]
 
     @Test
     func everyFileIsRunWithAllItsCases() {
         #expect(Set(Self.caseCounts.keys) == Set(VectorLoader.functions))
-        #expect(Self.caseCounts.values.reduce(0, +) == 312)
+        #expect(Self.caseCounts.values.reduce(0, +) == 332)
         for fn in VectorLoader.functions {
             #expect(VectorLoader.load(fn).count == Self.caseCounts[fn], "\(fn)")
         }

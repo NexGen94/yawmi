@@ -16,6 +16,12 @@
 //   min(T, max(1, ceil(T · k / L − 1e-9))), k its scheduled days and L the full period's days (7,
 //   or the month's length). A daily period is never proportional.
 // - `done ≥ target` and `done ≥ expected` allow a 1e-9 margin for floating-point noise.
+// - An abstain habit (`polarity: 'abstain'`, rulesVersion 2, design 9.6) is a daily boolean with
+//   target 1 whose `done` log is a slip. Every scheduled day up to and including today is kept
+//   (value 1) unless a slip is logged; a slip day is missed (value 0); `skip` and `vacation` stay
+//   neutral. strength, streak, adherence and challengeProgress at T equal a build habit with `done`
+//   on every kept day evaluated at T + 1 (today is settled, never pending); periodProgress stays at
+//   T: done 1 without a slip, 0 with one, expected 1 either way.
 //
 // How exact the floats are: the sums over days use the compensated (Neumaier) summation that
 // Python 3.12+ `sum()` uses, in the same order, so a period's `done` is bit-identical to the
@@ -88,8 +94,29 @@ function aggregate(spec: HabitSpec, s: Schedule, logs: readonly HabitLog[], toda
   if (spec.kind === 'boolean') {
     for (const total of days.values()) total.done = Math.min(1, total.done);
   }
+  return spec.polarity === 'abstain' ? abstainDays(s, days, today) : days;
+}
+
+/**
+ * An abstain habit's days as its build twin sees them (design 9.6), over [startDay,
+ * min(today, endDay)]: a slip day stays, missed with value 0 and a record (so it enters today's
+ * `expected`); a `skip` or `vacation` day without a slip is neutral; every other scheduled day is
+ * kept with value 1. A `missed` log changes nothing: the day is kept unless a slip is logged.
+ */
+function abstainDays(s: Schedule, logged: Days, today: number): Days {
+  const days: Days = new Map();
+  const last = Math.min(today, s.end);
+  for (let day = s.start; day <= last; day += 1) {
+    const total = logged.get(day);
+    if (total !== undefined && total.done > 0) days.set(day, { done: 0, neutral: total.neutral });
+    else if (total !== undefined && total.neutral) days.set(day, { done: 0, neutral: true });
+    else if (isScheduledOrd(day, s)) days.set(day, { done: 1, neutral: false });
+  }
   return days;
 }
+
+/** The day the cumulative rules judge at: T + 1 for an abstain habit (today is settled), else T. */
+const settled = (spec: HabitSpec, now: number): number => (spec.polarity === 'abstain' ? now + 1 : now);
 
 /**
  * The days' totals from `start` to `end`, summed as CPython 3.12+ `sum()` sums floats: Neumaier's
@@ -199,8 +226,8 @@ export function strength(
 ): number {
   const s = scheduleOf(spec);
   checkWeekStart(weekStart);
-  const now = toOrdinal(today);
-  const days = aggregate(spec, s, logs, now);
+  const days = aggregate(spec, s, logs, toOrdinal(today));
+  const now = settled(spec, toOrdinal(today));
   const last = Math.min(days.has(now) ? now : now - 1, s.end);
   const target = spec.targetPerPeriod;
   const window = ROLLING_WINDOW_DAYS[spec.period] ?? 1;
@@ -225,9 +252,9 @@ export function strength(
 export function streak(spec: HabitSpec, logs: readonly HabitLog[], today: Day, weekStart: WeekStart): number {
   const s = scheduleOf(spec);
   checkWeekStart(weekStart);
-  const now = toOrdinal(today);
+  const now = settled(spec, toOrdinal(today));
   if (now < s.start) return 0;
-  const days = aggregate(spec, s, logs, now);
+  const days = aggregate(spec, s, logs, toOrdinal(today));
   const inProgress = now <= s.end;
   const [firstStart] = periodBoundsOrd(s.start, spec.period, weekStart);
   let [start, end] = periodBoundsOrd(inProgress ? now : s.end, spec.period, weekStart);
@@ -260,9 +287,10 @@ export function challengeProgress(
   const s = scheduleOf(spec);
   checkWeekStart(weekStart);
   // `today` is checked before an open habit returns null, so a bad day never passes silently.
-  const now = toOrdinal(today);
+  const day0 = toOrdinal(today);
   if (spec.endDay === null) return null;
-  const days = aggregate(spec, s, logs, now);
+  const days = aggregate(spec, s, logs, day0);
+  const now = settled(spec, day0);
   let achieved = 0;
   let total = 0;
   if (spec.period === 'day') {
@@ -299,8 +327,8 @@ export function adherence(
 ): number | null {
   const s = scheduleOf(spec);
   checkWeekStart(weekStart);
-  const now = toOrdinal(today);
-  const days = aggregate(spec, s, logs, now);
+  const days = aggregate(spec, s, logs, toOrdinal(today));
+  const now = settled(spec, toOrdinal(today));
   let [start, end] = periodBoundsOrd(s.start, spec.period, weekStart);
   let reached = 0;
   let counted = 0;

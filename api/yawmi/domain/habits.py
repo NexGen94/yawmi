@@ -19,6 +19,12 @@
   اليومية لا تتناسب: الهدف يسري على كل يوم مجدول.
 - المقارنات `done ≥ target` و`done ≥ expected` بهامش `1e-9` كي لا يُسقِط ضجيجُ الفاصلة العائمة
   (مثل 0.7 + 0.1 + 0.1 + 0.1) هدفاً تحقق فعلاً.
+- عادة الامتناع (`polarity = "abstain"`، `rulesVersion` 2، التصميم §9.6): منطقية يومية هدفها 1،
+  وسجل `done` فيها معناه **انزلاق**. كل يوم مجدول في النافذة حتى اليوم شاملاً يُحسب محفوظاً (قيمة 1)
+  ما لم يُسجَّل فيه انزلاق، ويوم الانزلاق فوات (قيمة 0)، و`skip` و`vacation` محايدان كما هما.
+  و`strength` و`streak` و`adherence` و`challenge_progress` لها عند `T` تساوي ناتج عادة بناء لها
+  `done` في كل يوم محفوظ، محسوبةً عند `T + 1` (فاليوم محسوم لا معلّق). و`period_progress` يُحسب
+  عند `T` نفسه: `done = 1` بلا انزلاق، و`done = 0` بانزلاق، و`expected = 1` في الحالين.
 """
 
 from __future__ import annotations
@@ -41,6 +47,7 @@ from yawmi.domain.periods import (
 HabitKind = Literal["boolean", "count", "duration"]
 ScheduleKind = Literal["every_day", "weekdays", "every_n_days"]
 LogStatus = Literal["done", "skip", "vacation", "missed"]
+Polarity = Literal["build", "abstain"]
 
 _EPS = 1e-9
 _ONE_DAY = timedelta(days=1)
@@ -51,6 +58,7 @@ _VALID_STATUSES = frozenset({"done", "skip", "vacation", "missed"})
 _KINDS = frozenset({"boolean", "count", "duration"})
 _PERIODS = frozenset({"day", "week", "month"})
 _SCHEDULE_KINDS = frozenset({"every_day", "weekdays", "every_n_days"})
+_POLARITIES = frozenset({"build", "abstain"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +70,7 @@ class HabitSpec:
     - `every_n` (2 فأكثر، كقيد قاعدة البيانات) و`anchor_day`: مطلوبان لـ`every_n_days`.
     - `end_day`: آخر يوم في تحدٍّ بنهاية، و`None` لعادة مفتوحة.
     - الفترة الأسبوعية والشهرية تقبل الجدولة `every_day` وحدها.
+    - `polarity`: `build` (الافتراض) أو `abstain`. والامتناع منطقي يومي هدفه 1 وحده.
     """
 
     kind: HabitKind
@@ -74,6 +83,7 @@ class HabitSpec:
     anchor_day: date | None
     start_day: date
     end_day: date | None
+    polarity: Polarity = "build"
 
     def __post_init__(self) -> None:
         if self.kind not in _KINDS:
@@ -96,6 +106,12 @@ class HabitSpec:
             raise ValueError("جدولة كل n يوماً تحتاج n ≥ 2 ويوم مرسى")
         if self.end_day is not None and self.end_day < self.start_day:
             raise ValueError("يوم النهاية قبل يوم البداية")
+        if self.polarity not in _POLARITIES:
+            raise ValueError(f"قطبية عادة غير معروفة: {self.polarity!r}")
+        if self.polarity == "abstain" and (
+            self.kind != "boolean" or self.period != "day" or self.target_per_period != 1
+        ):
+            raise ValueError("عادة الامتناع منطقية يومية هدفها 1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,7 +206,34 @@ def _aggregate(spec: HabitSpec, logs: Iterable[HabitLog], today: date) -> dict[d
     if spec.kind == "boolean":
         for agg in days.values():
             agg.done = min(1.0, agg.done)
+    if spec.polarity == "abstain":
+        return _abstain_days(spec, days, today)
     return days
+
+
+def _abstain_days(spec: HabitSpec, logged: dict[date, _Day], today: date) -> dict[date, _Day]:
+    """أيام عادة امتناع بصيغة عادة البناء المكافئة (التصميم §9.6).
+
+    في النافذة `[start_day, min(today, end_day)]`: يوم فيه انزلاق (`done`) يبقى فواتاً بقيمة 0
+    وله سجل (فيدخل `expected` اليوم)، ويوم فيه `skip` أو `vacation` بلا انزلاق محايد، وكل يوم مجدول
+    غيرهما محفوظ بقيمة 1. وسجل `missed` لا يغيّر شيئاً: اليوم محفوظ ما لم يُسجَّل انزلاق.
+    """
+    last = today if spec.end_day is None else min(today, spec.end_day)
+    days: dict[date, _Day] = {}
+    for day in iter_days(spec.start_day, last):
+        agg = logged.get(day)
+        if agg is not None and agg.done > 0.0:
+            days[day] = _Day(done=0.0, neutral=agg.neutral)
+        elif agg is not None and agg.neutral:
+            days[day] = _Day(done=0.0, neutral=True)
+        elif is_scheduled(day, spec):
+            days[day] = _Day(done=1.0)
+    return days
+
+
+def _settled_today(spec: HabitSpec, today: date) -> date:
+    """اليوم الذي تُحكم عنده الدوال التراكمية: `T + 1` للامتناع (اليوم محسوم)، و`T` للبناء."""
+    return today + _ONE_DAY if spec.polarity == "abstain" else today
 
 
 def _geq(value: float, bound: float) -> bool:
@@ -308,6 +351,7 @@ def strength(
     """
     check_week_start(week_start)
     days = _aggregate(spec, logs, today)
+    today = _settled_today(spec, today)
     last = today if today in days else today - _ONE_DAY
     if spec.end_day is not None:
         last = min(last, spec.end_day)
@@ -342,9 +386,11 @@ def streak(spec: HabitSpec, logs: Iterable[HabitLog], today: date, week_start: W
     الفترة الأسبوعية/الشهرية المقصوصة تُحكم بهدفها المتناسب.
     """
     check_week_start(week_start)
-    if today < spec.start_day:
+    settled = _settled_today(spec, today)
+    if settled < spec.start_day:
         return 0
     days = _aggregate(spec, logs, today)
+    today = settled
     in_progress = spec.end_day is None or today <= spec.end_day
     reference = today if in_progress else spec.end_day
     assert reference is not None
@@ -385,6 +431,7 @@ def challenge_progress(
     if spec.end_day is None:
         return None
     days = _aggregate(spec, logs, today)
+    today = _settled_today(spec, today)
     achieved = total = 0
     if spec.period == "day":
         for day in _scheduled_days(spec, spec.start_day, spec.end_day):
@@ -419,6 +466,7 @@ def adherence(
     """
     check_week_start(week_start)
     days = _aggregate(spec, logs, today)
+    today = _settled_today(spec, today)
     start, end = period_bounds(spec.start_day, spec.period, week_start)
     reached = counted = 0
     while True:

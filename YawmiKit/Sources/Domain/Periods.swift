@@ -38,7 +38,8 @@ extension HabitSpec {
     /// - a target that is not above zero (NaN included);
     /// - `.weekdays` without a mask in 1...127;
     /// - `.everyNDays` without `everyN >= 2` and an anchor day;
-    /// - an end day before the start day.
+    /// - an end day before the start day;
+    /// - an abstain habit that is not a daily boolean with target 1 (rulesVersion 2).
     ///
     /// Every rule that takes a spec calls this first, so an invalid spec never reaches the maths
     /// (a zero `everyN` would otherwise trap on the remainder).
@@ -57,6 +58,9 @@ extension HabitSpec {
         }
         if let endDay, endDay < startDay {
             throw .invalidSpec("the end day is before the start day")
+        }
+        if polarity == .abstain, kind != .boolean || period != .day || targetPerPeriod != 1 {
+            throw .invalidSpec("an abstain habit is a daily boolean with target 1")
         }
     }
 }
