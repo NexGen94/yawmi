@@ -1,7 +1,6 @@
 """Tests for the notices push provider: day reminders (morning, evening, weekly) and deduplication."""
 
 import json
-import os
 from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Protocol
@@ -10,8 +9,8 @@ from zoneinfo import ZoneInfo
 
 import asyncpg
 import pytest
+from api_harness import open_pool
 
-from yawmi.db.pool import create_pool, set_pool
 from yawmi.journal.memory import InMemoryJournalReader
 from yawmi.journal.store import AsyncpgJournalReader
 from yawmi.prefs.memory import InMemoryPrefsStore
@@ -22,11 +21,6 @@ from yawmi.push.notices import Notice, NoticeContext
 from yawmi.push.scheduler import tick
 from yawmi.push.store import AsyncpgPushStore, Subscription
 
-IN_CI = bool(os.environ.get("CI"))
-DSN = os.environ.get("TEST_DATABASE_URL")
-needs_db = pytest.mark.skipif(
-    not DSN and not IN_CI, reason="TEST_DATABASE_URL is not set (database tests run in CI)"
-)
 TZ = "Asia/Riyadh"
 RIYADH = ZoneInfo(TZ)
 
@@ -135,21 +129,11 @@ async def backend(request: pytest.FixtureRequest) -> AsyncIterator[Backend]:
         yield b
         await b.cleanup()
         return
-    url = os.environ.get("TEST_DATABASE_URL")
-    if not url:
-        if IN_CI:
-            pytest.fail("CI is set but TEST_DATABASE_URL is not")
-        pytest.skip("TEST_DATABASE_URL is not set (database tests run in CI)")
-    pool = await create_pool(url)
-    set_pool(pool)
-    try:
+    async with open_pool() as pool:
         b = PostgresBackend(pool)
         await b.setup()
         yield b
         await b.cleanup()
-    finally:
-        set_pool(None)
-        await pool.close()
 
 
 @pytest.fixture
