@@ -39,7 +39,8 @@ export default defineConfig({
   webServer: [
     {
       // Resets the database it is pointed at (YAWMI_E2E_DATABASE_URL, a local one) and seeds it.
-      command: 'uv run python tools/e2e_server.py --port 8000',
+      // --no-sync: run in the environment that `uv sync` made (CI installs it without Web Push).
+      command: 'uv run --no-sync python tools/e2e_server.py --port 8000',
       cwd: '../api',
       url: 'http://127.0.0.1:8000/v1/health/live',
       reuseExistingServer: !inCI,

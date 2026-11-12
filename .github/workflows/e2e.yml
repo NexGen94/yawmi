@@ -66,9 +66,12 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # --no-build: nothing is built from source here. The one sdist-only dependency (http-ece, with
+      # pywebpush, which needs it) serves Web Push, and the test server starts with push off, so
+      # neither is installed.
       - name: Install the API
         working-directory: api
-        run: uv sync --locked
+        run: uv sync --locked --no-build --no-install-package pywebpush --no-install-package http-ece
 
       # Like the Dockerfile: no package's install script runs in CI.
       - name: Install the web app
