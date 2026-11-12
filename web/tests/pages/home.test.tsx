@@ -461,22 +461,22 @@ describe('home: the note stays until the next action or a dismissal', () => {
 });
 
 describe('home: the ring, the badge and abstain habits', () => {
-  const abstain = { ...habit('no_sugar', 'ترك السكر'), polarity: 'abstain' } as ReturnType<typeof habit>;
+  const abstain = habit('no_sugar', 'ترك السكر', { polarity: 'abstain' });
 
-  it('an abstain habit counts as done unless a slip is logged today, and stays out of the badge', async () => {
+  it('an abstain habit is outside the ring («3 من 6», not «4 من 7») and outside the badge', async () => {
     routeFetch(fetchMock, { habits: [...STORY_HABITS, abstain] });
     render(<HomePage />);
-    await screen.findByText('4 من 7');
+    await screen.findByText('3 من 6');
     await waitFor(() => expect(mocks.setBadge).toHaveBeenLastCalledWith(3));
   });
 
-  it('a slip today takes it out of the done count and still stays out of the badge', async () => {
+  it('a slip today changes neither the ring nor the badge', async () => {
     routeFetch(fetchMock, {
       habits: [...STORY_HABITS, abstain],
       logs: [...STORY_LOGS, { habit_code: 'no_sugar', day: DAY, status: 'done', value: null }],
     });
     render(<HomePage />);
-    await screen.findByText('3 من 7');
+    await screen.findByText('3 من 6');
     await waitFor(() => expect(mocks.setBadge).toHaveBeenLastCalledWith(3));
   });
 });

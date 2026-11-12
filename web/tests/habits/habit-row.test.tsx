@@ -20,11 +20,13 @@ const progress = (over: Partial<PeriodProgress> = {}): PeriodProgress => ({
 
 function abstainItem(status: HabitTodayItem['statusToday'], over: Partial<PeriodProgress> = {}): HabitTodayItem {
   return {
-    habit: { ...habit('no_sugar', 'ترك السكر'), polarity: 'abstain' } as HabitTodayItem['habit'],
+    habit: habit('no_sugar', 'ترك السكر', { polarity: 'abstain' }),
     progress: progress(over),
     statusToday: status,
     valueToday: null,
     group: 'free',
+    state: 'active',
+    dueToday: true,
   };
 }
 
@@ -96,6 +98,8 @@ describe('HabitRow: a build habit', () => {
     statusToday: 'done',
     valueToday: 5,
     group: 'free',
+    state: 'active',
+    dueToday: true,
     ...over,
   });
 

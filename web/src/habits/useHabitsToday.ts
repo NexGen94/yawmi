@@ -9,10 +9,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { type QueryState, useQuery } from '../data/query';
-import { applyPendingLogs, nextDayValue, toDomainLogs } from '../data/pending';
+import { applyPendingLogs, type HabitLogOut, nextDayValue, toDomainLogs } from '../data/pending';
 import { logHabit, type LogHabitInput } from '../data/events';
 import { periodProgress } from '../domain/habits';
-import type { Day, HabitSpec, PeriodProgress } from '../domain/types';
+import type { Day, PeriodProgress } from '../domain/types';
+import { habitState, type HabitState } from '../progress/state';
 import { onDayChange, todayRiyadh } from '../lib/today';
 import { discard, listPending, type OutboxEvent } from '../sync/outbox';
 import { habitSpecOf } from './spec';
@@ -32,6 +33,10 @@ export interface HabitTodayItem {
   group: HabitGroup;
   /** Today's log for this habit is still in the outbox: a tap on the done row can take it back. */
   unsent?: boolean;
+  /** One of the six states of design section 9.1, from the logs with the outbox over them. */
+  state: HabitState;
+  /** The server lists the habit among those scheduled today (`habits_due`). */
+  dueToday: boolean;
 }
 
 /** The last thing the person logged, for the «تراجع» note. */
@@ -50,20 +55,14 @@ const WEEK_START = 'sun';
 
 export type Polarity = 'build' | 'abstain';
 
-/**
- * `abstain` or `build`. The generated `HabitOut` has no `polarity` yet (the settings task adds it
- * to the contract); a habit without the field is a build habit, as the rules treat it.
- */
-export function polarityOf(habit: HabitOut): Polarity {
-  return (habit as { polarity?: unknown }).polarity === 'abstain' ? 'abstain' : 'build';
+/** `abstain` or `build`. */
+export function polarityOf(habit: Pick<HabitOut, 'polarity'>): Polarity {
+  return habit.polarity === 'abstain' ? 'abstain' : 'build';
 }
 
-/**
- * Whether the habit is counted in the ring and in «n من m». Always true for now; the habits task
- * makes abstain habits return false (design 4.1 and 9.6).
- */
-export function countsInRing(_habit: HabitOut): boolean {
-  return true;
+/** Whether the habit is counted in the ring and in «n من m»: build habits only (design 4.1 and 9.6). */
+export function countsInRing(habit: Pick<HabitOut, 'polarity'>): boolean {
+  return polarityOf(habit) === 'build';
 }
 
 /**
@@ -84,11 +83,6 @@ export function isDoneToday(item: HabitTodayItem): boolean {
   return item.progress.reached || item.statusToday === 'done';
 }
 
-function specOf(habit: HabitOut, day: Day): HabitSpec {
-  const spec = habitSpecOf(habit, day);
-  return polarityOf(habit) === 'abstain' ? { ...spec, polarity: 'abstain' } : spec;
-}
-
 const HABIT_EVENTS: ReadonlySet<string> = new Set(['habit_logged', 'habit_skipped', 'habit_vacation']);
 
 /** The events of a habit's log for `day` that are still in the outbox. */
@@ -100,18 +94,37 @@ export function unsentFor(code: string, unsent: OutboxEvent[], day: Day): Outbox
   });
 }
 
-/** Builds the items for the habits due. `sent` are events the outbox already sent that the loaded
- *  data may not hold yet; `unsent` are the ones still waiting. Both are laid over the logs. */
-export function buildItems(bundle: TodayBundle, sent: OutboxEvent[], unsent: OutboxEvent[], day: Day): HabitTodayItem[] {
-  const logs = applyPendingLogs(bundle.logs, [...sent, ...unsent], day);
+/** The logs of the bundle with the events of the outbox laid over them. */
+export function overlayLogs(bundle: TodayBundle, sent: OutboxEvent[], unsent: OutboxEvent[], day: Day): HabitLogOut[] {
+  return applyPendingLogs(bundle.logs, [...sent, ...unsent], day);
+}
+
+/** `due`: the habits scheduled today, in the server's order. `all`: every habit the server holds,
+ *  archived ones included (the habits page). */
+export type ItemScope = 'due' | 'all';
+
+/** Builds the items. `sent` are events the outbox already sent that the loaded data may not hold
+ *  yet; `unsent` are the ones still waiting. Both are laid over the logs. */
+export function buildItems(
+  bundle: TodayBundle,
+  sent: OutboxEvent[],
+  unsent: OutboxEvent[],
+  day: Day,
+  scope: ItemScope = 'due',
+): HabitTodayItem[] {
+  const logs = overlayLogs(bundle, sent, unsent, day);
   const byCode = new Map(bundle.habits.map((h) => [h.code, h]));
+  const dueCodes = new Set(bundle.today.habits_due.map((d) => d.code));
+  const habits = scope === 'all' ? bundle.habits : bundle.today.habits_due.map((d) => byCode.get(d.code));
   const items: HabitTodayItem[] = [];
-  for (const due of bundle.today.habits_due) {
-    const habit = byCode.get(due.code);
+  for (const habit of habits) {
     if (habit === undefined) continue;
     let progress: PeriodProgress;
+    let state: HabitState;
     try {
-      progress = periodProgress(specOf(habit, day), toDomainLogs(logs, habit.code), day, WEEK_START);
+      const domainLogs = toDomainLogs(logs, habit.code);
+      progress = periodProgress(habitSpecOf(habit, day), domainLogs, day, WEEK_START);
+      state = habitState(habit, domainLogs, day, WEEK_START);
     } catch (error) {
       // A habit the rules refuse is left out rather than breaking the page.
       if (error instanceof RangeError) continue;
@@ -127,6 +140,8 @@ export function buildItems(bundle: TodayBundle, sent: OutboxEvent[], unsent: Out
       valueToday,
       group: habit.anchor,
       unsent: unsentFor(habit.code, unsent, day).length > 0,
+      state,
+      dueToday: dueCodes.has(habit.code),
     });
   }
   return items;
@@ -172,6 +187,8 @@ export interface UseHabitsToday {
   undo(eventId: string): Promise<boolean>;
   /** The riyadh day the page shows. */
   day: Day;
+  /** The logs of the last 62 days with the outbox over them (the habit page draws its day grid). */
+  logs: HabitLogOut[];
   /** `GET /v1/today` as last loaded: the plan and the morning insight. */
   today: TodayOut | undefined;
   /** The last logged event, for the undo note. */
@@ -180,7 +197,9 @@ export interface UseHabitsToday {
   reload(): void;
 }
 
-export function useHabitsToday(): UseHabitsToday {
+/** `scope` 'due' (the default, the home page): the habits scheduled today. 'all': every habit, for
+ *  the habits pages. The ring and the badge always count the habits due today. */
+export function useHabitsToday(scope: ItemScope = 'due'): UseHabitsToday {
   const [day, setDay] = useState<Day>(() => todayRiyadh());
   useEffect(() => onDayChange(setDay), []);
 
@@ -250,13 +269,17 @@ export function useHabitsToday(): UseHabitsToday {
   const state: QueryState = query.state === 'loading' && bundle !== undefined ? 'ready' : query.state;
 
   const items = useMemo(
-    () => (bundle === undefined ? [] : buildItems(bundle, sent, pending, day)),
+    () => (bundle === undefined ? [] : buildItems(bundle, sent, pending, day, scope)),
+    [bundle, sent, pending, day, scope],
+  );
+  const logs = useMemo(
+    () => (bundle === undefined ? [] : overlayLogs(bundle, sent, pending, day)),
     [bundle, sent, pending, day],
   );
   const itemsRef = useRef(items);
   itemsRef.current = items;
 
-  const ringItems = items.filter((item) => countsInRing(item.habit));
+  const ringItems = items.filter((item) => item.dueToday && countsInRing(item.habit));
   const due = ringItems.length;
   const done = ringItems.filter(isDoneToday).length;
   const badge = ringItems.filter((item) => polarityOf(item.habit) === 'build' && !isDoneToday(item)).length;
@@ -373,6 +396,7 @@ export function useHabitsToday(): UseHabitsToday {
     vacation,
     undo,
     day,
+    logs,
     today: bundle?.today,
     last,
     clearLast: useCallback(() => setLast(null), []),
