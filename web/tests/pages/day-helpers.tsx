@@ -23,10 +23,11 @@ export const MONTH_AGO = '2026-10-11';
 export const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-export function habit(code: string, title: string, over: Partial<HabitDue> & { polarity?: string } = {}): HabitDue {
+export function habit(code: string, title: string, over: Partial<HabitDue> = {}): HabitDue {
   return {
     anchor: 'free',
     code,
+    polarity: 'build',
     done_today: false,
     goal_ref: null,
     kind: 'boolean',

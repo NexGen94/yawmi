@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { api } from '../../api/client';
+import { unwrap } from '../../api/unwrap';
 import type { components } from '../../api/schema';
 import {
   applyPendingJournal,
@@ -61,23 +62,15 @@ export interface DayData {
   refreshPending(): Promise<void>;
 }
 
-async function fetchToday(): Promise<TodayOut> {
-  const { data, response } = await api.GET('/v1/today');
-  if (data === undefined) throw new Error(`today: HTTP ${response.status}`);
-  return data;
-}
+// `unwrap` (api/unwrap.ts) tells a refusal (HttpError, the error state) from a failed network
+// (TypeError, the offline state), the same way on every page.
+const fetchToday = (): Promise<TodayOut> => api.GET('/v1/today').then(unwrap);
 
-async function fetchJournal(from: Day, to: Day): Promise<JournalEntryOut[]> {
-  const { data, response } = await api.GET('/v1/journal', { params: { query: { from, to } } });
-  if (data === undefined) throw new Error(`journal: HTTP ${response.status}`);
-  return data.entries;
-}
+const fetchJournal = (from: Day, to: Day): Promise<JournalEntryOut[]> =>
+  api.GET('/v1/journal', { params: { query: { from, to } } }).then((r) => unwrap(r).entries);
 
-async function fetchMood(day: Day): Promise<MoodLogOut[]> {
-  const { data, response } = await api.GET('/v1/mood', { params: { query: { from: day, to: day } } });
-  if (data === undefined) throw new Error(`mood: HTTP ${response.status}`);
-  return data.logs;
-}
+const fetchMood = (day: Day): Promise<MoodLogOut[]> =>
+  api.GET('/v1/mood', { params: { query: { from: day, to: day } } }).then((r) => unwrap(r).logs);
 
 /** The page's state from its queries. A query that is only refreshing (loading again with data in
  *  hand) is ready: the page keeps what it shows instead of flashing skeletons. The mood never
@@ -184,7 +177,7 @@ export function useDayData(): DayData {
   );
 
   const habits = useMemo(
-    () => (habitsDue ?? []).filter((h) => (h as { polarity?: string }).polarity !== 'abstain'),
+    () => (habitsDue ?? []).filter((h) => h.polarity !== 'abstain'),
     [habitsDue],
   );
 
