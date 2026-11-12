@@ -1,5 +1,5 @@
 import { fmt } from '../lib/format';
-import { flip } from './rtl';
+import { x } from './rtl';
 import { ratio, ratioLabel } from './scale';
 
 export interface RingProps {
@@ -16,13 +16,13 @@ export interface RingProps {
 export function Ring({ value, label, size = 120 }: RingProps) {
   const v = ratio(value);
   const stroke = Math.max(6, Math.round(size / 12));
-  const c = size / 2;
+  const c = x(0, 1, size);
   const r = (size - stroke) / 2;
   const circumference = 2 * Math.PI * r;
   const dash = (v ?? 0) * circumference;
-  // Start at 12 o'clock (rotate), then mirror horizontally through rtl.ts so the arc runs towards
-  // the inline end. The transform applies right to left: rotate first, then x -> flip(x, size).
-  const toReadingDirection = `translate(${flip(0, size)} 0) scale(-1 1) rotate(-90 ${c} ${c})`;
+  // Start at 12 o'clock (rotate), then mirror horizontally through x() in rtl.ts so the arc runs
+  // towards the inline end.
+  const toReadingDirection = `translate(${x(-0.5, 1, size)} 0) scale(-1 1) rotate(-90 ${c} ${c})`;
 
   return (
     <svg
@@ -49,6 +49,7 @@ export function Ring({ value, label, size = 120 }: RingProps) {
         class="ring-value"
         x={c}
         y={c}
+        direction="rtl"
         text-anchor="middle"
         dominant-baseline="central"
         font-size={Math.round(size * 0.22)}

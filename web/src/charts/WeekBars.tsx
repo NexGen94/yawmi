@@ -54,7 +54,7 @@ export function WeekBars({ values, label }: WeekBarsProps) {
           </rect>
         );
       })}
-      <text class="bars-value" x={x(n - 1, n, W)} y={BASE - heightOf(last) - 6} text-anchor="middle">
+      <text class="bars-value" x={x(n - 1, n, W)} y={BASE - heightOf(last) - 6} direction="rtl" text-anchor="middle">
         {fmt.num(last)}
       </text>
     </svg>

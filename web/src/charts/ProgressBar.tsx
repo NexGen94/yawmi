@@ -1,4 +1,4 @@
-import { flip } from './rtl';
+import { x } from './rtl';
 import { ratio, ratioLabel } from './scale';
 
 export interface ProgressBarProps {
@@ -11,7 +11,7 @@ export interface ProgressBarProps {
 const HEIGHT = 8;
 
 /** A thin horizontal bar that fills from the inline start (the right in RTL). Its width follows
- *  the container: positions are percentages, mirrored through rtl.ts. */
+ *  the container: positions are percentages, mirrored through x() in rtl.ts. */
 export function ProgressBar({ value, label }: ProgressBarProps) {
   const v = ratio(value);
   const filled = (v ?? 0) * 100;
@@ -27,7 +27,7 @@ export function ProgressBar({ value, label }: ProgressBarProps) {
       <rect class="bar-track" x="0" y="0" width="100%" height={HEIGHT} rx={HEIGHT / 2} />
       <rect
         class="bar-fill"
-        x={`${flip(filled, 100)}%`}
+        x={`${x(filled - 0.5, 100, 100)}%`}
         y="0"
         width={`${filled}%`}
         height={HEIGHT}

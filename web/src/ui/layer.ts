@@ -7,18 +7,27 @@ import type { RefObject } from 'preact';
 import { useLayoutEffect, useRef } from 'preact/hooks';
 
 const FOCUSABLE = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled]):not([type="hidden"])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  'summary',
+  'a[href]:not([tabindex="-1"])',
+  'button:not([disabled]):not([tabindex="-1"])',
+  'input:not([disabled]):not([type="hidden"]):not([tabindex="-1"])',
+  'select:not([disabled]):not([tabindex="-1"])',
+  'textarea:not([disabled]):not([tabindex="-1"])',
+  'summary:not([tabindex="-1"])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
+function isHiddenInClosedDetails(el: HTMLElement): boolean {
+  const details = el.closest('details');
+  if (!details || details.open) return false;
+  const summary = details.querySelector(':scope > summary');
+  return !summary || !summary.contains(el);
+}
+
 /** The elements Tab can reach inside `root`, in document order. */
 export function focusables(root: HTMLElement): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => !el.closest('[inert], [hidden]'));
+  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+    (el) => !el.closest('[inert], [hidden]') && !isHiddenInClosedDetails(el),
+  );
 }
 
 // Open layers, in the order they opened. The topmost is the last one that contains no other.

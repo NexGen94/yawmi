@@ -110,6 +110,16 @@
   color: var(--c-bg);
 }
 
+.hero-card .btn-primary {
+  background: var(--c-bg);
+  color: var(--c-ink);
+}
+
+.hero-card .btn-primary:hover {
+  background: var(--c-blue-light);
+  color: var(--c-ink);
+}
+
 /* ---------- Badge ---------- */
 
 .badge {
@@ -385,19 +395,21 @@
 }
 
 .slider-input::-webkit-slider-runnable-track {
-  block-size: 6px;
+  block-size: 8px;
+  border: 1px solid var(--c-blue);
   border-radius: var(--radius-pill);
-  background: var(--c-blue-light);
+  background: var(--c-blue-pale);
 }
 
 .slider-input::-moz-range-track {
-  block-size: 6px;
+  block-size: 8px;
+  border: 1px solid var(--c-blue);
   border-radius: var(--radius-pill);
-  background: var(--c-blue-light);
+  background: var(--c-blue-pale);
 }
 
 .slider-input::-moz-range-progress {
-  block-size: 6px;
+  block-size: 8px;
   border-radius: var(--radius-pill);
   background: var(--c-blue);
 }
@@ -490,6 +502,7 @@
 
 .state-frame {
   position: relative;
+  display: flow-root;
 }
 
 .state-message {
@@ -755,7 +768,7 @@
 
 .bars-value {
   fill: var(--c-ink);
-  font-size: 14px;
+  font-size: var(--fs-note);
   font-weight: 600;
 }
 
