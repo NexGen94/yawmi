@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { LocationProvider, Route, Router } from 'preact-iso';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as appModule from '../src/app';
 import { App } from '../src/app';
@@ -35,7 +35,12 @@ function countAsk(): { count: () => number; stop: () => void } {
   return { count: () => n, stop };
 }
 
-beforeEach(() => go('/'));
+// The home page reads the API. These tests are about the shell, so the network is simply down.
+beforeEach(() => {
+  go('/');
+  vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')));
+});
+afterEach(() => vi.unstubAllGlobals());
 
 describe('NAV (shell/nav.ts)', () => {
   it('has the four groups of design section 3 with their nine items and routes, in order', () => {
