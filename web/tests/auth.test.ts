@@ -4,6 +4,7 @@ import {
   authedFetch,
   clearAccessToken,
   logout,
+  LogoutError,
   pair,
   PairError,
   RefreshError,
@@ -527,25 +528,27 @@ describe('logout', () => {
     expect(authOf(fetchMock.mock.calls[1])).toBeNull();
   });
 
-  it('clears access token even if server returns 500', async () => {
+  it('on 500 server error, throws LogoutError and keeps access token', async () => {
     setAccessToken('tok-session');
     fetchMock.mockResolvedValueOnce(new Response('error', { status: 500 }));
 
-    await logout().catch(() => undefined);
+    const err = await logout().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LogoutError);
 
     fetchMock.mockResolvedValueOnce(json({ ok: true }));
     await authedFetch('/v1/things');
-    expect(authOf(fetchMock.mock.calls[1])).toBeNull();
+    expect(authOf(fetchMock.mock.calls[1])).toBe('Bearer tok-session');
   });
 
-  it('clears access token even on network failure', async () => {
+  it('on network failure, throws LogoutError and keeps access token', async () => {
     setAccessToken('tok-session');
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
-    await logout().catch(() => undefined);
+    const err = await logout().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LogoutError);
 
     fetchMock.mockResolvedValueOnce(json({ ok: true }));
     await authedFetch('/v1/things');
-    expect(authOf(fetchMock.mock.calls[1])).toBeNull();
+    expect(authOf(fetchMock.mock.calls[1])).toBe('Bearer tok-session');
   });
 });

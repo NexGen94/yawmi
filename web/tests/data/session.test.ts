@@ -4,10 +4,10 @@ import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearAccessToken, setAccessToken } from '../../src/api/auth';
+import { clearAccessToken, LogoutError, setAccessToken } from '../../src/api/auth';
 import { kvGet, readCache, writeCache } from '../../src/data/cache';
 import { isPaired, logout, pairDevice } from '../../src/data/session';
-import { closeDb, enqueue, pending } from '../../src/sync/outbox';
+import { closeDb, enqueue, openDb, pending, quarantined } from '../../src/sync/outbox';
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -149,5 +149,82 @@ describe('session and pairing', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1); // only the flush call
     expect(await pending()).toBe(1);
     expect(await isPaired()).toBe(true);
+  });
+
+  it('logout while offline rejects with LogoutError, keeps session and local data', async () => {
+    const { kvSet } = await import('../../src/data/cache');
+    await kvSet('device_id', 'dev-live');
+    await writeCache('test-key', { data: 123 });
+    await enqueue('habit_logged', { habit_code: 'h1', status: 'done' });
+
+    vi.stubGlobal('navigator', { onLine: false });
+
+    await expect(logout()).rejects.toThrow();
+
+    expect(await isPaired()).toBe(true);
+    expect(await kvGet('device_id')).toBe('dev-live');
+    expect(await readCache('test-key')).toBeDefined();
+    expect(await pending()).toBe(1);
+  });
+
+  it('logout on server 500 rejects with LogoutError, keeps session and local data', async () => {
+    const { kvSet } = await import('../../src/data/cache');
+    await kvSet('device_id', 'dev-live');
+    await writeCache('test-key', { data: 123 });
+
+    fetchMock.mockResolvedValueOnce(new Response('Server Error', { status: 500 }));
+
+    await expect(logout()).rejects.toThrow();
+
+    expect(await isPaired()).toBe(true);
+    expect(await kvGet('device_id')).toBe('dev-live');
+    expect(await readCache('test-key')).toBeDefined();
+  });
+
+  it('logout on success clears quarantine in addition to cache and kv', async () => {
+    const { kvSet } = await import('../../src/data/cache');
+    await kvSet('device_id', 'dev-live');
+    await writeCache('test-key', { data: 123 });
+
+    // Place an item directly into quarantine store
+    const db = await openDb();
+    await db.add('quarantine', {
+      id: '01931f3b-0001-7000-8000-000000000099',
+      type: 'habit_logged',
+      payload: {},
+      occurred_at: new Date().toISOString(),
+      tz: 'Asia/Riyadh',
+      errors: [],
+      quarantined_at: new Date().toISOString(),
+    });
+    expect(await quarantined()).toBe(1);
+
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await logout();
+
+    expect(await isPaired()).toBe(false);
+    expect(await readCache('test-key')).toBeUndefined();
+    expect(await quarantined()).toBe(0);
+  });
+
+  it.each([
+    [1, 'في الطابور تسجيل واحد لم تُرسل. الخروج يحذفها.'],
+    [2, 'في الطابور تسجيلان لم تُرسل. الخروج يحذفها.'],
+    [3, 'في الطابور 3 تسجيلات لم تُرسل. الخروج يحذفها.'],
+    [11, 'في الطابور 11 تسجيلاً لم تُرسل. الخروج يحذفها.'],
+  ])('logout prompts with correct Arabic count phrasing for %i unsent events', async (count, expectedPrompt) => {
+    for (let i = 0; i < count; i += 1) {
+      await enqueue('habit_logged', { habit_code: `h${i}`, status: 'done' });
+    }
+
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch')); // flush fails
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 })); // logout succeeds
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    await logout();
+
+    expect(confirmSpy).toHaveBeenCalledWith(expectedPrompt);
   });
 });

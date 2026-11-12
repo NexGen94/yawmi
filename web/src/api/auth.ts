@@ -100,6 +100,17 @@ export class PairError extends Error {
   }
 }
 
+/** Sign-out failed. `message` is Arabic and safe to show to the user. */
+export class LogoutError extends Error {
+  readonly status: number | undefined;
+
+  constructor(message = 'تعذّر تسجيل الخروج', status?: number) {
+    super(message);
+    this.name = 'LogoutError';
+    this.status = status;
+  }
+}
+
 const jsonHeaders = (): Headers => new Headers({ 'Content-Type': 'application/json' });
 
 async function readAccessToken(res: Response): Promise<string | null> {
@@ -246,18 +257,25 @@ export async function pair(code: string, name?: string): Promise<void> {
 
 /**
  * Revoke the device session on the server (POST /v1/auth/logout) and discard the in-memory access token.
- * Access token is always cleared, even on network error or server failure.
+ * Access token is cleared only after server confirms (2xx). Throws LogoutError on failure.
  */
 export async function logout(): Promise<void> {
+  let res: Response;
   try {
-    await fetch(LOGOUT_URL, {
+    res = await fetch(LOGOUT_URL, {
       method: 'POST',
       credentials: 'include',
       headers: jsonHeaders(),
       body: '{}',
     });
-  } finally {
-    clearAccessToken();
-    lastDeviceId = null;
+  } catch (cause) {
+    throw new LogoutError('تعذّر تسجيل الخروج');
   }
+
+  if (!res.ok) {
+    throw new LogoutError('تعذّر تسجيل الخروج', res.status);
+  }
+
+  clearAccessToken();
+  lastDeviceId = null;
 }
