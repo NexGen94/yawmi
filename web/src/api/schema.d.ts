@@ -136,6 +136,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/goal-tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * تعديل مهمة أو إنجازها أو أرشفتها
+         * @description حقل واحد على الأقل. `done` يكتب `done_at` ويحسم أمام أحداث `goal_task_set` الأقدم منه. `due_day: null` يمسح الموعد. لا حذف: الإغلاق بـ`archived`، ويخرج بها من المجاميع.
+         */
+        patch: operations["patch_task_v1_goal_tasks__task_id__patch"];
+        trace?: never;
+    };
+    "/v1/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * الأهداف كاملة: المخرجات والدورات والمحطات والبطاقات
+         * @description قراءة كاملة من مرآة Notion مع العادات والمهام والمؤشرات. مرآة فارغة (قبل نشر المزامنة) تعطي قوائم فارغة و`synced_at: null`. `completion` المخرج المحطات المنجزة ÷ كلها كما في Notion، ولا تغيّرها العادات. `target_date` و`next_step` للبطاقة من خاصيتين مسمّاتين فقط، ولا يُقرأ غيرهما من خصائصها.
+         */
+        get: operations["get_goals_v1_goals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/goals/{ref}/pace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * خط وتيرة مخرج
+         * @description الأساس `kpi` لمخرج له مؤشر تراكمي (مجموع يُبلغ بالموعد) بهدف واحد، و`kpi` يختار واحداً منها؛ والمؤشر السنوي `books_done` يُقاس على السنة الميلادية الحالية. العدّ الأسبوعي والمتوسط والمستوى لا تكون أساساً. وغير ذلك `milestones` (المنجزة من كلها، من 2026-10-31)؛ ولا محطات: `current_value` و`on_pace` و`projected_end` بـ`null`. `days_left` سالب بعد الموعد.
+         */
+        get: operations["get_pace_v1_goals__ref__pace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/goals/{ref}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * مهام هدف
+         * @description غير المؤرشفة بترتيب الموضع. `ref` رمز مخرج أو معرّف بطاقة أو محطة، وإلا 404.
+         */
+        get: operations["list_tasks_v1_goals__ref__tasks_get"];
+        put?: never;
+        /**
+         * إضافة مهمة إلى هدف
+         * @description مهمة مفتوحة بعد آخر مهام الهدف. لا تُكتب في Notion.
+         */
+        post: operations["create_task_v1_goals__ref__tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/goals/{ref}/to-habit": {
         parameters: {
             query?: never;
@@ -215,7 +299,7 @@ export interface paths {
         head?: never;
         /**
          * تعديل عادة أو أرشفتها
-         * @description تعديل جزئي: تتغير الحقول المرسلة وحدها، و`null` يفرغ الحقل الذي يقبل الفراغ. `reminders` يستبدل التذكيرات كلها. الأرشفة `active = false`، ولا حذف. العادة النظامية يُعدَّل فيها `anchor` و`reminders` فقط (409 لغيرهما إن اختلفت قيمته). التذكير الباقي بوقته وقناعه يحتفظ بصفّه، والمحذوف يُعطَّل، والجديد يُضاف.
+         * @description تعديل جزئي: تتغير الحقول المرسلة وحدها، و`null` يفرغ الحقل الذي يقبل الفراغ. `reminders` يستبدل التذكيرات كلها. الأرشفة `active = false`، ولا حذف. العادة النظامية يُعدَّل فيها `anchor` و`reminders` فقط (409 لغيرهما إن اختلفت قيمته). التذكير الباقي بوقته وقناعه يحتفظ بصفّه، والمحذوف يُعطَّل، والجديد يُضاف. و`polarity` لا يتغيّر بعد أول سجل للعادة، أياً كانت حالته: 422 بالرسالة «لا يمكن تغيير نوع العادة بعد تسجيلها».
          */
         patch: operations["patch_habit_v1_habits__code__patch"];
         trace?: never;
@@ -564,6 +648,44 @@ export interface components {
             /** Sound */
             sound: boolean;
         };
+        /** CardFull */
+        CardFull: {
+            /** Habits */
+            habits: components["schemas"]["CardHabit"][];
+            /** Habits Adherence Avg */
+            habits_adherence_avg: number | null;
+            indicator: components["schemas"]["GoalIndicatorValue"];
+            /** Milestones Done */
+            milestones_done: number;
+            /** Milestones Total */
+            milestones_total: number;
+            /**
+             * Next Step
+             * @description من خاصية «الخطوة التالية» في Notion
+             */
+            next_step: string | null;
+            /** Notion Edited At */
+            notion_edited_at: string | null;
+            /** Outcome Codes */
+            outcome_codes: string[];
+            /** Page Id */
+            page_id: string;
+            /** Pending */
+            pending: string[];
+            /** Status */
+            status: string | null;
+            /**
+             * Target Date
+             * @description من خاصية «المستهدف» في Notion إن كانت تاريخاً
+             */
+            target_date: string | null;
+            /** Tasks Done */
+            tasks_done: number;
+            /** Tasks Total */
+            tasks_total: number;
+            /** Title */
+            title: string;
+        };
         /** CardHabit */
         CardHabit: {
             /** Adherence */
@@ -618,6 +740,37 @@ export interface components {
             kind: string;
             /** Text */
             text: string;
+        };
+        /** CycleOut */
+        CycleOut: {
+            /** Cycle No */
+            cycle_no: number;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Gate */
+            gate: string;
+            /**
+             * Review End
+             * Format: date
+             */
+            review_end: string;
+            /**
+             * Review Start
+             * Format: date
+             */
+            review_start: string;
+            /** Stage No */
+            stage_no: number;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** Theme */
+            theme: string;
         };
         /**
          * DailyMetricsIn
@@ -918,7 +1071,10 @@ export interface components {
             /** Planned Minutes */
             planned_minutes: number;
         };
-        /** GoalColumnsIO */
+        /**
+         * GoalColumnsIO
+         * @description The columns each goals table shows, in order. A column appears once in a list.
+         */
         GoalColumnsIO: {
             /** Cards */
             cards?: ("page_id" | "title" | "status" | "outcome_codes" | "target_date" | "next_step" | "notion_edited_at" | "habits" | "habits_adherence_avg" | "milestones_total" | "milestones_done" | "tasks_total" | "tasks_done" | "indicator" | "pending")[];
@@ -926,6 +1082,129 @@ export interface components {
             milestones?: ("page_id" | "title" | "outcome_code" | "card_page_ids" | "cycle_no" | "due_date" | "done" | "criterion" | "evidence" | "notion_edited_at" | "overdue_days" | "pending")[];
             /** Outcomes */
             outcomes?: ("code" | "title" | "track" | "target_date" | "acceptance" | "status" | "milestones_total" | "milestones_done" | "milestones_due" | "completion" | "next_milestone" | "habits" | "indicator" | "kpis")[];
+        };
+        /**
+         * GoalIndicatorValue
+         * @description The indicator of an outcome or a card, computed (design §9.3).
+         *
+         *     `value` and `target` are the numbers the display shows («2 من 5»): done and total for
+         *     milestones and tasks (a stored target replaces the total), a percentage of 100 for linked
+         *     habits. `completion` is 0 to 1. Both are `null` when there is nothing to measure yet.
+         */
+        GoalIndicatorValue: {
+            /** Completion */
+            completion: number | null;
+            /**
+             * Custom
+             * @description مخزَّن بتخصيص من المستخدم لا افتراضي
+             * @default false
+             */
+            custom: boolean;
+            /**
+             * Display
+             * @default ring
+             * @enum {string}
+             */
+            display: "ring" | "bar" | "number" | "sparkline";
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "milestones" | "linked_habits" | "tasks";
+            /** Target */
+            target: number | null;
+            /** Value */
+            value: number | null;
+        };
+        /** GoalOutcome */
+        GoalOutcome: {
+            /** Acceptance */
+            acceptance: string;
+            /** Code */
+            code: string;
+            /**
+             * Completion
+             * @description المحطات المنجزة ÷ كلها، أو null بلا محطات
+             */
+            completion: number | null;
+            /** Habits */
+            habits: components["schemas"]["CardHabit"][];
+            indicator: components["schemas"]["GoalIndicatorValue"];
+            /** Kpis */
+            kpis: components["schemas"]["KpiOut"][];
+            /** Milestones Done */
+            milestones_done: number;
+            /**
+             * Milestones Due
+             * @description محطاتها التي حان موعدها حتى اليوم
+             */
+            milestones_due: number;
+            /** Milestones Total */
+            milestones_total: number;
+            next_milestone: components["schemas"]["MilestoneOut"] | null;
+            /** Status */
+            status: string;
+            /**
+             * Target Date
+             * Format: date
+             */
+            target_date: string;
+            /** Title */
+            title: string;
+            /** Track */
+            track: string;
+        };
+        /**
+         * GoalTaskIn
+         * @description A task of a goal: the user's own small list, not a Notion page (design §13.1, ruling 2).
+         */
+        GoalTaskIn: {
+            /** Due Day */
+            due_day?: string | null;
+            /** Title */
+            title: string;
+        };
+        /** GoalTaskList */
+        GoalTaskList: {
+            /** Items */
+            items: components["schemas"]["GoalTaskOut"][];
+        };
+        /** GoalTaskOut */
+        GoalTaskOut: {
+            /** Archived */
+            archived: boolean;
+            /** Done At */
+            done_at: string | null;
+            /** Due Day */
+            due_day: string | null;
+            /** Goal Ref */
+            goal_ref: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Position */
+            position: number;
+            /** Title */
+            title: string;
+        };
+        /**
+         * GoalTaskPatch
+         * @description The fields to change, at least one. `due_day: null` clears the due day. No deletion:
+         *     `archived` closes a task, and an archived task leaves the totals.
+         */
+        GoalTaskPatch: {
+            /** Archived */
+            archived?: boolean;
+            /** Done */
+            done?: boolean;
+            /** Due Day */
+            due_day?: string | null;
+            /** Position */
+            position?: number;
+            /** Title */
+            title?: string;
         };
         /** GoalTaskSetPayload */
         GoalTaskSetPayload: {
@@ -936,6 +1215,24 @@ export interface components {
              * Format: uuid
              */
             task_id: string;
+        };
+        /** GoalsOut */
+        GoalsOut: {
+            /** Cards */
+            cards: components["schemas"]["CardFull"][];
+            /** Cycles */
+            cycles: components["schemas"]["CycleOut"][];
+            /** Milestones */
+            milestones: components["schemas"]["MilestoneFull"][];
+            /** Outcomes */
+            outcomes: components["schemas"]["GoalOutcome"][];
+            /** Pending Edits */
+            pending_edits: number;
+            /**
+             * Synced At
+             * @description آخر مزامنة لمرآة Notion، أو null إن كانت فارغة
+             */
+            synced_at: string | null;
         };
         /**
          * HabitDraft
@@ -1497,10 +1794,69 @@ export interface components {
              */
             part: "morning" | "evening";
         };
+        /** KpiLatest */
+        KpiLatest: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Value */
+            value: number;
+        };
+        /** KpiOut */
+        KpiOut: {
+            /** Code */
+            code: string;
+            /** Direction */
+            direction: string;
+            /** Frequency */
+            frequency: string;
+            latest: components["schemas"]["KpiLatest"] | null;
+            /** Name */
+            name: string;
+            /** Target */
+            target: number | null;
+            /** Unit */
+            unit: string;
+        };
         /** Live */
         Live: {
             /** Ok */
             ok: boolean;
+        };
+        /** MilestoneFull */
+        MilestoneFull: {
+            /** Card Page Ids */
+            card_page_ids: string[];
+            /** Criterion */
+            criterion: string | null;
+            /** Cycle No */
+            cycle_no: number | null;
+            /** Done */
+            done: boolean;
+            /** Due Date */
+            due_date: string | null;
+            /** Evidence */
+            evidence: string | null;
+            /** Notion Edited At */
+            notion_edited_at: string | null;
+            /** Outcome Code */
+            outcome_code: string | null;
+            /**
+             * Overdue Days
+             * @description أيام التأخر عن الموعد لمحطة مفتوحة فات موعدها
+             */
+            overdue_days: number | null;
+            /** Page Id */
+            page_id: string;
+            /**
+             * Pending
+             * @description التعديلات المعلّقة (فارغة في هذا الإصدار)
+             */
+            pending: string[];
+            /** Title */
+            title: string;
         };
         /** MilestoneOut */
         MilestoneOut: {
@@ -1621,6 +1977,62 @@ export interface components {
             cards: components["schemas"]["CardOut"][];
             /** Outcomes */
             outcomes: components["schemas"]["OutcomeOut"][];
+        };
+        /**
+         * PaceOut
+         * @description The pace line of an outcome (design §9.4); `days_left` is negative after the due day.
+         */
+        PaceOut: {
+            /**
+             * Basis
+             * @enum {string}
+             */
+            basis: "kpi" | "milestones";
+            /** Current Value */
+            current_value: number | null;
+            /** Days Left */
+            days_left: number;
+            /**
+             * Due Day
+             * Format: date
+             */
+            due_day: string;
+            /** Expected Today */
+            expected_today: number;
+            /** Kpi Code */
+            kpi_code: string | null;
+            /** On Pace */
+            on_pace: boolean | null;
+            /** Projected End */
+            projected_end: number | null;
+            /** Readings */
+            readings: components["schemas"]["PaceReading"][];
+            /**
+             * Start Day
+             * Format: date
+             */
+            start_day: string;
+            /** Start Value */
+            start_value: number;
+            /** Target Value */
+            target_value: number;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Unit */
+            unit: string | null;
+        };
+        /** PaceReading */
+        PaceReading: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Value */
+            value: number;
         };
         /** PairRequest */
         PairRequest: {
@@ -2399,6 +2811,290 @@ export interface operations {
                 };
             };
             /** @description طلب غير صالح: الدفعة تُرفض كاملة */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    patch_task_v1_goal_tasks__task_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalTaskPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalTaskOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description المهمة غير موجودة */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    get_goals_v1_goals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalsOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    get_pace_v1_goals__ref__pace_get: {
+        parameters: {
+            query?: {
+                /** @description رمز مؤشر المخرج */
+                kpi?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description رمز المخرج */
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaceOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description لا مخرج بهذا الرمز */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    list_tasks_v1_goals__ref__tasks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description رمز مخرج أو معرّف بطاقة أو محطة */
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalTaskList"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description لا مخرج ولا بطاقة ولا محطة بهذا المعرّف */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    create_task_v1_goals__ref__tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description رمز مخرج أو معرّف بطاقة أو محطة */
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalTaskIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalTaskOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description لا مخرج ولا بطاقة ولا محطة بهذا المعرّف */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -1154,11 +1154,17 @@ async def test_lifespan_starts_and_stops_the_scheduler_only_when_push_is_enabled
     monkeypatch.setattr("yawmi.main.create_pool", fake_create_pool)
     ticks: list[datetime] = []
 
-    async def fake_tick(store, sender, now, *, tz, week_start, prefs, journal) -> int:
+    async def fake_tick(store, sender, now, *, tz, week_start, prefs, journal, goal_sources) -> int:
         ticks.append(now)
         assert (tz, week_start) == ("Asia/Riyadh", "sun")
         # the notice providers get their stores from the loop, not from the push store's pool
         assert prefs is not None and journal is not None
+        # the goal readers of the goal indicator and late summary notices come from the loop too
+        assert goal_sources is not None
+        assert all(
+            getattr(goal_sources, name) is not None
+            for name in ("goals", "today", "tasks", "indicators")
+        )
         return 0
 
     monkeypatch.setattr("yawmi.push.scheduler.tick", fake_tick)

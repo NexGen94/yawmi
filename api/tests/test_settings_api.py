@@ -392,3 +392,61 @@ async def test_text_with_a_lone_surrogate_is_a_422(
         headers=auth_header() | {"Content-Type": "application/json"},
     )
     assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.parametrize(
+    ("list_name", "columns"),
+    [
+        ("outcomes", ["code", "title", "code"]),
+        ("milestones", ["title", "title"]),
+        ("cards", ["status", "title", "next_step", "status"]),
+    ],
+)
+async def test_goal_columns_refuse_a_duplicate_name(
+    client: httpx.AsyncClient, backend: Backend, list_name: str, columns: list[str]
+) -> None:
+    resp = await client.patch(
+        "/v1/settings", json={"goal_columns": {list_name: columns}}, headers=auth_header()
+    )
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert ["body", "goal_columns", list_name] == body["errors"][0]["loc"][:3]
+    assert body["errors"][0]["type"] == "duplicate_columns"
+    # nothing was stored
+    got = (await client.get("/v1/settings", headers=auth_header())).json()
+    assert got["goal_columns"] == {
+        "outcomes": ["code", "title", "completion", "next_milestone", "target_date"],
+        "milestones": ["title", "outcome_code", "due_date", "done", "cycle_no"],
+        "cards": [
+            "title",
+            "status",
+            "outcome_codes",
+            "target_date",
+            "next_step",
+            "milestones_done",
+        ],
+    }
+
+
+async def test_goal_columns_keep_their_order_when_unique(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    columns = {"outcomes": ["completion", "code"], "milestones": [], "cards": ["title"]}
+    resp = await client.patch("/v1/settings", json={"goal_columns": columns}, headers=auth_header())
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["goal_columns"] == columns
+
+
+async def test_a_stored_duplicate_falls_back_to_the_default_columns(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    await backend.plant("goal_columns", {"outcomes": ["code", "code"]})
+    got = await client.get("/v1/settings", headers=auth_header())
+    assert got.status_code == 200
+    assert got.json()["goal_columns"]["outcomes"] == [
+        "code",
+        "title",
+        "completion",
+        "next_milestone",
+        "target_date",
+    ]
