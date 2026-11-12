@@ -117,6 +117,11 @@ def _cycles() -> list[dict[str, Any]]:
     return rows
 
 
+def _card_fields(target: str, next_step: str) -> dict[str, Any]:
+    """The two keys of the card props that `yawmi_ro.notion_card_fields` exposes."""
+    return {"المستهدف": {"start": target}, "الخطوة التالية": next_step}
+
+
 def mirror(today: date) -> Mirror:
     """12 outcomes, 21 cycles, 6 milestones (one two days late) and 3 cards for `today`."""
     goals = [
@@ -135,9 +140,9 @@ def mirror(today: date) -> Mirror:
         CardRow("e2e-card-3", "بطاقة النظام", "🔄 قيد التنفيذ", ("O3",)),
     ]
     card_props = {
-        "e2e-card-1": {"المستهدف": {"start": "2026-12-26"}, "الخطوة التالية": "قياس الأساس"},
-        "e2e-card-2": {"المستهدف": {"start": "2027-03-27"}, "الخطوة التالية": "اختبار تحديد"},
-        "e2e-card-3": {"المستهدف": {"start": "2026-12-26"}, "الخطوة التالية": "مراجعة النسخ"},
+        "e2e-card-1": _card_fields("2026-12-26", "قياس الأساس"),
+        "e2e-card-2": _card_fields("2027-03-27", "اختبار تحديد"),
+        "e2e-card-3": _card_fields("2026-12-26", "مراجعة النسخ"),
     }
 
     def milestone(

@@ -235,8 +235,17 @@ def test_local_pg_prints_the_recipe_and_exits_2_when_pgserver_is_not_cached(
     code = local_pg.main(["start"], uv_cache=tmp_path)
     assert code == 2
     err = capsys.readouterr().err
-    assert "pginstall" in err and "initdb" in err
+    assert "pginstall" in err
+    assert "initdb" in err
     assert not list(tmp_path.iterdir())  # nothing was downloaded or written
+
+
+def test_local_pg_refuses_a_port_outside_the_unprivileged_range() -> None:
+    with pytest.raises(SystemExit):
+        local_pg.checked_port(80)
+    with pytest.raises(SystemExit):
+        local_pg.checked_port(70000)
+    assert local_pg.checked_port(55432) == 55432
 
 
 def test_local_pg_finds_pginstall_in_the_uv_cache(tmp_path: Path) -> None:

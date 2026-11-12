@@ -18,6 +18,7 @@ class FakeProvider:
     """Replies with `LINES` and cites the first source of the request, if there is one."""
 
     async def complete(self, system: str, user: str, schema: dict, model: str) -> dict:
+        del system, schema, model  # the reply is fixed; only the sources of `user` matter
         return {
             "lines": list(LINES),
             "question": None,

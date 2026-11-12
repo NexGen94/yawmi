@@ -60,6 +60,14 @@ def find_pginstall(uv_cache: Path) -> Path | None:
     return None
 
 
+def checked_port(value: int) -> int:
+    """`value` as a plain `int` in the unprivileged port range, else exit: it reaches commands."""
+    port = int(value)
+    if not 1024 <= port <= 65535:
+        raise SystemExit("--port must be between 1024 and 65535")
+    return port
+
+
 def work_dir(port: int) -> Path:
     return Path(tempfile.gettempdir()) / f"yawmi-local-pg-{port}"
 
@@ -161,7 +169,8 @@ def main(argv: Sequence[str] | None = None, *, uv_cache: Path | None = None) -> 
     parser.add_argument("command", choices=("start", "stop"))
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     args = parser.parse_args(argv)
-    return start(args.port, uv_cache) if args.command == "start" else stop(args.port)
+    port = checked_port(args.port)
+    return start(port, uv_cache) if args.command == "start" else stop(port)
 
 
 if __name__ == "__main__":
