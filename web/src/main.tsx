@@ -4,6 +4,10 @@ import { registerSW } from 'virtual:pwa-register';
 import { App } from './app';
 import { UpdatePrompt } from './shell/UpdatePrompt';
 import './styles/index.css';
+import { installFlushTriggers } from './sync/triggers';
+
+// Flush the outbox when online, foregrounded or launched.
+installFlushTriggers();
 
 const root = document.getElementById('app');
 if (!root) throw new Error('#app root element is missing from index.html');

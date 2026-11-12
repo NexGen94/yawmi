@@ -18,8 +18,8 @@ import { uuidv7 } from './uuidv7';
 type Schemas = components['schemas'];
 
 const DB_NAME = 'yawmi';
-/** 1: `outbox`. 2: adds `quarantine` (existing queued events are kept by the upgrade). */
-const DB_VERSION = 2;
+/** 1: `outbox`. 2: adds `quarantine`. 3: adds `cache` and `kv`. */
+const DB_VERSION = 3;
 const STORE = 'outbox';
 const QUARANTINE = 'quarantine';
 const EVENTS_URL = '/v1/events';
@@ -138,14 +138,22 @@ export class DatabaseNeedsReload extends Error {
   }
 }
 
-interface YawmiDB extends DBSchema {
+export interface CacheEntry<T = unknown> {
+  value: T;
+  savedAt: string;
+}
+
+export interface YawmiDB extends DBSchema {
   outbox: { key: string; value: OutboxEvent };
   quarantine: { key: string; value: QuarantinedEvent };
+  cache: { key: string; value: CacheEntry };
+  kv: { key: string; value: unknown };
 }
 
 export type SendFn = (input: string, init: RequestInit) => Promise<Response>;
 
 let dbPromise: Promise<IDBPDatabase<YawmiDB>> | null = null;
+let wasBlocked = false;
 
 /** The millisecond timestamp inside a UUIDv7, or NaN if `id` does not look like one. */
 const idTime = (id: string): number => Number.parseInt(id.slice(0, 8) + id.slice(9, 13), 16);
@@ -165,18 +173,34 @@ function connect(): Promise<IDBPDatabase<YawmiDB>> {
   return new Promise<IDBPDatabase<YawmiDB>>((resolve, reject) => {
     let gaveUp = false;
     let graceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const startGraceTimer = () => {
+      graceTimer ??= setTimeout(() => {
+        gaveUp = true;
+        reject(new DatabaseNeedsReload('blocked'));
+      }, dbTimeouts.blockedGraceMs);
+    };
+
+    if (wasBlocked) {
+      startGraceTimer();
+    }
+
     openDB<YawmiDB>(DB_NAME, DB_VERSION, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) db.createObjectStore(STORE, { keyPath: 'id' });
-        if (oldVersion < 2) db.createObjectStore(QUARANTINE, { keyPath: 'id' });
+        if (oldVersion < 2) {
+          if (!db.objectStoreNames.contains(QUARANTINE)) db.createObjectStore(QUARANTINE, { keyPath: 'id' });
+        }
+        if (oldVersion < 3) {
+          if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache');
+          if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
+        }
       },
       blocked() {
         // Another tab still has the old version open. It usually closes on `versionchange` in a
         // moment; if not, stop waiting so the caller can ask for a reload.
-        graceTimer ??= setTimeout(() => {
-          gaveUp = true;
-          reject(new DatabaseNeedsReload('blocked'));
-        }, dbTimeouts.blockedGraceMs);
+        wasBlocked = true;
+        startGraceTimer();
       },
       blocking() {
         // A newer version of the app wants to upgrade: step aside.
@@ -194,6 +218,7 @@ function connect(): Promise<IDBPDatabase<YawmiDB>> {
           db.close();
           return;
         }
+        wasBlocked = false;
         try {
           await seedIdClock(db);
           resolve(db);
@@ -259,6 +284,51 @@ export async function enqueue(type: EventType, payload: EventPayload, occurredAt
 /** How many events are waiting to be sent. */
 export async function pending(): Promise<number> {
   return (await openDb()).count(STORE);
+}
+
+/** The queued events, oldest first. */
+export async function listPending(): Promise<OutboxEvent[]> {
+  return (await openDb()).getAll(STORE);
+}
+
+/**
+ * Discard an event from the outbox before it was sent.
+ * Resolves true if it was found and deleted, false if it had already been sent (or does not exist).
+ */
+export async function discard(id: string): Promise<boolean> {
+  const db = await openDb();
+  const tx = db.transaction(STORE, 'readwrite');
+  const existing = await tx.store.get(id);
+  if (existing === undefined) {
+    await tx.done;
+    return false;
+  }
+  await tx.store.delete(id);
+  await tx.done;
+  return true;
+}
+
+/** Clear all queued events from the outbox. */
+export async function clearOutbox(): Promise<void> {
+  const db = await openDb();
+  await db.clear(STORE);
+}
+
+/** Clear all quarantined events. */
+export async function clearQuarantine(): Promise<void> {
+  const db = await openDb();
+  await db.clear(QUARANTINE);
+}
+
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Schedule a flush after delayMs (default 5000ms), resetting any previously scheduled flush. */
+export function scheduleFlush(delayMs = 5000, sendFn: SendFn = authedFetch): void {
+  if (flushTimer !== null) clearTimeout(flushTimer);
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    void flush(100, sendFn).catch(() => undefined);
+  }, delayMs);
 }
 
 /** How many events the server refused and that were set aside. They are kept, never sent again automatically. */

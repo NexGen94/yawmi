@@ -10,10 +10,12 @@ import {
   BatchRejected,
   closeDb,
   DatabaseNeedsReload,
+  discard,
   enqueue,
   EVENT_TYPES,
   flushedBefore,
   flushTimeouts,
+  listPending,
   listQuarantined,
   dbTimeouts,
   type EventType,
@@ -23,6 +25,7 @@ import {
   pending,
   quarantined,
   requeue,
+  scheduleFlush,
   type SendFn,
 } from '../src/sync/outbox';
 import { uuidv7 } from '../src/sync/uuidv7';
@@ -574,8 +577,57 @@ describe('quarantine', () => {
     expect(await pending()).toBe(1);
     expect(await quarantined()).toBe(0);
     const db = await openDb();
-    expect(db.version).toBe(2);
+    expect(db.version).toBe(3);
     expect(await db.getAllKeys('outbox')).toEqual([id]);
+    expect(db.objectStoreNames.contains('quarantine')).toBe(true);
+    expect(db.objectStoreNames.contains('cache')).toBe(true);
+    expect(db.objectStoreNames.contains('kv')).toBe(true);
+  });
+
+  it('upgrades a version 2 database keeping pending and quarantined events', async () => {
+    const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('yawmi', 2);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        db.createObjectStore('outbox', { keyPath: 'id' });
+        db.createObjectStore('quarantine', { keyPath: 'id' });
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const pendingId = uuidv7(Date.now());
+    const quarantinedId = uuidv7(Date.now() + 1);
+    await new Promise<void>((resolve, reject) => {
+      const tx = legacy.transaction(['outbox', 'quarantine'], 'readwrite');
+      tx.objectStore('outbox').add({
+        id: pendingId,
+        type: 'app_opened',
+        payload: {},
+        occurred_at: new Date().toISOString(),
+        tz: 'Asia/Riyadh',
+      });
+      tx.objectStore('quarantine').add({
+        id: quarantinedId,
+        type: 'app_opened',
+        payload: {},
+        occurred_at: new Date().toISOString(),
+        tz: 'Asia/Riyadh',
+        errors: [],
+        quarantined_at: new Date().toISOString(),
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    legacy.close();
+
+    expect(await pending()).toBe(1);
+    expect(await quarantined()).toBe(1);
+    const db = await openDb();
+    expect(db.version).toBe(3);
+    expect(await db.getAllKeys('outbox')).toEqual([pendingId]);
+    expect(await db.getAllKeys('quarantine')).toEqual([quarantinedId]);
+    expect(db.objectStoreNames.contains('cache')).toBe(true);
+    expect(db.objectStoreNames.contains('kv')).toBe(true);
   });
 });
 
@@ -755,6 +807,51 @@ describe('quarantine access', () => {
   });
 });
 
+describe('listPending and discard', () => {
+  it('listPending returns queued events in order', async () => {
+    const id1 = await enqueue('app_opened', { seq: 1 });
+    const id2 = await enqueue('app_opened', { seq: 2 });
+
+    const items = await listPending();
+    expect(items.map((e) => e.id)).toEqual([id1, id2]);
+  });
+
+  it('discard returns true before sending and false after sending', async () => {
+    const id = await enqueue('app_opened', { seq: 1 });
+    expect(await pending()).toBe(1);
+
+    // Discard before sending:
+    const removed = await discard(id);
+    expect(removed).toBe(true);
+    expect(await pending()).toBe(0);
+
+    // Discard again (or after sending):
+    expect(await discard(id)).toBe(false);
+  });
+
+  it('discard returns false when event was already sent and removed by flush', async () => {
+    const id = await enqueue('app_opened', {});
+    send.mockResolvedValueOnce(ok());
+    await flush(100, send);
+    expect(await pending()).toBe(0);
+
+    expect(await discard(id)).toBe(false);
+  });
+});
+
+describe('scheduleFlush', () => {
+  it('schedules a flush after delayMs', async () => {
+    await enqueue('app_opened', {});
+    send.mockResolvedValueOnce(ok());
+
+    scheduleFlush(20, send);
+    expect(send).not.toHaveBeenCalled();
+
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('database versions', () => {
   const saved = { ...dbTimeouts };
   afterEach(() => {
@@ -773,7 +870,7 @@ describe('database versions', () => {
     });
 
   it('asks for a reload when the stored database is newer than this app', async () => {
-    (await openRaw(3)).close();
+    (await openRaw(4)).close();
 
     const error = await pending().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(DatabaseNeedsReload);
@@ -781,13 +878,18 @@ describe('database versions', () => {
     await expect(enqueue('app_opened', {})).rejects.toBeInstanceOf(DatabaseNeedsReload);
   });
 
-  it('asks for a reload when an old tab keeps the upgrade blocked past the grace period', async () => {
+  it('asks for a reload when an old tab keeps the upgrade blocked past the grace period, and next call does not hang (N-1)', async () => {
     dbTimeouts.blockedGraceMs = 40;
     const old = await openRaw(1); // an old tab that never closes on versionchange
 
-    const error = await pending().catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(DatabaseNeedsReload);
-    expect((error as DatabaseNeedsReload).reason).toBe('blocked');
+    const error1 = await pending().catch((e: unknown) => e);
+    expect(error1).toBeInstanceOf(DatabaseNeedsReload);
+    expect((error1 as DatabaseNeedsReload).reason).toBe('blocked');
+
+    // N-1: Next call while still blocked rejects within grace period without hanging
+    const error2 = await pending().catch((e: unknown) => e);
+    expect(error2).toBeInstanceOf(DatabaseNeedsReload);
+    expect((error2 as DatabaseNeedsReload).reason).toBe('blocked');
 
     // Once the old tab is gone the next call opens normally.
     old.close();
