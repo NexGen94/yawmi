@@ -3,11 +3,9 @@ import 'fake-indexeddb/auto';
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { IDBFactory } from 'fake-indexeddb';
-import { LocationProvider, Route, Router } from 'preact-iso';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../src/app';
-import type { components } from '../../src/api/schema';
 import { clearOutbox, closeDb, listPending } from '../../src/sync/outbox';
 
 // Nothing here may send the outbox by itself: a test moves events out of the queue explicitly to
@@ -20,127 +18,27 @@ vi.mock('../../src/sync/outbox', async (importOriginal) => {
 import { ActivityChips } from '../../src/pages/day/ActivityChips';
 import { ClosureCard } from '../../src/pages/day/ClosureCard';
 import { FEELINGS } from '../../src/pages/day/feelings';
-import DayPage from '../../src/pages/day/index';
 import { PLANNED_MINUTES } from '../../src/pages/day/MorningForm';
 import { defaultPart } from '../../src/pages/day/part';
-
-type TodayOut = components['schemas']['TodayOut'];
-type HabitDue = components['schemas']['HabitDue'];
-type JournalEntryOut = components['schemas']['JournalEntryOut'];
-type MoodLogOut = components['schemas']['MoodLogOut'];
-
-// 12:00 in Riyadh on 2026-11-10: the morning side of the 15:00 switch.
-const NOW = '2026-11-10T09:00:00Z';
-const DAY = '2026-11-10';
-const WEEK_AGO = '2026-11-03';
-const MONTH_AGO = '2026-10-11';
-
-const json = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-
-function habit(code: string, title: string, over: Partial<HabitDue> & { polarity?: string } = {}): HabitDue {
-  return {
-    anchor: 'free',
-    code,
-    done_today: false,
-    goal_ref: null,
-    kind: 'boolean',
-    outcome: null,
-    period: 'day',
-    period_progress: { completion: 0, done: 0, expected: 1, need_per_day: 1, on_track: true, reached: false, target: 1 },
-    status_today: null,
-    target_per_period: 1,
-    title_ar: title,
-    unit: '',
-    value_today: null,
-    ...over,
-  } as HabitDue;
-}
-
-function todayOut(over: Partial<TodayOut> = {}): TodayOut {
-  return {
-    day: DAY,
-    habits_due: [],
-    health: { data_quality: 'missing', recovery_7d: [], recovery_score: null, sleep_minutes: null, strain_score: null },
-    insight: null,
-    plan: { cycle: 2, day_in_cycle: 11, focus_outcomes: ['O4', 'O5'] },
-    ...over,
-  };
-}
-
-const entry = (day: string, part: 'morning' | 'evening', answers: Record<string, unknown>): JournalEntryOut => ({
-  day,
-  part,
-  answers,
-  logged_at: `${day}T10:00:00Z`,
-});
-
-interface Api {
-  today: () => Response | Promise<Response>;
-  journal: () => Response | Promise<Response>;
-  mood: () => Response | Promise<Response>;
-}
-
-/** Answers GET /v1/today, /v1/journal and /v1/mood from the given bodies; a handler may throw. */
-function stubApi(
-  data: { today?: TodayOut; journal?: JournalEntryOut[]; mood?: MoodLogOut[] } = {},
-  over: Partial<Api> = {},
-) {
-  const handlers: Api = {
-    today: () => json(data.today ?? todayOut()),
-    journal: () => json({ entries: data.journal ?? [] }),
-    mood: () => json({ logs: data.mood ?? [] }),
-    ...over,
-  };
-  const calls: URL[] = [];
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-    const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
-    calls.push(url);
-    if (url.pathname === '/v1/today') return handlers.today();
-    if (url.pathname === '/v1/journal') return handlers.journal();
-    if (url.pathname === '/v1/mood') return handlers.mood();
-    return json({ detail: 'not found' }, 404);
-  });
-  vi.stubGlobal('fetch', fetchMock);
-  return { fetchMock, calls };
-}
-
-const offline = (): never => {
-  throw new TypeError('Failed to fetch');
-};
-
-function RoutedDay() {
-  return (
-    <LocationProvider>
-      <Router>
-        <Route path="/day" component={DayPage} />
-        <Route path="/day/morning" component={DayPage} />
-        <Route path="/day/evening" component={DayPage} />
-      </Router>
-    </LocationProvider>
-  );
-}
-
-const go = (path: string): void => history.replaceState(null, '', path);
-
-async function openDay(path: '/day/morning' | '/day/evening') {
-  go(path);
-  const view = render(<RoutedDay />);
-  await screen.findByRole('heading', { level: 1, name: 'اليوم' });
-  return view;
-}
-
-const type = (label: string | RegExp, value: string): void => {
-  fireEvent.input(screen.getByLabelText(label), { target: { value } });
-};
-
-const click = (name: string | RegExp, role = 'button'): void => {
-  fireEvent.click(screen.getByRole(role, { name }));
-};
-
-async function pendingOf(type: string) {
-  return (await listPending()).filter((e) => e.type === type);
-}
+import {
+  DAY,
+  MONTH_AGO,
+  NOW,
+  WEEK_AGO,
+  click,
+  entry,
+  evening,
+  go,
+  json,
+  offline,
+  openDay,
+  pendingOf,
+  RoutedDay,
+  stubApi,
+  stubEvening,
+  todayOut,
+  type,
+} from './day-helpers';
 
 beforeEach(() => {
   closeDb();
@@ -262,12 +160,12 @@ describe('the morning page', () => {
         insight: {
           lines: ['سطر'],
           priorities: [
-            { source_id: 'habit:reading', title: 'قراءة ثلاثين دقيقة' },
-            { source_id: 'goal:O5', title: 'تمرين المحادثة' },
+            { source_id: 'goal:O5', title: 'قراءة ثلاثين دقيقة' },
+            { source_id: 'goal:O6', title: 'تمرين المحادثة' },
             { source_id: 'milestone:m1', title: 'تسليم المسودة' },
           ],
           question: null,
-          source_ids: ['habit:reading', 'goal:O5', 'milestone:m1'],
+          source_ids: ['goal:O5', 'goal:O6', 'milestone:m1'],
         },
       }),
     });
@@ -276,7 +174,7 @@ describe('the morning page', () => {
     expect(screen.getByText('تمرين المحادثة')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'قبول' })).toHaveLength(3);
     expect(screen.getAllByRole('button', { name: 'استبدال' })).toHaveLength(3);
-    expect(screen.getByText('habit:reading')).toBeTruthy();
+    expect(within(document.querySelector('.day-slots') as HTMLElement).getByText('O5')).toBeTruthy();
 
     // accept the first, replace the second with the person's own words, leave the third
     fireEvent.click(screen.getAllByRole('button', { name: 'قبول' })[0] as HTMLElement);
@@ -288,7 +186,7 @@ describe('the morning page', () => {
     const [event] = await pendingOf('journal_saved');
     const answers = (event?.payload as { answers: { priorities: Record<string, unknown>[] } }).answers;
     expect(answers.priorities).toHaveLength(2);
-    expect(answers.priorities[0]).toMatchObject({ title: 'قراءة ثلاثين دقيقة', source_id: 'habit:reading' });
+    expect(answers.priorities[0]).toMatchObject({ title: 'قراءة ثلاثين دقيقة', source_id: 'goal:O5' });
     expect(answers.priorities[1]).toMatchObject({ title: 'مكالمة الإرشاد', source_id: null });
   });
 
@@ -338,30 +236,6 @@ describe('the context column', () => {
     expect(within(column).getByText('O4')).toBeTruthy();
   });
 });
-
-const evening = {
-  habits: [
-    habit('h_read', 'القراءة', { done_today: true, status_today: 'done' }),
-    habit('h_walk', 'المشي', { done_today: true, status_today: 'done' }),
-    habit('h_water', 'الماء'),
-    habit('h_sugar', 'بلا سكر', { done_today: true, status_today: 'done', polarity: 'abstain' }),
-  ],
-  morning: entry(DAY, 'morning', {
-    priorities: [
-      { title: 'مراجعة الفصل', source_id: null, goal_ref: null },
-      { title: 'تمرين المشي', source_id: null, goal_ref: null },
-    ],
-    planned_minutes: 90,
-  }),
-};
-
-function stubEvening(over: { journal?: JournalEntryOut[]; mood?: MoodLogOut[] } = {}) {
-  return stubApi({
-    today: todayOut({ habits_due: evening.habits }),
-    journal: over.journal ?? [evening.morning],
-    mood: over.mood,
-  });
-}
 
 describe('the evening page', () => {
   it('the one-minute switch hides the sliders and the learned field', async () => {
@@ -630,7 +504,7 @@ describe('offline and undo', () => {
 });
 
 describe('the unsent draft', () => {
-  it('survives a reload of the page, and is cleared once the journal is saved', async () => {
+  it('survives a reload of the page, and goes once the server accepted the journal', async () => {
     stubApi();
     const first = await openDay('/day/morning');
     await screen.findByRole('button', { name: 'حفظ الصباح' });
@@ -644,7 +518,11 @@ describe('the unsent draft', () => {
 
     click('حفظ الصباح');
     await waitFor(async () => expect(await pendingOf('journal_saved')).toHaveLength(1));
-    expect(Object.keys(localStorage).filter((k) => k.includes('draft'))).toHaveLength(0);
+    // queued is not accepted: the text stays on the device until the server has it
+    expect(Object.keys(localStorage).some((k) => k.includes('draft'))).toBe(true);
+    await clearOutbox();
+    fireEvent(window, new Event('online'));
+    await waitFor(() => expect(Object.keys(localStorage).filter((k) => k.includes('draft'))).toHaveLength(0));
   });
 
   it('prunes the drafts of days older than yesterday when the page loads', async () => {
@@ -661,7 +539,7 @@ describe('the unsent draft', () => {
     ).toEqual(['yawmi.draft.day.2026-11-09.morning', `yawmi.draft.day.${DAY}.morning`]);
   });
 
-  it('removes the evening draft as soon as the evening is saved', async () => {
+  it('removes the evening draft once the evening is accepted, not when it is queued', async () => {
     stubEvening();
     await openDay('/day/evening');
     await screen.findByRole('button', { name: 'إغلاق اليوم' });
@@ -669,7 +547,10 @@ describe('the unsent draft', () => {
     expect(localStorage.getItem(`yawmi.draft.day.${DAY}.evening`)).not.toBeNull();
     click('إغلاق اليوم');
     await waitFor(async () => expect(await pendingOf('journal_saved')).toHaveLength(1));
-    expect(localStorage.getItem(`yawmi.draft.day.${DAY}.evening`)).toBeNull();
+    expect(localStorage.getItem(`yawmi.draft.day.${DAY}.evening`)).not.toBeNull();
+    await clearOutbox();
+    fireEvent(window, new Event('online'));
+    await waitFor(() => expect(localStorage.getItem(`yawmi.draft.day.${DAY}.evening`)).toBeNull());
   });
 
   it('keeps the evening draft apart from the morning one', async () => {
@@ -708,13 +589,6 @@ describe('the four states, from the real route', () => {
     fail = false;
     click('إعادة المحاولة');
     await screen.findByRole('button', { name: 'حفظ الصباح' });
-  });
-
-  it('offline without a saved copy: «لا نسخة محفوظة بعد»', async () => {
-    stubApi({}, { today: offline, journal: offline, mood: offline });
-    await openDay('/day/evening');
-    await screen.findByText('لا نسخة محفوظة بعد');
-    expect(screen.queryByRole('button', { name: 'إغلاق اليوم' })).toBeNull();
   });
 
   it('evening empty: no morning priorities says what is missing and offers the action', async () => {

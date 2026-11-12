@@ -97,6 +97,41 @@
   color: var(--c-ink-2);
 }
 
+/* A save the server refused: the one line of this page that needs attention. */
+.day-status-refused {
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-card);
+  background: var(--c-signal-bg);
+  color: var(--c-signal-ink);
+}
+
+/* Offline with nothing saved: one line above the forms that says logging still works. */
+.day-offline-note {
+  margin-block-end: var(--sp-3);
+}
+
+/* Words of a day that ended and were not saved: to save for their day, to open, or to drop. */
+.day-notice {
+  display: grid;
+  gap: var(--sp-3);
+  margin-block-end: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--radius-card);
+  background: var(--c-blue-pale);
+}
+
+.day-notice-text {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.day-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
 /* ---------- Priorities ---------- */
 
 .day-slots,

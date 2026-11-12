@@ -10,10 +10,12 @@ import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { Chips } from '../../ui/Chips';
 import { Field } from '../../ui/Field';
-import { clearDraft, readDraft, writeDraft } from './draft';
+import { clearSaved, readDraft, markSaved, writeDraft } from './draft';
 import { GratitudeFields } from './GratitudeFields';
+import { LIMITS } from './limits';
 import type { SaveRecord } from './SaveStatus';
-import type { TodayOut } from './useDayData';
+import { sourceLabel } from './sourceLabel';
+import type { DayHabit, TodayOut } from './useDayData';
 
 type MorningAnswers = components['schemas']['MorningAnswers'];
 
@@ -21,7 +23,7 @@ type MorningAnswers = components['schemas']['MorningAnswers'];
 export const PLANNED_MINUTES = [30, 60, 90, 120, 175] as const;
 
 /** At most three priorities: the design gives three fields and no way to add a fourth. */
-const SLOTS = 3;
+const SLOTS = LIMITS.priorities;
 
 /** `suggested`: the insight proposes it and nothing is decided. `accepted`: kept as proposed, with
  *  its source. `own`: the person's words (a replaced suggestion is `own` and empty). */
@@ -90,22 +92,28 @@ function isState(value: unknown): value is MorningState {
 
 export interface MorningFormProps {
   day: Day;
-  /** The saved (or queued) morning of today, if any. */
+  /** The saved (or queued) morning of this day, if any. */
   entry: JournalEntryOut | undefined;
   insight: TodayOut['insight'];
+  /** Today's habits, to name a suggestion that comes from one. */
+  habits: readonly DayHabit[];
   onSaved(record: SaveRecord): Promise<void>;
+  /** The page can save this form too (the notice about yesterday's text does). */
+  saveRef?: { current: (() => Promise<void>) | null };
 }
 
 /** The morning card: priorities (proposed ones to accept or replace), planned minutes, one line of
  *  enthusiasm, up to three gratitude lines and the free text. Saving queues one `journal_saved`. */
-export function MorningForm({ day, entry, insight, onSaved }: MorningFormProps) {
+export function MorningForm({ day, entry, insight, habits, onSaved, saveRef }: MorningFormProps) {
   const draft = readDraft<MorningState>(day, 'morning');
   const [state, setState] = useState<MorningState>(() => {
     if (isState(draft)) return draft;
     return entry ? fromEntry(entry.answers) : fromInsight(insight);
   });
+  const [busy, setBusy] = useState(false);
   // The draft mirrors the form only while it holds words that were not saved.
   const touched = useRef(isState(draft));
+  const saving = useRef(false);
   const latest = useRef(state);
   latest.current = state;
 
@@ -115,32 +123,58 @@ export function MorningForm({ day, entry, insight, onSaved }: MorningFormProps) 
 
   const update = (patch: Partial<MorningState>): void => {
     touched.current = true;
+    // Words changed after a save: they are not what the queue holds.
+    clearSaved(day, 'morning');
     setState((s) => ({ ...s, ...patch }));
   };
   const setSlot = (i: number, slot: Slot): void => update({ slots: state.slots.map((s, j) => (j === i ? slot : s)) });
 
   const save = async (): Promise<void> => {
-    const priorities = state.slots
-      .filter((s) => s.mode !== 'suggested' && s.title.trim() !== '')
-      .map((s) => ({ title: s.title.trim(), source_id: s.source_id, goal_ref: s.goal_ref }));
-    const answers: MorningAnswers = {
-      priorities,
-      planned_minutes: state.planned,
-      enthusiasm: state.enthusiasm.trim() || null,
-      gratitude: state.gratitude.map((g) => g.trim()).filter((g) => g !== ''),
-      note: state.note.trim() || null,
-    };
-    const id = await saveJournal('morning', answers, day);
-    touched.current = false;
-    clearDraft(day, 'morning');
-    await onSaved({
-      ids: [id],
-      onUndone: () => {
-        touched.current = true;
-        writeDraft(day, 'morning', latest.current);
-      },
-    });
+    if (saving.current) return; // a second click while the first is on its way
+    saving.current = true;
+    setBusy(true);
+    try {
+      const priorities = state.slots
+        .filter((s) => s.mode !== 'suggested' && s.title.trim() !== '')
+        .map((s) => ({ title: s.title.trim(), source_id: s.source_id, goal_ref: s.goal_ref }));
+      const answers: MorningAnswers = {
+        priorities,
+        planned_minutes: state.planned,
+        enthusiasm: state.enthusiasm.trim() || null,
+        gratitude: state.gratitude.map((g) => g.trim()).filter((g) => g !== ''),
+        note: state.note.trim() || null,
+      };
+      const id = await saveJournal('morning', answers, day);
+      // The draft stays until the server has accepted the events (reconcileDrafts), so a refusal
+      // or a reload loses nothing.
+      writeDraft(day, 'morning', latest.current);
+      markSaved(day, 'morning', [id]);
+      touched.current = false;
+      await onSaved({
+        ids: [id],
+        day,
+        part: 'morning',
+        onUndone: () => {
+          clearSaved(day, 'morning');
+          touched.current = true;
+          writeDraft(day, 'morning', latest.current);
+        },
+      });
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
   };
+
+  const saveNow = useRef(save);
+  saveNow.current = save;
+  useEffect(() => {
+    if (!saveRef) return;
+    saveRef.current = () => saveNow.current();
+    return () => {
+      saveRef.current = null;
+    };
+  }, [saveRef]);
 
   return (
     <Card title="يومية الصباح" class="day-form">
@@ -149,39 +183,45 @@ export function MorningForm({ day, entry, insight, onSaved }: MorningFormProps) 
           الأولويات
         </h3>
         <ol class="day-slots">
-          {state.slots.map((slot, i) => (
-            <li key={i}>
-              {slot.mode === 'own' ? (
-                <Field
-                  label={`الأولوية ${fmt.num(i + 1)}`}
-                  value={slot.title}
-                  onInput={(title) => setSlot(i, { ...slot, title })}
-                />
-              ) : (
-                <div class="day-suggestion">
-                  <div class="day-suggestion-text">
-                    <span class="day-suggestion-title" dir="auto">
-                      {slot.title}
-                    </span>
-                    <span class="day-suggestion-source">
-                      المصدر{' '}
-                      <Badge>
-                        <bdi dir="ltr">{slot.source_id}</bdi>
-                      </Badge>
-                    </span>
+          {state.slots.map((slot, i) => {
+            const source = slot.source_id === null ? null : sourceLabel(slot.source_id, habits);
+            return (
+              <li key={i}>
+                {slot.mode === 'own' ? (
+                  <Field
+                    label={`الأولوية ${fmt.num(i + 1)}`}
+                    value={slot.title}
+                    maxLength={LIMITS.title}
+                    onInput={(title) => setSlot(i, { ...slot, title })}
+                  />
+                ) : (
+                  <div class="day-suggestion">
+                    <div class="day-suggestion-text">
+                      <span class="day-suggestion-title" dir="auto">
+                        {slot.title}
+                      </span>
+                      {source && (
+                        <span class="day-suggestion-source">
+                          المصدر{' '}
+                          <Badge>
+                            {source.kind} <bdi dir="auto">{source.ref}</bdi>
+                          </Badge>
+                        </span>
+                      )}
+                    </div>
+                    <div class="day-suggestion-actions">
+                      {slot.mode === 'suggested' ? (
+                        <Button onClick={() => setSlot(i, { ...slot, mode: 'accepted' })}>قبول</Button>
+                      ) : (
+                        <Badge>مقبولة</Badge>
+                      )}
+                      <Button onClick={() => setSlot(i, emptySlot())}>استبدال</Button>
+                    </div>
                   </div>
-                  <div class="day-suggestion-actions">
-                    {slot.mode === 'suggested' ? (
-                      <Button onClick={() => setSlot(i, { ...slot, mode: 'accepted' })}>قبول</Button>
-                    ) : (
-                      <Badge>مقبولة</Badge>
-                    )}
-                    <Button onClick={() => setSlot(i, emptySlot())}>استبدال</Button>
-                  </div>
-                </div>
-              )}
-            </li>
-          ))}
+                )}
+              </li>
+            );
+          })}
         </ol>
       </section>
 
@@ -206,6 +246,7 @@ export function MorningForm({ day, entry, insight, onSaved }: MorningFormProps) 
           label="سطر الحماس"
           hint="سطر واحد عمّا يُنتظر اليوم"
           value={state.enthusiasm}
+          maxLength={LIMITS.enthusiasm}
           onInput={(enthusiasm) => update({ enthusiasm })}
         />
       </section>
@@ -220,15 +261,16 @@ export function MorningForm({ day, entry, insight, onSaved }: MorningFormProps) 
       <section class="day-section">
         <Field
           label="اليومية"
-          hint="نص حر. يبقى مسودة على هذا الجهاز حتى الحفظ"
+          hint="نص حر. يبقى مسودة على هذا الجهاز حتى يقبله الخادم"
           multiline
           value={state.note}
+          maxLength={LIMITS.note}
           onInput={(note) => update({ note })}
         />
       </section>
 
       <div class="day-actions">
-        <Button variant="primary" onClick={() => void save()}>
+        <Button variant="primary" disabled={busy} onClick={() => void save()}>
           حفظ الصباح
         </Button>
       </div>

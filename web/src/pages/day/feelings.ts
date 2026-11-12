@@ -14,6 +14,3 @@ export const FEELINGS: readonly { code: string; label: string }[] = [
   { code: 'frustrated', label: 'إحباط' },
   { code: 'lonely', label: 'وحدة' },
 ];
-
-/** `MoodLoggedPayload.feelings` allows six. */
-export const MAX_FEELINGS = 6;

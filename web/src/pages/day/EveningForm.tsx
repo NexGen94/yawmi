@@ -12,9 +12,10 @@ import { Field } from '../../ui/Field';
 import { Slider } from '../../ui/Slider';
 import { ActivityChips } from './ActivityChips';
 import { ClosureCard } from './ClosureCard';
-import { clearDraft, readDraft, writeDraft } from './draft';
+import { clearSaved, markSaved, readDraft, writeDraft } from './draft';
 import { FeelingChips } from './FeelingChips';
 import { GratitudeFields } from './GratitudeFields';
+import { LIMITS } from './limits';
 import { MoodScale } from './MoodScale';
 import { OnThisDay } from './OnThisDay';
 import type { SaveRecord } from './SaveStatus';
@@ -50,7 +51,6 @@ const STATES: readonly string[] = ['done', 'open', 'moved'];
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const score = (v: unknown): number | null => (typeof v === 'number' ? v : null);
-const cap = (value: string, max: number): string => value.slice(0, max);
 
 function prioritiesOf(answers: JournalEntryOut['answers'] | undefined): EveningPriority[] {
   const list = Array.isArray(answers?.priorities) ? (answers.priorities as Record<string, unknown>[]) : [];
@@ -76,8 +76,7 @@ function mergePriorities(
   return base.map((p) => ({ title: p.title, state: earlier.get(p.title) ?? 'open' }));
 }
 
-const byCode = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-const sorted = (a: readonly string[]): string[] => [...a].sort(byCode);
+const sorted = (a: readonly string[]): string[] => [...a].sort((x, y) => x.localeCompare(y));
 const signature = (score: number | null, feelings: readonly string[], activities: readonly string[]): string =>
   JSON.stringify([score, sorted(feelings), sorted(activities)]);
 
@@ -124,15 +123,19 @@ export interface Closure {
 export interface EveningFormProps {
   day: Day;
   morning: JournalEntryOut | undefined;
-  /** The saved (or queued) evening of today, if any. */
+  /** The saved (or queued) evening of this day, if any. */
   evening: JournalEntryOut | undefined;
   /** The journal of the last 30 days, for «في مثل هذا اليوم». */
   entries: readonly JournalEntryOut[];
   mood: MoodLogOut | undefined;
   habits: readonly DayHabit[];
+  /** The list of habits is known (from the server or a saved copy). */
+  habitsKnown: boolean;
   doneCodes: readonly string[];
   closure: Closure;
   onSaved(record: SaveRecord): Promise<void>;
+  /** The page can close this form too (the notice about yesterday's text does). */
+  saveRef?: { current: (() => Promise<void>) | null };
 }
 
 function Score(props: { label: string; value: number | null; onChange(v: number): void }) {
@@ -156,7 +159,7 @@ function Score(props: { label: string; value: number | null; onChange(v: number)
  *  what was learned, gratitude and the free text. «دقيقة واحدة» keeps only the quick part. Closing
  *  queues one `journal_saved` (and the mood too if it was chosen and not logged yet). */
 export function EveningForm(props: EveningFormProps) {
-  const { day, morning, evening, entries, mood, habits, doneCodes, closure, onSaved } = props;
+  const { day, morning, evening, entries, mood, habits, habitsKnown, doneCodes, closure, onSaved, saveRef } = props;
   const draft = readDraft<EveningState>(day, 'evening');
   const [state, setState] = useState<EveningState>(() => {
     const restored = isState(draft) ? draft : undefined;
@@ -164,7 +167,9 @@ export function EveningForm(props: EveningFormProps) {
     return restored ? { ...restored, priorities: base.priorities } : base;
   });
   const [logged, setLogged] = useState<string | null>(() => (mood ? signature(mood.score, mood.feelings, mood.activities) : null));
+  const [busy, setBusy] = useState(false);
   const touched = useRef(isState(draft));
+  const saving = useRef(false);
   const latest = useRef(state);
   latest.current = state;
   const outcomeId = useId();
@@ -176,12 +181,14 @@ export function EveningForm(props: EveningFormProps) {
 
   const update = (patch: Partial<EveningState>): void => {
     touched.current = true;
+    // Words changed after a save: they are not what the queue holds.
+    clearSaved(day, 'evening');
     setState((s) => ({ ...s, ...patch }));
   };
   const setPriority = (i: number, next: PriorityState): void =>
     update({ priorities: state.priorities.map((p, j) => (j === i ? { ...p, state: next } : p)) });
 
-  const activities = state.activities ?? [...doneCodes];
+  const activities = (state.activities ?? [...doneCodes]).slice(0, LIMITS.activities);
   const moodSignature = state.score === null ? null : signature(state.score, state.feelings, activities);
   const moodDirty = moodSignature !== null && moodSignature !== logged;
 
@@ -193,42 +200,83 @@ export function EveningForm(props: EveningFormProps) {
     return id;
   };
 
-  const saveMood = async (): Promise<void> => {
-    const before = logged;
-    const id = await queueMood();
-    if (id !== null) await onSaved({ ids: [id], onUndone: () => setLogged(before) });
+  /** Runs one save at a time: a second click while the first is on its way does nothing. */
+  const once = async (work: () => Promise<void>): Promise<void> => {
+    if (saving.current) return;
+    saving.current = true;
+    setBusy(true);
+    try {
+      await work();
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
   };
 
-  const close = async (): Promise<void> => {
-    const before = logged;
-    const one = state.oneMinute;
-    const answers: EveningAnswers = {
-      one_minute: one,
-      priorities: state.priorities,
-      calm: one ? null : state.calm,
-      distraction: one ? null : state.distraction,
-      presence: one ? null : state.presence,
-      win: state.win.trim() || null,
-      win_outcome: (state.winOutcome || null) as EveningAnswers['win_outcome'],
-      learned: one ? null : state.learned.trim() || null,
-      gratitude: state.gratitude.map((g) => g.trim()).filter((g) => g !== ''),
-      note: state.note.trim() || null,
-    };
-    const ids: string[] = [];
-    const moodId = await queueMood();
-    if (moodId !== null) ids.push(moodId);
-    ids.push(await saveJournal('evening', answers, day));
-    touched.current = false;
-    clearDraft(day, 'evening');
-    await onSaved({
-      ids,
-      onUndone: () => {
-        setLogged(before);
-        touched.current = true;
-        writeDraft(day, 'evening', latest.current);
-      },
+  const saveMood = (): Promise<void> =>
+    once(async () => {
+      const before = logged;
+      const id = await queueMood();
+      if (id === null) return;
+      await onSaved({
+        ids: [id],
+        day,
+        part: 'evening',
+        onUndone: () => setLogged(before),
+        onRefused: () => setLogged(before),
+      });
     });
-  };
+
+  const close = (): Promise<void> =>
+    once(async () => {
+      const before = logged;
+      const one = state.oneMinute;
+      const answers: EveningAnswers = {
+        one_minute: one,
+        priorities: state.priorities,
+        calm: one ? null : state.calm,
+        distraction: one ? null : state.distraction,
+        presence: one ? null : state.presence,
+        win: state.win.trim() || null,
+        win_outcome: (state.winOutcome || null) as EveningAnswers['win_outcome'],
+        learned: one ? null : state.learned.trim() || null,
+        gratitude: state.gratitude.map((g) => g.trim()).filter((g) => g !== ''),
+        note: state.note.trim() || null,
+      };
+      const ids: string[] = [];
+      const moodId = await queueMood();
+      if (moodId !== null) ids.push(moodId);
+      const journalId = await saveJournal('evening', answers, day);
+      ids.push(journalId);
+      // The draft stays until the server has accepted the events (reconcileDrafts).
+      writeDraft(day, 'evening', latest.current);
+      markSaved(day, 'evening', [journalId]);
+      touched.current = false;
+      await onSaved({
+        ids,
+        day,
+        part: 'evening',
+        onUndone: () => {
+          setLogged(before);
+          clearSaved(day, 'evening');
+          touched.current = true;
+          writeDraft(day, 'evening', latest.current);
+        },
+        onRefused: (refused) => {
+          if (moodId !== null && refused.has(moodId)) setLogged(before);
+        },
+      });
+    });
+
+  const closeNow = useRef(close);
+  closeNow.current = close;
+  useEffect(() => {
+    if (!saveRef) return;
+    saveRef.current = () => closeNow.current();
+    return () => {
+      saveRef.current = null;
+    };
+  }, [saveRef]);
 
   return (
     <Card title="يومية المساء" class="day-form">
@@ -258,7 +306,7 @@ export function EveningForm(props: EveningFormProps) {
               دقيقة واحدة
             </span>
             <span id={`${switchId}-hint`} class="day-switch-hint">
-              المزاج والأولويات والإنجاز فقط
+              يُخفي منزلقات الحالة وحقل «تعلّمت»
             </span>
           </span>
         </button>
@@ -275,10 +323,15 @@ export function EveningForm(props: EveningFormProps) {
         </div>
         <div class="day-group">
           <p class="day-sub">الأنشطة</p>
-          <ActivityChips habits={habits} selected={activities} onChange={(next) => update({ activities: next })} />
+          <ActivityChips
+            habits={habits}
+            selected={activities}
+            unavailable={!habitsKnown}
+            onChange={(next) => update({ activities: next })}
+          />
         </div>
         <div class="day-actions">
-          <Button disabled={!moodDirty} onClick={() => void saveMood()}>
+          <Button disabled={!moodDirty || busy} onClick={() => void saveMood()}>
             تسجيل المزاج
           </Button>
         </div>
@@ -306,7 +359,10 @@ export function EveningForm(props: EveningFormProps) {
                   checked={p.state === 'done'}
                   onToggle={(checked) => setPriority(i, checked ? 'done' : 'open')}
                 />
-                <Button aria-pressed={p.state === 'moved' ? 'true' : 'false'} onClick={() => setPriority(i, p.state === 'moved' ? 'open' : 'moved')}>
+                <Button
+                  aria-pressed={p.state === 'moved' ? 'true' : 'false'}
+                  onClick={() => setPriority(i, p.state === 'moved' ? 'open' : 'moved')}
+                >
                   نقل للغد
                 </Button>
               </li>
@@ -332,7 +388,7 @@ export function EveningForm(props: EveningFormProps) {
         <h3 id="e-win" class="day-h">
           الإنجاز
         </h3>
-        <Field label="إنجاز اليوم" value={state.win} onInput={(win) => update({ win: cap(win, 300) })} />
+        <Field label="إنجاز اليوم" value={state.win} maxLength={LIMITS.win} onInput={(win) => update({ win })} />
         <div class="field">
           <label class="field-label" for={outcomeId}>
             المخرج
@@ -355,7 +411,13 @@ export function EveningForm(props: EveningFormProps) {
 
       {!state.oneMinute && (
         <section class="day-section">
-          <Field label="تعلّمت" value={state.learned} onInput={(learned) => update({ learned: cap(learned, 300) })} multiline />
+          <Field
+            label="تعلّمت"
+            value={state.learned}
+            maxLength={LIMITS.learned}
+            onInput={(learned) => update({ learned })}
+            multiline
+          />
         </section>
       )}
 
@@ -363,7 +425,7 @@ export function EveningForm(props: EveningFormProps) {
         <h3 id="e-gratitude" class="day-h">
           الامتنان
         </h3>
-        <GratitudeFields values={state.gratitude} onChange={(gratitude) => update({ gratitude: gratitude.map((g) => cap(g, 200)) })} />
+        <GratitudeFields values={state.gratitude} onChange={(gratitude) => update({ gratitude })} />
       </section>
 
       <OnThisDay day={day} entries={entries} />
@@ -371,15 +433,16 @@ export function EveningForm(props: EveningFormProps) {
       <section class="day-section">
         <Field
           label="اليومية"
-          hint="نص حر. يبقى مسودة على هذا الجهاز حتى الإغلاق"
+          hint="نص حر. يبقى مسودة على هذا الجهاز حتى يقبله الخادم"
           multiline
           value={state.note}
-          onInput={(note) => update({ note: cap(note, 2000) })}
+          maxLength={LIMITS.note}
+          onInput={(note) => update({ note })}
         />
       </section>
 
       <div class="day-actions">
-        <Button variant="primary" onClick={() => void close()}>
+        <Button variant="primary" disabled={busy} onClick={() => void close()}>
           إغلاق اليوم
         </Button>
       </div>

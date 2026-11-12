@@ -13,7 +13,8 @@ import {
 import { type QueryResult, type QueryState, useQuery } from '../../data/query';
 import type { Day } from '../../domain/types';
 import { onDayChange, todayRiyadh } from '../../lib/today';
-import { listPending, type OutboxEvent } from '../../sync/outbox';
+import { listPending, listQuarantined, type OutboxEvent, type QuarantinedEvent } from '../../sync/outbox';
+import { nextQueueEpoch } from './draft';
 import { addDays } from './part';
 
 export type TodayOut = components['schemas']['TodayOut'];
@@ -34,9 +35,13 @@ export interface DayData {
   state: QueryState;
   /** The page shows a saved copy: there is no connection and a copy exists. */
   stale: boolean;
+  /** Today's list of habits is known: from the server, or from the last saved copy. When it is not
+   *  (offline, nothing ever saved) the activities say they wait for the connection. */
+  habitsKnown: boolean;
   /** No connection: the queries fell back to their copies, or the browser says so. */
   offline: boolean;
   reload(): void;
+  /** Today's answer of the server. Not the copy of another day: that only lends its habits. */
   today: TodayOut | undefined;
   /** The journal of the last 30 days and today, with the unsent saves laid over it. */
   entries: JournalEntryOut[];
@@ -48,6 +53,11 @@ export interface DayData {
   doneCodes: string[];
   /** The queue, oldest first (the page's own saves are in it until they are sent). */
   pending: OutboxEvent[];
+  /** Events the server refused, kept apart with their reasons. */
+  quarantine: QuarantinedEvent[];
+  /** The number of the queue reading that `pending` and `quarantine` come from (0: none yet). Only
+   *  a reading that began after a save can say that the save was sent. */
+  queueEpoch: number;
   refreshPending(): Promise<void>;
 }
 
@@ -90,14 +100,25 @@ export function useDayData(): DayData {
   const [day, setDay] = useState<Day>(() => todayRiyadh());
   useEffect(() => onDayChange(setDay), []);
 
-  const today = useQuery<TodayOut>(`day/today/${day}`, fetchToday);
-  const journal = useQuery<JournalEntryOut[]>(`day/journal/${day}`, () => fetchJournal(addDays(day, -LOOK_BACK_DAYS), day));
-  const mood = useQuery<MoodLogOut[]>(`day/mood/${day}`, () => fetchMood(day));
+  // One saved copy per query, not one per day: on a new day without a connection the last copy
+  // still lends the list of habits, and what belongs to another day is not shown as today's.
+  const today = useQuery<TodayOut>('day/today', fetchToday);
+  const journal = useQuery<JournalEntryOut[]>('day/journal', () => fetchJournal(addDays(day, -LOOK_BACK_DAYS), day));
+  const mood = useQuery<MoodLogOut[]>('day/mood', () => fetchMood(day));
 
   const [pending, setPending] = useState<OutboxEvent[]>([]);
+  const [quarantine, setQuarantine] = useState<QuarantinedEvent[]>([]);
+  const [queueEpoch, setQueueEpoch] = useState(0);
+  const applied = useRef(0);
   const refreshPending = useCallback(async (): Promise<void> => {
+    const epoch = nextQueueEpoch();
     try {
-      setPending(await listPending());
+      const [waiting, refused] = await Promise.all([listPending(), listQuarantined()]);
+      if (epoch < applied.current) return; // a later reading already answered
+      applied.current = epoch;
+      setPending(waiting);
+      setQuarantine(refused);
+      setQueueEpoch(epoch);
     } catch {
       // the queue cannot be read: keep what is shown
     }
@@ -112,6 +133,14 @@ export function useDayData(): DayData {
     reloadJournal();
     reloadMood();
   }, [reloadToday, reloadJournal, reloadMood]);
+
+  // The day turned over while the page was open: read all three again for the new day.
+  const shownDay = useRef(day);
+  useEffect(() => {
+    if (shownDay.current === day) return;
+    shownDay.current = day;
+    reloadAll();
+  }, [day, reloadAll]);
 
   useEffect(() => {
     void refreshPending();
@@ -140,6 +169,12 @@ export function useDayData(): DayData {
   }, [pending.length, reloadAll]);
 
   const todayData = today.data?.day === day ? today.data : undefined;
+  // Offline, a copy of an earlier day still names the habits; whether they were done is that day's.
+  const copyHabits =
+    todayData === undefined && today.data !== undefined && today.state === 'offline'
+      ? today.data.habits_due.map((h) => ({ ...h, done_today: false, status_today: null, value_today: null }))
+      : undefined;
+  const habitsDue = todayData?.habits_due ?? copyHabits;
   const state = combineStates(
     [
       { state: today.state, data: todayData },
@@ -149,8 +184,8 @@ export function useDayData(): DayData {
   );
 
   const habits = useMemo(
-    () => (todayData?.habits_due ?? []).filter((h) => (h as { polarity?: string }).polarity !== 'abstain'),
-    [todayData],
+    () => (habitsDue ?? []).filter((h) => (h as { polarity?: string }).polarity !== 'abstain'),
+    [habitsDue],
   );
 
   const entries = useMemo(() => applyPendingJournal(journal.data ?? [], pending), [journal.data, pending]);
@@ -172,6 +207,7 @@ export function useDayData(): DayData {
     day,
     state,
     stale: today.stale,
+    habitsKnown: habitsDue !== undefined,
     offline: state === 'offline' || (typeof navigator !== 'undefined' && navigator.onLine === false),
     reload: reloadAll,
     today: todayData,
@@ -180,6 +216,8 @@ export function useDayData(): DayData {
     habits: habits.map((h) => ({ code: h.code, title: h.title_ar })),
     doneCodes,
     pending,
+    quarantine,
+    queueEpoch,
     refreshPending,
   };
 }
