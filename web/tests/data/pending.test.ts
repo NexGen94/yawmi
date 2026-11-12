@@ -118,6 +118,25 @@ describe('applyPendingLogs', () => {
     expect(todayLog?.value).toBe(1);
     expect(yesterdayLog?.status).toBe('skip');
   });
+
+  it('pending habit log without explicit day belongs to Riyadh day of occurred_at (23:50 viewed after midnight)', () => {
+    // 23:50 Riyadh time on 2026-11-10 is 20:50:00 UTC on 2026-11-10
+    const events: OutboxEvent[] = [
+      {
+        id: '01931f3b-0001-7000-8000-000000000001',
+        type: 'habit_logged',
+        payload: { habit_code: 'walk', status: 'done', value: 1 }, // no day specified
+        occurred_at: '2026-11-10T20:50:00Z',
+        tz: 'Asia/Riyadh',
+      },
+    ];
+
+    // Viewed after midnight Riyadh time, so today parameter is 2026-11-11
+    const result = applyPendingLogs([], events, '2026-11-11');
+    expect(result).toHaveLength(1);
+    expect(result[0]?.day).toBe('2026-11-10');
+    expect(result[0]?.habit_code).toBe('walk');
+  });
 });
 
 describe('toDomainLogs', () => {
@@ -136,6 +155,18 @@ describe('toDomainLogs', () => {
       { day: '2026-11-12', value: null, status: 'skip' },
     ]);
     expect(typeof domainLogs[0]?.value).toBe('number');
+  });
+
+  it('drops unknown status such as "weird"', () => {
+    const logs: HabitLogOut[] = [
+      { habit_code: 'read', day: '2026-11-10', value: 20, status: 'done' },
+      { habit_code: 'read', day: '2026-11-11', value: 25, status: 'weird' as unknown as HabitLogOut['status'] },
+    ];
+
+    const domainLogs = toDomainLogs(logs, 'read');
+    expect(domainLogs).toEqual([
+      { day: '2026-11-10', value: 20, status: 'done' },
+    ]);
   });
 });
 

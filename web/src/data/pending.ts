@@ -15,13 +15,15 @@ export function nextDayValue(valueToday: number | null, delta: number): number {
   return (valueToday ?? 0) + delta;
 }
 
+const VALID_LOG_STATUSES: Set<string> = new Set(['done', 'skip', 'vacation', 'missed']);
+
 /**
  * Converts server HabitLogOut records to the domain HabitLog shape used by the habit rules.
- * Restricts to the given habit code and ensures `value` is a number or null.
+ * Restricts to the given habit code, filters out unknown statuses, and ensures `value` is a number or null.
  */
 export function toDomainLogs(logs: HabitLogOut[], code: string): HabitLog[] {
   return logs
-    .filter((log) => log.habit_code === code)
+    .filter((log) => log.habit_code === code && VALID_LOG_STATUSES.has(log.status))
     .map((log) => ({
       day: log.day,
       value: log.value !== null && log.value !== undefined ? Number(log.value) : null,
@@ -43,6 +45,7 @@ export function applyPendingLogs(
   }
 
   for (const event of events) {
+    const eventDay = event.occurred_at ? todayRiyadh(new Date(event.occurred_at)) : today;
     if (event.type === 'habit_logged') {
       const payload = event.payload as {
         habit_code?: string;
@@ -51,7 +54,7 @@ export function applyPendingLogs(
         day?: string | null;
       };
       if (!payload.habit_code) continue;
-      const day = payload.day ?? today;
+      const day = payload.day ?? eventDay;
       const status = payload.status ?? 'done';
       const value =
         status === 'done' && payload.value !== undefined && payload.value !== null
@@ -66,7 +69,7 @@ export function applyPendingLogs(
     } else if (event.type === 'habit_skipped') {
       const payload = event.payload as { habit_code?: string; day?: string | null };
       if (!payload.habit_code) continue;
-      const day = payload.day ?? today;
+      const day = payload.day ?? eventDay;
       map.set(`${payload.habit_code}:${day}`, {
         habit_code: payload.habit_code,
         day,
@@ -76,7 +79,7 @@ export function applyPendingLogs(
     } else if (event.type === 'habit_vacation') {
       const payload = event.payload as { habit_code?: string; day?: string | null };
       if (!payload.habit_code) continue;
-      const day = payload.day ?? today;
+      const day = payload.day ?? eventDay;
       map.set(`${payload.habit_code}:${day}`, {
         habit_code: payload.habit_code,
         day,
