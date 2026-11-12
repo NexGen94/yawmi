@@ -1,8 +1,38 @@
-import { lazy, LocationProvider, Route, Router } from 'preact-iso';
+import type { AnyComponent } from 'preact';
+import { lazy as isoLazy, LocationProvider, Route, Router } from 'preact-iso';
 
 import HomePage from './pages/home';
-import { AppShell, focusPageHeading } from './shell/AppShell';
+import { AppShell, focusPageHeading, syncPageTitle } from './shell/AppShell';
 import { NotFound } from './shell/NotFound';
+
+function LoadFailed(props: { onRetry?: () => void }) {
+  return (
+    <div class="load-failed">
+      <h1>تعذّر التحميل</h1>
+      <button
+        type="button"
+        class="retry-button"
+        onClick={() => (props.onRetry ? props.onRetry() : window.location.reload())}
+      >
+        إعادة المحاولة
+      </button>
+    </div>
+  );
+}
+
+/** Wraps preact-iso's lazy() so a failed chunk load shows an Arabic error state with a reload retry. */
+export function lazyPage<P = Record<string, unknown>>(
+  load: () => Promise<{ default: AnyComponent<P> } | AnyComponent<P>>,
+  onRetry?: () => void,
+) {
+  return isoLazy(() =>
+    load().catch(() => ({
+      default: (() => <LoadFailed onRetry={onRetry} />) as unknown as AnyComponent<P>,
+    })),
+  );
+}
+
+const lazy = lazyPage;
 
 // Every route of design section 3, registered once. The shell and the home page are in the first
 // bundle; every other page is lazy() (scripts/check-budget.mjs fails if index.html loads one).
@@ -24,7 +54,7 @@ export function App() {
   return (
     <LocationProvider>
       <AppShell>
-        <Router onRouteChange={focusPageHeading}>
+        <Router onLoadEnd={syncPageTitle} onRouteChange={focusPageHeading}>
           <Route path="/" component={HomePage} />
           <Route path="/day" component={DayPage} />
           <Route path="/day/morning" component={DayPage} />
