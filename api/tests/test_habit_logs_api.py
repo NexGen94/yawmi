@@ -1,10 +1,8 @@
 """`GET /v1/habit-logs` tests on both backends (memory and Postgres)."""
 
-import os
 from collections.abc import AsyncIterator
 from datetime import date, timedelta
 from decimal import Decimal
-from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
@@ -12,22 +10,15 @@ import asyncpg
 import httpx
 import pytest
 from fastapi import FastAPI
-from httpx import ASGITransport
-from pydantic import SecretStr
+from test_journal import auth, client, open_pg_pool  # type: ignore[import-not-found]
 
-from yawmi.auth.memory_store import InMemoryDeviceStore
-from yawmi.auth.tokens import issue_access
-from yawmi.db.pool import create_pool, set_pool
-from yawmi.main import create_app
-from yawmi.settings import Settings
+from yawmi.db.pool import set_pool
 from yawmi.today.memory import InMemoryTodayReader
 from yawmi.today.reader import HabitRow, LogRow
 
-SECRET = "test-secret-for-unit-tests-only-0123456789"
+__all__ = ["client"]
+
 PREFIX = "t3hl-"
-IN_CI = bool(os.environ.get("CI"))
-MIGRATIONS = Path(__file__).resolve().parents[1] / "db" / "migrations"
-STUB_SQL = Path(__file__).parent / "fixtures" / "raqib_stub.sql"
 
 
 class Backend(Protocol):
@@ -127,27 +118,12 @@ class PostgresBackend:
         await self.pool.execute("DELETE FROM yawmi.habits WHERE code LIKE $1", PREFIX + "%")
 
 
-async def ensure_schema(pool: asyncpg.Pool) -> None:
-    await pool.execute(STUB_SQL.read_text(encoding="utf-8"))
-    if not await pool.fetchval("SELECT to_regclass('yawmi.habits') IS NOT NULL"):
-        await pool.execute((MIGRATIONS / "0001_yawmi_schema.sql").read_text(encoding="utf-8"))
-    if not await pool.fetchval("SELECT to_regclass('yawmi.journal_entries') IS NOT NULL"):
-        await pool.execute((MIGRATIONS / "0002_yawmi_role.sql").read_text(encoding="utf-8"))
-        await pool.execute((MIGRATIONS / "0003_yawmi_web.sql").read_text(encoding="utf-8"))
-
-
 @pytest.fixture(params=["memory", "postgres"])
 async def backend(request: pytest.FixtureRequest) -> AsyncIterator[Backend]:
     if request.param == "memory":
         yield MemoryBackend()
         return
-    url = os.environ.get("TEST_DATABASE_URL")
-    if not url:
-        if IN_CI:
-            pytest.fail("CI is set but TEST_DATABASE_URL is not: the database tests must run")
-        pytest.skip("TEST_DATABASE_URL is not set (the Postgres tests run in CI)")
-    pool = await create_pool(url)
-    await ensure_schema(pool)
+    pool = await open_pg_pool()
     pg = PostgresBackend(pool)
     await pg.cleanup()
     set_pool(pool)
@@ -157,29 +133,6 @@ async def backend(request: pytest.FixtureRequest) -> AsyncIterator[Backend]:
         set_pool(None)
         await pg.cleanup()
         await pool.close()
-
-
-@pytest.fixture
-def app(backend: Backend) -> FastAPI:
-    application = create_app(
-        settings=Settings(
-            database_url="postgresql://yawmi_api@localhost:5432/raqib",
-            jwt_secret=SecretStr(SECRET),
-        ),
-        devices=InMemoryDeviceStore(),
-    )
-    backend.install(application)
-    return application
-
-
-@pytest.fixture
-async def client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
-    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
-
-
-def auth(kind: str = "web") -> dict[str, str]:
-    return {"Authorization": f"Bearer {issue_access(uuid4(), kind, SECRET, 900)}"}
 
 
 async def test_range_of_400_days_is_accepted_and_401_is_rejected_with_range_too_large(

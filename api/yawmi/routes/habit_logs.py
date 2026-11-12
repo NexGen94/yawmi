@@ -10,16 +10,11 @@ from pydantic import BaseModel
 from yawmi.auth.deps import require_kind
 from yawmi.db.pool import get_pool
 from yawmi.errors import FORBIDDEN, INVALID, UNAUTHORIZED
-from yawmi.events.project import EARLIEST, LATEST
+from yawmi.journal import check_date_range
 from yawmi.text import is_storable
 from yawmi.today.reader import AsyncpgTodayReader, TodayReader
 
 READER_KINDS = ("iphone", "watch", "web")
-MAX_RANGE_DAYS = 400
-
-_DAY_OUT_OF_RANGE = "اليوم خارج النطاق المعقول"
-_INVALID_RANGE = "نهاية المدى تسبق بدايته"
-_RANGE_TOO_LARGE = "المدى يتجاوز 400 يوم"
 _INVALID_CODE = "رمز العادة غير صالح"
 
 router = APIRouter(
@@ -47,23 +42,6 @@ def get_today_reader(request: Request) -> TodayReader:
 
 
 TodayReaderDep = Annotated[TodayReader, Depends(get_today_reader)]
-
-
-def check_date_range(first: date, last: date) -> tuple[date, date]:
-    for name, value in (("from", first), ("to", last)):
-        if not EARLIEST.date() <= value < LATEST.date():
-            raise RequestValidationError(
-                [{"loc": ("query", name), "type": "day_out_of_range", "msg": _DAY_OUT_OF_RANGE}]
-            )
-    if last < first:
-        raise RequestValidationError(
-            [{"loc": ("query", "to"), "type": "invalid_range", "msg": _INVALID_RANGE}]
-        )
-    if (last - first).days > MAX_RANGE_DAYS:
-        raise RequestValidationError(
-            [{"loc": ("query", "to"), "type": "range_too_large", "msg": _RANGE_TOO_LARGE}]
-        )
-    return first, last
 
 
 @router.get(

@@ -1,38 +1,22 @@
 """`POST /v1/auth/logout` tests on both backends (memory and Postgres)."""
 
-import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from uuid import uuid4
 
-import asyncpg
 import httpx
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport
 from pydantic import SecretStr
+from test_journal import SECRET, open_pg_pool  # type: ignore[import-not-found]
 
 from yawmi.auth.deps import DeviceStore
 from yawmi.auth.memory_store import InMemoryDeviceStore
 from yawmi.auth.pg_store import AsyncpgDeviceStore
-from yawmi.db.pool import create_pool, set_pool
+from yawmi.db.pool import set_pool
 from yawmi.main import create_app
 from yawmi.settings import Settings
-
-SECRET = "test-secret-for-unit-tests-only-0123456789"
-IN_CI = bool(os.environ.get("CI"))
-MIGRATIONS = Path(__file__).resolve().parents[1] / "db" / "migrations"
-STUB_SQL = Path(__file__).parent / "fixtures" / "raqib_stub.sql"
-
-
-async def ensure_schema(pool: asyncpg.Pool) -> None:
-    await pool.execute(STUB_SQL.read_text(encoding="utf-8"))
-    if not await pool.fetchval("SELECT to_regclass('yawmi.devices') IS NOT NULL"):
-        await pool.execute((MIGRATIONS / "0001_yawmi_schema.sql").read_text(encoding="utf-8"))
-    if not await pool.fetchval("SELECT to_regclass('yawmi.journal_entries') IS NOT NULL"):
-        await pool.execute((MIGRATIONS / "0002_yawmi_role.sql").read_text(encoding="utf-8"))
-        await pool.execute((MIGRATIONS / "0003_yawmi_web.sql").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(params=["memory", "postgres"])
@@ -40,13 +24,7 @@ async def store(request: pytest.FixtureRequest) -> AsyncIterator[DeviceStore]:
     if request.param == "memory":
         yield InMemoryDeviceStore()
         return
-    url = os.environ.get("TEST_DATABASE_URL")
-    if not url:
-        if IN_CI:
-            pytest.fail("CI is set but TEST_DATABASE_URL is not: the database tests must run")
-        pytest.skip("TEST_DATABASE_URL is not set (the Postgres tests run in CI)")
-    pool = await create_pool(url)
-    await ensure_schema(pool)
+    pool = await open_pg_pool()
     set_pool(pool)
     try:
         yield AsyncpgDeviceStore(pool)
@@ -56,8 +34,8 @@ async def store(request: pytest.FixtureRequest) -> AsyncIterator[DeviceStore]:
 
 
 @pytest.fixture
-def app(store: DeviceStore) -> FastAPI:
-    return create_app(
+async def client(store: DeviceStore) -> AsyncIterator[httpx.AsyncClient]:
+    app: FastAPI = create_app(
         settings=Settings(
             database_url="postgresql://yawmi_api@localhost:5432/raqib",
             jwt_secret=SecretStr(SECRET),
@@ -65,10 +43,6 @@ def app(store: DeviceStore) -> FastAPI:
         ),
         devices=store,
     )
-
-
-@pytest.fixture
-async def client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
     async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
 

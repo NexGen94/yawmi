@@ -64,17 +64,27 @@ class PostgresBackend:
         await self.pool.execute(
             "DELETE FROM yawmi.journal_entries WHERE day BETWEEN '2026-11-01' AND '2026-11-20'"
         )
+        await self.pool.execute(
+            "DELETE FROM yawmi.mood_logs WHERE day BETWEEN '2026-11-01' AND '2026-11-20'"
+        )
         await self.pool.execute("DELETE FROM yawmi.events WHERE device_id = $1", DEVICE_ID)
         await self.pool.execute("DELETE FROM yawmi.devices WHERE id = $1", DEVICE_ID)
 
 
-async def ensure_schema(pool: asyncpg.Pool) -> None:
+async def open_pg_pool() -> asyncpg.Pool:
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url:
+        if IN_CI:
+            pytest.fail("CI is set but TEST_DATABASE_URL is not: the database tests must run")
+        pytest.skip("TEST_DATABASE_URL is not set (the Postgres tests run in CI)")
+    pool = await create_pool(url)
     await pool.execute(STUB_SQL.read_text(encoding="utf-8"))
     if not await pool.fetchval("SELECT to_regclass('yawmi.events') IS NOT NULL"):
         await pool.execute((MIGRATIONS / "0001_yawmi_schema.sql").read_text(encoding="utf-8"))
     if not await pool.fetchval("SELECT to_regclass('yawmi.journal_entries') IS NOT NULL"):
         await pool.execute((MIGRATIONS / "0002_yawmi_role.sql").read_text(encoding="utf-8"))
         await pool.execute((MIGRATIONS / "0003_yawmi_web.sql").read_text(encoding="utf-8"))
+    return pool
 
 
 @pytest.fixture(params=["memory", "postgres"])
@@ -82,13 +92,7 @@ async def backend(request: pytest.FixtureRequest) -> AsyncIterator[Backend]:
     if request.param == "memory":
         yield MemoryBackend()
         return
-    url = os.environ.get("TEST_DATABASE_URL")
-    if not url:
-        if IN_CI:
-            pytest.fail("CI is set but TEST_DATABASE_URL is not: the database tests must run")
-        pytest.skip("TEST_DATABASE_URL is not set (the Postgres tests run in CI)")
-    pool = await create_pool(url)
-    await ensure_schema(pool)
+    pool = await open_pg_pool()
     pg = PostgresBackend(pool)
     await pg.setup()
     set_pool(pool)
@@ -101,21 +105,16 @@ async def backend(request: pytest.FixtureRequest) -> AsyncIterator[Backend]:
 
 
 @pytest.fixture
-def app(backend: Backend) -> FastAPI:
-    application = create_app(
-        settings=Settings(
-            database_url="postgresql://yawmi_api@localhost:5432/raqib",
-            jwt_secret=SecretStr(SECRET),
-        ),
-        devices=InMemoryDeviceStore(),
+async def client(backend: Backend) -> AsyncIterator[httpx.AsyncClient]:
+    cfg = Settings(
+        database_url="postgresql://yawmi_api@localhost:5432/raqib",
+        jwt_secret=SecretStr(SECRET),
     )
+    application = create_app(settings=cfg, devices=InMemoryDeviceStore())
     backend.install(application)
-    return application
-
-
-@pytest.fixture
-async def client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
-    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as c:
         yield c
 
 
