@@ -16,7 +16,7 @@ completion and overdue day is the one of the values shown, not of the lagging mi
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import date, datetime
 
 from yawmi.domain.habits import HabitLog, HabitSpec, period_progress
@@ -63,11 +63,16 @@ def overlay[MirrorRow: (MilestoneFullRow, CardFullRow, MilestoneRow, CardRow)](
 
     Every reader of milestones and cards goes through here (the goals, the pace, the late notice,
     `/v1/today` and `/v1/overview`), so no screen counts a value another one does not show.
+    A reader whose row type does not carry an edited field (the today reader's milestones have no
+    `evidence`) gets the fields it carries overlaid and the others left out, never an error.
     """
-    kind = "milestone" if mirror_rows and hasattr(mirror_rows[0], "done") else "card"
+    if not mirror_rows:
+        return [], {}
+    kind = "milestone" if hasattr(mirror_rows[0], "done") else "card"
+    carried = {f.name for f in fields(mirror_rows[0])}
     by_key: dict[tuple[str, str], list[GoalEditOut]] = defaultdict(list)
     for e in edits:
-        if e.target_kind == kind and e.field in EDITABLE[kind]:
+        if e.target_kind == kind and e.field in EDITABLE[kind] and e.field in carried:
             by_key[(e.page_id, e.field)].append(e)
     fields_of: dict[str, set[str]] = defaultdict(set)
     for page_id, field in by_key:

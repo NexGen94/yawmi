@@ -160,3 +160,24 @@ async def test_overview_shows_a_card_status_set_by_an_edit(
     await goals_backend.edit("card", card, "status", "قيد التنفيذ", "مكتملة", applied_at=applied)
     cards = {c["page_id"]: c for c in (await get(client, "/v1/overview"))["cards"]}
     assert cards[card]["status"] == "مكتملة"
+
+
+# --- an evidence edit: a field the today reader's rows do not carry -----------------------------
+
+
+@pytest.mark.parametrize("state", STATES)
+async def test_an_evidence_edit_breaks_no_reader(
+    client: httpx.AsyncClient, goals_backend: GoalsBackend, state: str
+) -> None:
+    """`evidence` is editable, but `/v1/today` and `/v1/overview` read rows without it: the
+    overlay skips the field there instead of failing, and every reader still answers."""
+    page = await late_milestone(goals_backend)
+    applied = APPLIED_AT if state == "applied" else None
+    await goals_backend.edit("milestone", page, "evidence", None, "رابط", applied_at=applied)
+    assert (await get(client, "/v1/today"))["plan"]["focus_outcomes"] == ["O1"]
+    [o1] = (await get(client, "/v1/overview"))["outcomes"]
+    assert o1["next_milestone"]["page_id"] == page
+    assert (await get(client, "/v1/goals/O1/pace"))["current_value"] == 0.0
+    assert await _late_titles(goals_backend.sources(), TODAY, WEEK_START) == ["فحص الدم"]
+    shown = next(m for m in (await get(client, "/v1/goals"))["milestones"] if m["page_id"] == page)
+    assert shown["evidence"] == "رابط"
