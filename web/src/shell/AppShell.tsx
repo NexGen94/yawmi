@@ -2,7 +2,9 @@ import type { ComponentChildren } from 'preact';
 import { useLocation } from 'preact-iso';
 import { useEffect } from 'preact/hooks';
 
+import { onUnauthorized } from '../api/auth';
 import { installShortcuts } from '../lib/keys';
+import { navigate } from '../lib/navigate';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 
@@ -29,6 +31,7 @@ export function AppShell(props: { children?: ComponentChildren }) {
   const { path } = useLocation();
 
   useEffect(() => installShortcuts(), []);
+  useEffect(() => onUnauthorized(() => navigate('/pair')), []);
   useEffect(() => {
     syncPageTitle();
   }, [path]);
