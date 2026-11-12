@@ -69,13 +69,13 @@ export function WeekBars({ values, label }: WeekBarsProps) {
 
   const lastDesc = lastFinite === undefined ? 'لا بيانات' : fmt.num(lastFinite);
   const notes: string[] = [];
-  if (missingCount > 0 && lastFinite !== undefined) notes.push('بعض الفترات لا بيانات');
+  if (missingCount > 0 && lastFinite !== undefined) notes.push('بعض الفترات بلا بيانات');
   if (hasNegative) notes.push('القيم السالبة مقصوصة عند 0');
   const suffix = notes.length > 0 ? ` (${notes.join('، ')})` : '';
   const sentence = `${label}: الأحدث ${lastDesc}، والأعلى ${fmt.num(max)}، والأدنى ${fmt.num(min)}${suffix}`;
 
   const lastSlotX = x(n - 1, n, w);
-  const lastText = lastFinite === undefined ? undefined : fmt.num(Math.max(0, lastFinite));
+  const lastText = lastFinite === undefined ? undefined : fmt.num(lastFinite);
   const halfLabel = lastText ? Math.min(w / 2, Math.max(12, lastText.length * 4.5)) : 0;
   const textX = Math.max(halfLabel, Math.min(w - halfLabel, lastSlotX));
 

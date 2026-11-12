@@ -180,16 +180,23 @@ describe('WeekBars', () => {
     expect(chart(container).getAttribute('aria-label')).toBe('أ: لا بيانات بعد');
   });
 
-  it('does not turn NaN or negative values into 0 in its label, says «لا بيانات» for missing slots, and clamps negatives explicitly', () => {
+  it('does not turn NaN or negative values into 0 in its label, says «بلا بيانات» for missing slots, and makes the bar label and aria-label agree on negative latest values', () => {
     const { container } = render(<WeekBars values={[Number.NaN, -3, 5]} label="آخر الفترات" />);
     const svg = chart(container);
     const label = svg.getAttribute('aria-label') ?? '';
     expect(label).not.toContain('الأدنى 0');
-    expect(label).toContain('لا بيانات');
+    expect(label).toContain('بعض الفترات بلا بيانات');
     expect(label).toContain('مقصوص');
     const bars = [...svg.querySelectorAll('.bars-bar')];
     expect(bars).toHaveLength(2);
     expect(Number(bars[0]?.getAttribute('height'))).toBe(2);
+
+    const negLatest = render(<WeekBars values={[4, 1, -2]} label="صافي" />);
+    const negSvg = chart(negLatest.container);
+    const negText = negLatest.container.querySelector('.bars-value')?.textContent ?? '';
+    expect(negText).toBe('\u200E-2');
+    expect(negSvg.getAttribute('aria-label')).toContain(`الأحدث ${negText}`);
+    negLatest.unmount();
 
     const trailingMissing = render(<WeekBars values={[2, 5, Number.NaN]} label="فترة" />);
     expect(chart(trailingMissing.container).getAttribute('aria-label')).toContain('الأحدث لا بيانات');
