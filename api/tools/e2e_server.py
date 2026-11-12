@@ -53,7 +53,8 @@ from yawmi.today.memory import InMemoryTodayReader
 from yawmi.today.reader import CardRow, CycleRow, GoalRow, HabitRow, MilestoneRow
 
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
-DEFAULT_ADMIN_DSN = "postgresql://postgres@localhost:55432/raqib"
+# The trust-authenticated admin user of the throwaway database `local_pg.py start` creates.
+DEFAULT_ADMIN_DSN = urlunsplit(("postgresql", "postgres@localhost:55432", "/raqib", "", ""))
 ADMIN_DSN_ENV = "YAWMI_E2E_DATABASE_URL"
 API_ROLE = "yawmi_api"
 STUB_SQL = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "raqib_stub.sql"

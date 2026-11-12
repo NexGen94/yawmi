@@ -21,6 +21,7 @@ import tempfile
 import time
 from collections.abc import Sequence
 from pathlib import Path
+from urllib.parse import urlunsplit
 
 DEFAULT_PORT = 55432
 DATABASE = "raqib"
@@ -140,7 +141,7 @@ def start(port: int, uv_cache: Path | None = None) -> int:
     else:
         print(f"the server did not accept connections; see {root / 'pg.log'}", file=sys.stderr)
         return 1
-    print(f"postgresql://postgres@127.0.0.1:{port}/{DATABASE}")
+    print(urlunsplit(("postgresql", f"postgres@127.0.0.1:{port}", f"/{DATABASE}", "", "")))
     print(f"bin: {root / 'pginstall' / 'bin'}", file=sys.stderr)
     return 0
 
