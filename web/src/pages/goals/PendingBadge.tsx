@@ -24,7 +24,7 @@ function waitingOf(goals: GoalsOut): Waiting[] {
 export function PendingBadge({ goals }: { goals: GoalsOut }) {
   const [open, setOpen] = useState(false);
   const count = goals.pending_edits;
-  if (!(count > 0)) return null;
+  if (count <= 0) return null;
   const waiting = waitingOf(goals);
   return (
     <>

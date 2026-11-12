@@ -47,7 +47,7 @@ function stateOf(m: MilestoneFull, today: Day): PointState {
 }
 
 /** One milestone's symbol: a filled circle (done), a hollow circle (open), a diamond (late). */
-function Symbol({ state, cx, cy }: { state: PointState; cx: number; cy: number }) {
+function Mark({ state, cx, cy }: { state: PointState; cx: number; cy: number }) {
   if (state === 'done') return <circle class="tl-done" cx={cx} cy={cy} r="5" />;
   if (state === 'open') return <circle class="tl-open" fill="none" cx={cx} cy={cy} r="4.5" />;
   return <path class="tl-late" fill="none" d={`M${cx} ${cy - 6}L${cx + 6} ${cy}L${cx} ${cy + 6}L${cx - 6} ${cy}Z`} />;
@@ -118,7 +118,7 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
 
   return (
     <div class="timeline-wrap">
-      <div class="timeline-scroll" role="region" aria-label={`${label}، قابل للتمرير`} tabIndex={0}>
+      <section class="timeline-scroll" aria-label={`${label}، قابل للتمرير`} tabIndex={0}>
         <svg
           class="chart timeline"
           role="img"
@@ -191,7 +191,7 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
             return (
               <g key={m.page_id} data-milestone={m.page_id} data-state={state} data-x={cx}>
                 <title>{`${m.title} · ${STATE_WORDS[state]} · ${fmt.day(m.due_date as Day)}`}</title>
-                <Symbol state={state} cx={cx} cy={cy} />
+                <Mark state={state} cx={cx} cy={cy} />
               </g>
             );
           })}
@@ -209,12 +209,12 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
             اليوم
           </text>
         </svg>
-      </div>
+      </section>
       <ul class="timeline-key">
         {STATES.map((s) => (
           <li key={s}>
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-              <Symbol state={s} cx={8} cy={8} />
+              <Mark state={s} cx={8} cy={8} />
             </svg>
             {STATE_WORDS[s]}
           </li>

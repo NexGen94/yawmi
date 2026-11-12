@@ -9,7 +9,9 @@ import { Badge } from '../../ui/Badge';
 import { Disclosure } from '../../ui/Disclosure';
 
 const byDate = (a: MilestoneFull, b: MilestoneFull): number => {
-  if (a.due_date === null || b.due_date === null) return a.due_date === b.due_date ? 0 : a.due_date === null ? 1 : -1;
+  if (a.due_date === b.due_date) return 0;
+  if (a.due_date === null) return 1;
+  if (b.due_date === null) return -1;
   return a.due_date.localeCompare(b.due_date);
 };
 

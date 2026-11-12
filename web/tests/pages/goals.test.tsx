@@ -354,7 +354,7 @@ describe('the horizons', () => {
     await open('/goals?view=horizons', {
       goals: goals({ milestones: [], cards: [] }),
     });
-    await waitFor(() => expect(document.querySelectorAll('[data-horizon]').length).toBe(5));
+    await waitFor(() => expect(document.querySelectorAll('[data-horizon]')).toHaveLength(5));
     expect(document.querySelector('[data-horizon="week"]')?.textContent).toBe('الأسبوع: لا شيء مستحق');
     expect(document.querySelector('[data-horizon="plan"]')?.textContent).toBe('الخطة: لا شيء مستحق');
   });
@@ -483,6 +483,7 @@ describe('the four states', () => {
       </LocationProvider>,
     );
     await screen.findByText('لا نسخة محفوظة بعد');
+    expect(screen.queryByRole('radiogroup', { name: 'العرض' })).toBeNull();
   });
 });
 

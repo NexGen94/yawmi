@@ -108,7 +108,7 @@ describe('Timeline', () => {
     expect(shape('m-late')).toBe('late');
     const tag = (id: string): string => (container.querySelector(`[data-milestone="${id}"] > :not(title)`) as Element).tagName;
     expect(new Set([tag('m-first'), tag('m-blood'), tag('m-late')]).size).toBeGreaterThanOrEqual(2);
-    expect(container.querySelectorAll('.timeline-key li').length).toBe(3);
+    expect(container.querySelectorAll('.timeline-key li')).toHaveLength(3);
   });
 
   it('each point has a title with the milestone and its date', () => {

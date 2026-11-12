@@ -19,56 +19,58 @@ const hrefOf = (table: GoalTable, row: Row): string =>
 const ofTotal = (done: unknown, total: unknown): ComponentChildren =>
   typeof done === 'number' && typeof total === 'number' ? `${fmt.num(done)} من ${fmt.num(total)}` : DASH;
 
+interface Ctx {
+  table: GoalTable;
+  row: Row;
+  record: Record<string, unknown>;
+}
+
+const countOf = (value: unknown): ComponentChildren => (Array.isArray(value) && value.length > 0 ? fmt.num(value.length) : DASH);
+
+/** How each field that is not plain text or a plain number is written. */
+const FORMATTERS: Record<string, (value: unknown, ctx: Ctx) => ComponentChildren> = {
+  title: (value, { table, row }) => <a href={hrefOf(table, row)}>{plain(value)}</a>,
+  code: (value) => <Badge>{plain(value)}</Badge>,
+  page_id: (value) => <bdi dir="ltr">{plain(value)}</bdi>,
+  done: (value) => (value === true ? 'منجزة' : 'مفتوحة'),
+  completion: (value) => pctOrDash(value as number | null),
+  habits_adherence_avg: (value) => pctOrDash(value as number | null),
+  notion_edited_at: (value) => (typeof value === 'string' ? editedDay(value) : DASH),
+  overdue_days: (value) => (typeof value === 'number' && value > 0 ? <Badge tone="signal">{relativeDays(-value)}</Badge> : DASH),
+  milestones_done: (value, { record }) => ofTotal(value, record.milestones_total),
+  tasks_done: (value, { record }) => ofTotal(value, record.tasks_total),
+  outcome_codes: (value) => (Array.isArray(value) && value.length > 0 ? value.map(plain).join('، ') : DASH),
+  card_page_ids: countOf,
+  habits: countOf,
+  kpis: countOf,
+  pending: (value) => (Array.isArray(value) && value.length > 0 ? value.map((f) => fieldLabel(plain(f))).join('، ') : DASH),
+  next_milestone: (value) => {
+    const next = value as { title: string; due_date: string | null } | null | undefined;
+    if (next === null || next === undefined) return DASH;
+    return next.due_date === null ? next.title : `${next.title} · ${fmt.day(next.due_date)}`;
+  },
+  indicator: (value) => {
+    const indicator = value as { value: number | null; target: number | null; completion: number | null };
+    if (indicator.value !== null && indicator.target !== null) return `${fmt.num(indicator.value)} من ${fmt.num(indicator.target)}`;
+    return pctOrDash(indicator.completion);
+  },
+};
+
+/** A value as text: a string as it is, a number in the current digits, anything else a dash. */
+function plain(value: unknown): string {
+  if (typeof value === 'string') return value === '' ? DASH : value;
+  if (typeof value === 'number') return fmt.num(value);
+  return DASH;
+}
+
 /** The text of one cell. A value that is not there is a dash. Dates are words, through `fmt.day`. */
 function cellOf(table: GoalTable, row: Row, key: string): ComponentChildren {
   const record = row as unknown as Record<string, unknown>;
   const value = record[key];
-  switch (key) {
-    case 'title':
-      return <a href={hrefOf(table, row)}>{String(value)}</a>;
-    case 'code':
-      return <Badge>{String(value)}</Badge>;
-    case 'page_id':
-      return <bdi dir="ltr">{String(value)}</bdi>;
-    case 'done':
-      return value === true ? 'منجزة' : 'مفتوحة';
-    case 'completion':
-    case 'habits_adherence_avg':
-      return pctOrDash(value as number | null);
-    case 'notion_edited_at':
-      return typeof value === 'string' ? editedDay(value) : DASH;
-    case 'overdue_days':
-      return typeof value === 'number' && value > 0 ? <Badge tone="signal">{relativeDays(-value)}</Badge> : DASH;
-    case 'milestones_done':
-      return ofTotal(value, record.milestones_total);
-    case 'tasks_done':
-      return ofTotal(value, record.tasks_total);
-    case 'outcome_codes':
-      return Array.isArray(value) && value.length > 0 ? value.join('، ') : DASH;
-    case 'card_page_ids':
-      return Array.isArray(value) && value.length > 0 ? fmt.num(value.length) : DASH;
-    case 'habits':
-      return Array.isArray(value) && value.length > 0 ? fmt.num(value.length) : DASH;
-    case 'kpis':
-      return Array.isArray(value) && value.length > 0 ? fmt.num(value.length) : DASH;
-    case 'pending':
-      return Array.isArray(value) && value.length > 0 ? value.map((f) => fieldLabel(String(f))).join('، ') : DASH;
-    case 'next_milestone': {
-      const next = value as { title: string; due_date: string | null } | null;
-      if (next === null || next === undefined) return DASH;
-      return next.due_date === null ? next.title : `${next.title} · ${fmt.day(next.due_date)}`;
-    }
-    case 'indicator': {
-      const indicator = value as { value: number | null; target: number | null; completion: number | null };
-      if (indicator.value !== null && indicator.target !== null) return `${fmt.num(indicator.value)} من ${fmt.num(indicator.target)}`;
-      return pctOrDash(indicator.completion);
-    }
-    default:
-  }
-  if (value === null || value === undefined || value === '') return DASH;
-  if (key.endsWith('_date')) return fmt.day(String(value));
-  if (typeof value === 'number') return fmt.num(value);
-  return String(value);
+  const format = FORMATTERS[key];
+  if (format) return format(value, { table, row, record });
+  if (key.endsWith('_date') && typeof value === 'string') return fmt.day(value);
+  return plain(value);
 }
 
 export interface GoalsTableProps {
@@ -98,7 +100,7 @@ export function GoalsTable({ goals, table, columns, canChoose, onTable, onSaveCo
       {rows.length === 0 ? (
         <p class="goals-table-none">{`لا صفوف في جدول ${TABLE_LABELS[table]}.`}</p>
       ) : (
-        <div class="table-scroll" role="region" aria-label={`جدول ${TABLE_LABELS[table]}، قابل للتمرير`} tabIndex={0}>
+        <section class="table-scroll" aria-label={`جدول ${TABLE_LABELS[table]}، قابل للتمرير`}>
           <table class="data-table">
             <caption class="visually-hidden">{`جدول ${TABLE_LABELS[table]}`}</caption>
             <thead>
@@ -120,7 +122,7 @@ export function GoalsTable({ goals, table, columns, canChoose, onTable, onSaveCo
               ))}
             </tbody>
           </table>
-        </div>
+        </section>
       )}
     </div>
   );

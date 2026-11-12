@@ -131,16 +131,13 @@ export function milestones(): MilestoneFull[] {
     milestone('m-five', 'حجز دورة الإنجليزية', { outcome_code: 'O7', due_date: '2026-11-15' }),
     milestone('m-month', 'تحديث السيرة المهنية', { outcome_code: 'O4', due_date: '2026-11-28' }),
   ];
-  const rest: MilestoneFull[] = [];
-  for (let i = 0; rest.length + head.length < 122; i += 1) {
-    rest.push(
-      milestone(`m-later-${i}`, `محطة لاحقة ${i + 1}`, {
-        outcome_code: `O${1 + (i % 12)}`,
-        due_date: `${2027 + Math.floor(i / 24)}-${String(1 + (i % 12)).padStart(2, '0')}-15`,
-        cycle_no: 2 + (i % 19),
-      }),
-    );
-  }
+  const rest: MilestoneFull[] = Array.from({ length: 122 - head.length }, (_, i) =>
+    milestone(`m-later-${i}`, `محطة لاحقة ${i + 1}`, {
+      outcome_code: `O${1 + (i % 12)}`,
+      due_date: `${2027 + Math.floor(i / 24)}-${String(1 + (i % 12)).padStart(2, '0')}-15`,
+      cycle_no: 2 + (i % 19),
+    }),
+  );
   return [...head, ...rest];
 }
 
