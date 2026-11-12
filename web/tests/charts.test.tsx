@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { render } from '@testing-library/preact';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { Heatmap } from '../src/charts/Heatmap';
@@ -8,6 +10,7 @@ import { Ring } from '../src/charts/Ring';
 import { flip, x } from '../src/charts/rtl';
 import { Sparkline } from '../src/charts/Sparkline';
 import { WeekBars } from '../src/charts/WeekBars';
+import { setDigits } from '../src/lib/format';
 
 const ARABIC = /[؀-ۿ]/;
 
@@ -87,6 +90,32 @@ describe('Ring', () => {
   it('fills from the top towards the inline end (counter-clockwise in RTL), mirrored through rtl.ts', () => {
     const { container } = render(<Ring value={0.5} label="د" />);
     expect(container.querySelector('.ring-arc')?.getAttribute('transform')).toContain('scale(-1');
+  });
+
+  it('sets explicit text-anchor and direction="rtl" on <text> even with Arabic-Indic digits', () => {
+    setDigits('arab');
+    try {
+      const { container } = render(
+        <>
+          <Ring value={0.5} label="إنجاز اليوم" />
+          <WeekBars values={[2, 5, 8]} label="آخر الفترات" />
+        </>,
+      );
+      expectAnchoredText(container);
+    } finally {
+      setDigits('latn');
+    }
+  });
+
+  it('every chart .tsx mirrors horizontally through x() from rtl.ts only', () => {
+    const chartsDir = resolve(import.meta.dirname, '..', 'src', 'charts');
+    const chartFiles = readdirSync(chartsDir).filter((f) => f.endsWith('.tsx'));
+    expect(chartFiles.length).toBeGreaterThanOrEqual(5);
+    for (const file of chartFiles) {
+      const source = readFileSync(join(chartsDir, file), 'utf8');
+      expect(source, file).toMatch(/import\s*\{\s*x\s*\}\s*from\s*['"]\.\/rtl['"]/);
+      expect(source, file).not.toMatch(/\bflip\b/);
+    }
   });
 });
 

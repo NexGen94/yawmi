@@ -120,12 +120,14 @@ describe('StateFrame', () => {
   });
 
   it('keeps the same outer element from loading to ready, so nothing remounts or jumps', () => {
+    withStyles();
     const { container, rerender } = render(
       <StateFrame state="loading" emptyText="أ" onRetry={noop}>
         <p>المحتوى</p>
       </StateFrame>,
     );
-    const before = container.firstElementChild;
+    const before = container.firstElementChild as HTMLElement;
+    expect(getComputedStyle(before).getPropertyValue('display')).toBe('flow-root');
     rerender(
       <StateFrame state="ready" emptyText="أ" onRetry={noop}>
         <p>المحتوى</p>
@@ -498,6 +500,37 @@ describe('Dialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'إغلاق' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.activeElement).toBe(opener);
+  });
+
+  it('skips roving tabindex="-1" radios and controls inside closed Disclosure when trapping Tab', () => {
+    render(
+      <Dialog open title="خيارات" onClose={() => undefined}>
+        <Segmented
+          label="المدى"
+          options={[
+            { value: 'day', label: 'اليوم' },
+            { value: 'week', label: 'الأسبوع' },
+          ]}
+          value="day"
+          onChange={() => undefined}
+        />
+        <Disclosure summary="تفاصيل إضافية">
+          <button type="button">زر مخفي</button>
+        </Disclosure>
+      </Dialog>,
+    );
+    const closeBtn = screen.getByRole('button', { name: 'إغلاق' });
+    const dayRadio = screen.getByRole('radio', { name: 'اليوم' });
+    const summary = screen.getByText('تفاصيل إضافية').closest('summary') as HTMLElement;
+    expect(document.activeElement).toBe(dayRadio);
+
+    summary.focus();
+    fireEvent.keyDown(summary, { key: 'Tab' });
+    expect(document.activeElement).toBe(closeBtn);
+
+    closeBtn.focus();
+    fireEvent.keyDown(closeBtn, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(summary);
   });
 });
 

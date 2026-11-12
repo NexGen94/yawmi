@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 // (section 5.1) to those files: colours only through the tokens (var(--c-...), currentColor), and
 // logical directions only.
 
-const webRoot = resolve(import.meta.dirname, '..', '..');
+const webRoot = resolve(import.meta.dirname, '..');
 const DIRS = ['src/ui', 'src/charts'].map((d) => join(webRoot, d));
 const rel = (path: string): string => relative(webRoot, path).replaceAll('\\', '/');
 
@@ -43,10 +43,11 @@ const NAMED_SET = new Set(NAMED);
 
 const strip = (code: string): string => code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-const HEX = /(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])/;
-const COLOR_FUNCTION = /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\(/i;
+const HEX = /(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])/g;
+const COLOR_FUNCTION = /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\(/gi;
 // Paint attributes in JSX (fill="...", stopColor='...') and paint keys in style objects or strings.
-const PAINT = /\b(fill|stroke|color|stop-?color|flood-?color|lighting-?color|background(?:-?color)?|border(?:-?color)?|outline(?:-?color)?)\s*[=:]\s*\{?\s*["'`]([^"'`]*)["'`]/gi;
+const PAINT =
+  /\b(fill|stroke|color|stop-?color|flood-?color|lighting-?color|caret-?color|accent-?color|text-?decoration-?color|column-?rule-?color|background[\w-]*|border[\w-]*|outline[\w-]*|box-?shadow|text-?shadow)\s*[=:]\s*\{?\s*["'`]([^"'`]*)["'`]/gi;
 const ALLOWED_PAINT = /^(?:none|currentColor|transparent|inherit|url\(#[^)]*\)|var\(--c-[\w-]+\)|\$\{[^}]*\})$/i;
 
 /** Colour literals in a component source: hex, colour functions, a named or system colour as a
@@ -55,10 +56,8 @@ const ALLOWED_PAINT = /^(?:none|currentColor|transparent|inherit|url\(#[^)]*\)|v
 function colourLiterals(source: string): string[] {
   const code = strip(source);
   const found: string[] = [];
-  const hex = HEX.exec(code);
-  if (hex) found.push(hex[0]);
-  const fn = COLOR_FUNCTION.exec(code);
-  if (fn) found.push(fn[0]);
+  for (const hex of code.matchAll(HEX)) found.push(hex[0]);
+  for (const fn of code.matchAll(COLOR_FUNCTION)) found.push(fn[0]);
   const named = (text: string): string[] =>
     (text.toLowerCase().match(/[a-z]+/g) ?? []).filter((word) => NAMED_SET.has(word));
   for (const [, literal = ''] of code.matchAll(/["'`]([^"'`\n]*)["'`]/g)) {
@@ -74,7 +73,7 @@ function colourLiterals(source: string): string[] {
 // Physical sides in inline styles: style objects (marginLeft, paddingRight, borderLeftWidth, left:,
 // right:), CSS text (margin-left, left:), and values that name a side (textAlign: 'left').
 const PHYSICAL_KEY =
-  /(?:^|[\s{,;"'`(])(?:(?:margin|padding|border|inset|scrollMargin|scrollPadding)(?:Left|Right)\w*|(?:margin|padding|border|inset|scroll-margin|scroll-padding)-(?:left|right)\b|border(?:Top|Bottom)(?:Left|Right)Radius|left|right)\s*:/;
+  /(?:^|[\s{,;"'`(])(?:(?:margin|padding|border|inset|scrollMargin|scrollPadding)(?:Left|Right)\w*|(?:margin|padding|border|inset|scroll-margin|scroll-padding)-(?:left|right)\b|border(?:Top|Bottom)(?:Left|Right)Radius|border-(?:top|bottom)-(?:left|right)-radius|left|right)\s*:/;
 const PHYSICAL_VALUE =
   /\b(?:textAlign|text-align|float|clear|backgroundPosition|background-position|transformOrigin|transform-origin|objectPosition|object-position)\s*:\s*["'`]?[^,;}"'`]*\b(?:left|right)\b/i;
 
@@ -156,9 +155,11 @@ describe('the component guard catches what it must', () => {
 });
 
 const files = DIRS.flatMap(walk).filter((file) => /\.(tsx?|jsx?)$/.test(file));
+const tsxFiles = files.filter((file) => file.endsWith('.tsx'));
 
 describe('src/ui and src/charts', () => {
   it('have the component files', () => {
+    expect(tsxFiles.length).toBeGreaterThanOrEqual(20);
     expect(files.length).toBeGreaterThanOrEqual(21);
   });
 
