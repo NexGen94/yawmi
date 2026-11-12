@@ -502,6 +502,15 @@ describe('Dialog', () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  it('closes when clicking the backdrop and returns the focus', () => {
+    const { container } = render(<Harness />);
+    const opener = open();
+    const backdrop = container.querySelector('[data-layer-backdrop]') as HTMLElement;
+    fireEvent.click(backdrop);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
   it('skips roving tabindex="-1" radios and controls inside closed Disclosure when trapping Tab', () => {
     render(
       <Dialog open title="خيارات" onClose={() => undefined}>

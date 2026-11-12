@@ -16,14 +16,14 @@ export interface DrawerProps {
 /** A side panel at the inline end (the left in RTL), full height, modal like Dialog: it traps the
  *  focus, closes with Escape, and gives the focus back. */
 export function Drawer({ open, title, onClose, children }: DrawerProps) {
-  const panel = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDialogElement>(null);
   const id = useId();
   useModalLayer(open, panel, onClose);
   if (!open) return null;
   return (
     <div class="layer layer-drawer">
-      <div class="layer-backdrop" onClick={onClose} />
-      <div ref={panel} class="drawer" role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1}>
+      <div class="layer-backdrop" data-layer-backdrop aria-hidden="true" />
+      <dialog ref={panel} open class="drawer" aria-modal="true" aria-labelledby={id} tabIndex={-1}>
         <div class="layer-head">
           <h2 id={id} class="layer-title">
             {title}
@@ -33,7 +33,7 @@ export function Drawer({ open, title, onClose, children }: DrawerProps) {
         <div class="layer-body" data-layer-body>
           {children}
         </div>
-      </div>
+      </dialog>
     </div>
   );
 }

@@ -20,7 +20,7 @@ function isHiddenInClosedDetails(el: HTMLElement): boolean {
   const details = el.closest('details');
   if (!details || details.open) return false;
   const summary = details.querySelector(':scope > summary');
-  return !summary || !summary.contains(el);
+  return !summary?.contains(el);
 }
 
 /** The elements Tab can reach inside `root`, in document order. */
@@ -35,7 +35,7 @@ const open: HTMLElement[] = [];
 
 function isTop(root: HTMLElement): boolean {
   const innermost = open.filter((layer) => !open.some((other) => other !== layer && layer.contains(other)));
-  return innermost[innermost.length - 1] === root;
+  return innermost.at(-1) === root;
 }
 
 /** Makes `panel` a modal layer while `isOpen`. The first focusable element inside the part marked
@@ -57,7 +57,7 @@ export function useModalLayer(isOpen: boolean, panel: RefObject<HTMLElement | nu
       const body = root.querySelector<HTMLElement>('[data-layer-body]');
       const all = focusables(root);
       const first =
-        (body && focusables(body)[0]) ?? all.find((el) => !el.hasAttribute('data-layer-close')) ?? all[0] ?? root;
+        (body && focusables(body)[0]) ?? all.find((el) => el.dataset.layerClose === undefined) ?? all[0] ?? root;
       first.focus();
     }
 
@@ -72,7 +72,7 @@ export function useModalLayer(isOpen: boolean, panel: RefObject<HTMLElement | nu
       if (event.key !== 'Tab') return;
       const items = focusables(root);
       const first = items[0];
-      const last = items[items.length - 1];
+      const last = items.at(-1);
       if (!first || !last) {
         event.preventDefault();
         root.focus();
@@ -92,12 +92,18 @@ export function useModalLayer(isOpen: boolean, panel: RefObject<HTMLElement | nu
       if (!isTop(root) || !(event.target instanceof Node) || root.contains(event.target)) return;
       (focusables(root)[0] ?? root).focus();
     };
+    const backdrop = root.parentElement?.querySelector<HTMLElement>('[data-layer-backdrop]');
+    const onBackdropClick = (): void => {
+      if (isTop(root)) close.current();
+    };
 
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('focusin', onFocusIn);
+    backdrop?.addEventListener('click', onBackdropClick);
     return () => {
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('focusin', onFocusIn);
+      backdrop?.removeEventListener('click', onBackdropClick);
       open.splice(open.indexOf(root), 1);
       if (opener?.isConnected) opener.focus();
     };

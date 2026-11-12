@@ -17,7 +17,7 @@ export function Chips<T extends string>({ label, options, selected, onChange }: 
     onChange(options.map((o) => o.value).filter((v) => (v === value ? !on : selected.includes(v))));
   };
   return (
-    <div class="chips" role="group" aria-label={label}>
+    <fieldset class="chips" aria-label={label}>
       {options.map((option) => {
         const on = selected.includes(option.value);
         return (
@@ -37,6 +37,6 @@ export function Chips<T extends string>({ label, options, selected, onChange }: 
           </button>
         );
       })}
-    </div>
+    </fieldset>
   );
 }

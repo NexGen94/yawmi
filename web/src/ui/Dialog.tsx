@@ -18,14 +18,14 @@ export interface DialogProps {
 /** A modal dialog: focus moves to its first field or button, stays inside, Escape closes it, and
  *  focus goes back to what opened it. Rendered in place; it covers the window with position: fixed. */
 export function Dialog({ open, title, onClose, children, actions }: DialogProps) {
-  const panel = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDialogElement>(null);
   const id = useId();
   useModalLayer(open, panel, onClose);
   if (!open) return null;
   return (
     <div class="layer">
-      <div class="layer-backdrop" onClick={onClose} />
-      <div ref={panel} class="dialog" role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1}>
+      <div class="layer-backdrop" data-layer-backdrop aria-hidden="true" />
+      <dialog ref={panel} open class="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1}>
         <div class="layer-head">
           <h2 id={id} class="layer-title">
             {title}
@@ -36,7 +36,7 @@ export function Dialog({ open, title, onClose, children, actions }: DialogProps)
           {children}
         </div>
         {actions && <div class="layer-actions">{actions}</div>}
-      </div>
+      </dialog>
     </div>
   );
 }

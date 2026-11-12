@@ -269,6 +269,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
 }
 
 .chip {
@@ -547,7 +551,9 @@
   inline-size: min(100%, 480px);
   max-block-size: calc(100dvh - 2 * var(--sp-4));
   overflow: auto;
+  margin: 0;
   padding: var(--sp-6);
+  border: 0;
   border-radius: var(--radius-hero);
   background: var(--c-surface);
   color: var(--c-ink);
@@ -565,7 +571,9 @@
   flex-direction: column;
   inline-size: min(100%, 420px);
   overflow: auto;
+  margin: 0;
   padding: var(--sp-6);
+  border: 0;
   border-start-start-radius: var(--radius-hero);
   border-end-start-radius: var(--radius-hero);
   background: var(--c-surface);

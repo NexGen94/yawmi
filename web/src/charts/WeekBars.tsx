@@ -40,11 +40,12 @@ export function WeekBars({ values, label }: WeekBarsProps) {
       <line class="bars-base" x1="0" y1={BASE} x2={W} y2={BASE} />
       {vals.map((v, i) => {
         const h = heightOf(v);
+        const slotX = x(i, n, W);
         return (
           <rect
-            key={i}
+            key={slotX}
             class={i === n - 1 ? 'bars-bar bars-latest' : 'bars-bar'}
-            x={x(i, n, W) - bar / 2}
+            x={slotX - bar / 2}
             y={BASE - h}
             width={bar}
             height={h}
