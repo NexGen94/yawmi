@@ -36,3 +36,104 @@
   flex-direction: column;
   gap: var(--sp-4);
 }
+
+/* ---------- Habit detail ---------- */
+
+.detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-block-end: var(--sp-5);
+}
+
+.detail-meta p {
+  margin: 0;
+}
+
+.detail-identity {
+  color: var(--c-ink-2);
+  font-size: var(--fs-body);
+}
+
+.detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.detail-badges:empty {
+  display: none;
+}
+
+.detail-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-inline-size: 0;
+}
+
+.strength-body {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+}
+
+.strength-body .ring {
+  flex: none;
+}
+
+.strength-note,
+.detail-note {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.detail-note {
+  margin-block-start: var(--sp-3);
+}
+
+.votes-total {
+  margin: 0;
+  font-size: var(--fs-num);
+  font-weight: 600;
+}
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.facts dd {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+.detail-anchor {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.reminders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-body);
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}

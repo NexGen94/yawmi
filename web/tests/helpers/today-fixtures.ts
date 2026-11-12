@@ -10,6 +10,7 @@ export type HabitLogOut = Schemas['HabitLogOut'];
 export type TodayOut = Schemas['TodayOut'];
 export type JournalEntryOut = Schemas['JournalEntryOut'];
 export type InsightOut = Schemas['InsightOut'];
+export type ProgressOut = Schemas['ProgressOut'];
 
 export const DAY = '2026-11-10';
 export const NOON_RIYADH = '2026-11-10T09:00:00Z';
@@ -121,6 +122,8 @@ export interface ServerData {
   logs?: HabitLogOut[];
   journal?: JournalEntryOut[];
   reviews?: InsightOut[];
+  /** `GET /v1/habits/{code}/progress`, by habit code; a habit without one answers 404. */
+  progress?: Record<string, ProgressOut>;
 }
 
 const json = (body: unknown, status = 200): Response =>
@@ -138,6 +141,11 @@ export function routeFetch(
     if (request.method === 'POST') return new Promise<Response>(() => undefined);
     if (options.fail === 'network') throw new TypeError('Failed to fetch');
     if (options.fail === 500) return json({ detail: 'خطأ' }, 500);
+    const progress = /^\/v1\/habits\/([^/]+)\/progress$/.exec(url.pathname);
+    if (progress) {
+      const body = data.progress?.[decodeURIComponent(progress[1] ?? '')];
+      return body ? json(body) : json({ detail: 'not found' }, 404);
+    }
     switch (url.pathname) {
       case '/v1/today':
         return json(data.today ?? todayOut(data.habits));

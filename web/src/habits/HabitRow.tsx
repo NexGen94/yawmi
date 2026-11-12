@@ -2,7 +2,8 @@ import type { ComponentChildren } from 'preact';
 
 import { CheckRow } from '../ui/CheckRow';
 import { Badge } from '../ui/Badge';
-import { fmt, type Noun } from '../lib/format';
+import { fmt } from '../lib/format';
+import { amount, PERIOD_WORD } from './amount';
 import { isCleanToday, isDoneToday, polarityOf, roundUpNeed, type HabitTodayItem } from './useHabitsToday';
 import type { HabitUnit } from './types';
 import './habit-row.css';
@@ -21,8 +22,6 @@ export interface HabitRowProps {
   showState?: boolean;
 }
 
-const NOUN: Record<HabitUnit, Noun> = { min: 'minute', hour: 'hour', session: 'session', '': 'time' };
-
 /** The quick increment of a count or duration habit, and how it is read aloud. */
 const STEP: Record<HabitUnit, { step: number; noun: string }> = {
   min: { step: 5, noun: 'دقائق' },
@@ -36,14 +35,6 @@ const NBSP = String.fromCharCode(0xa0);
 
 const DONE_UNSENT = 'التسجيل لم يُرسل بعد؛ النقر يتراجع عنه';
 const DONE_SENT = 'التسجيل مُرسل؛ التصحيح بتخطي اليوم';
-
-const PERIOD_WORD = { day: 'اليوم', week: 'هذا الأسبوع', month: 'هذا الشهر' } as const;
-
-function amount(n: number, unit: HabitUnit): string {
-  const text = fmt.count(n, NOUN[unit]);
-  // «جلسة» and «جلستان» alone would read as a label, not a quantity.
-  return n === 1 || n === 2 ? `${fmt.num(n)} ${text}` : text;
-}
 
 /** The second line of a build habit: the status of today, then the progress of the period. */
 function buildNote(item: HabitTodayItem): string | undefined {
