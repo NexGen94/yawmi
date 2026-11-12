@@ -112,8 +112,8 @@ class GoalsReader(Protocol):
         """The newest reading of each KPI that has one, by KPI code."""
         ...
 
-    async def readings(self, kpi_code: str) -> list[ReadingRow]:
-        """All readings of one KPI, oldest first."""
+    async def readings(self, kpi_code: str, first: date, last: date) -> list[ReadingRow]:
+        """The readings of one KPI with `first <= day <= last`, oldest first."""
         ...
 
     async def last_synced(self) -> datetime | None:
@@ -179,7 +179,7 @@ ORDER BY kpi_code, reading_date DESC, created_at DESC, id DESC
 READINGS = """
 SELECT kpi_code, reading_date AS day, value
 FROM raqib.kpi_readings
-WHERE kpi_code = $1
+WHERE kpi_code = $1 AND reading_date BETWEEN $2 AND $3
 ORDER BY reading_date, created_at, id
 """
 
@@ -240,8 +240,9 @@ class AsyncpgGoalsReader:
             r["kpi_code"]: ReadingRow(**dict(r)) for r in await self._pool.fetch(LATEST_READINGS)
         }
 
-    async def readings(self, kpi_code: str) -> list[ReadingRow]:
-        return [ReadingRow(**dict(r)) for r in await self._pool.fetch(READINGS, kpi_code)]
+    async def readings(self, kpi_code: str, first: date, last: date) -> list[ReadingRow]:
+        rows = await self._pool.fetch(READINGS, kpi_code, first, last)
+        return [ReadingRow(**dict(r)) for r in rows]
 
     async def last_synced(self) -> datetime | None:
         return await self._pool.fetchval(LAST_SYNCED)

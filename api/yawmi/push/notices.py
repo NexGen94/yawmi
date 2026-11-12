@@ -11,13 +11,15 @@ the habits and logs, the tasks and the stored indicators; without it they say no
 """
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from yawmi.domain.periods import WeekStart, weekday_bit
+from yawmi.goals.models import GoalIndicatorValue
 from yawmi.goals.service import GoalSources, load_goals
+from yawmi.goals.tasks_store import TaskCounts
 from yawmi.habits.models import ReminderIO, domain_logs
 from yawmi.habits.state import habit_state
 from yawmi.indicators.compute import indicator_value
@@ -119,6 +121,33 @@ def _plain(number: float) -> str:
     return f"{round(number, 1):g}"
 
 
+def _goal_notice(
+    item: IndicatorIO,
+    day: date,
+    known: dict[str, tuple[str, GoalIndicatorValue]],
+    counts: Mapping[str, TaskCounts],
+) -> Notice | None:
+    """The reminder of one goal indicator, or `None` when its goal is complete or unmeasured."""
+    if item.subject_ref in known:
+        title, value = known[item.subject_ref]
+    else:  # not in the mirror (empty before the sync): measured by its tasks
+        tasks = counts.get(item.subject_ref)
+        title = item.subject_ref
+        value = indicator_value(
+            item.source,
+            milestones_done=0,
+            milestones_total=0,
+            habit_completions=[],
+            tasks_done=tasks.done if tasks else 0,
+            tasks_total=tasks.total if tasks else 0,
+            target=item.target,
+        )
+    if value.completion is None or value.completion >= 1 or value.value is None:
+        return None
+    body = f"{item.title_ar or title}: {_plain(value.value)} من {_plain(value.target or 0)}"
+    return Notice("goal_indicator", item.subject_ref, day, body, f"/goals/{item.subject_ref}")
+
+
 async def goal_indicator_notices(ctx: NoticeContext, now: datetime) -> list[Notice]:
     """The reminder of each goal indicator that has one, while its goal is not finished.
 
@@ -136,32 +165,18 @@ async def goal_indicator_notices(ctx: NoticeContext, now: datetime) -> list[Noti
             due.append((item, day))
     if not due:
         return []
-    goals = await load_goals(sources, ctx.local.date(), ctx.week_start)
-    known = {o.code: (o.title, o.indicator) for o in goals.outcomes}
-    known.update({c.page_id: (c.title, c.indicator) for c in goals.cards})
     counts = await sources.tasks.counts()
     notices: list[Notice] = []
-    for item, day in due:
-        if item.subject_ref in known:
-            title, value = known[item.subject_ref]
-        else:
-            tasks = counts.get(item.subject_ref)
-            title = item.subject_ref
-            value = indicator_value(
-                item.source,
-                milestones_done=0,
-                milestones_total=0,
-                habit_completions=[],
-                tasks_done=tasks.done if tasks else 0,
-                tasks_total=tasks.total if tasks else 0,
-                target=item.target,
-            )
-        if value.completion is None or value.completion >= 1 or value.value is None:
-            continue
-        body = f"{item.title_ar or title}: {_plain(value.value)} من {_plain(value.target or 0)}"
-        notices.append(
-            Notice("goal_indicator", item.subject_ref, day, body, f"/goals/{item.subject_ref}")
-        )
+    # each notice is valued for the day it is claimed for: after midnight that is yesterday
+    for day in sorted({d for _, d in due}):
+        goals = await load_goals(sources, day, ctx.week_start)
+        known = {o.code: (o.title, o.indicator) for o in goals.outcomes}
+        known.update({c.page_id: (c.title, c.indicator) for c in goals.cards})
+        for item, due_day in due:
+            if due_day == day:
+                notice = _goal_notice(item, day, known, counts)
+                if notice is not None:
+                    notices.append(notice)
     return notices
 
 

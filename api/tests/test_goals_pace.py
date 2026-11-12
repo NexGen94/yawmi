@@ -158,12 +158,16 @@ async def test_an_outcome_without_a_usable_kpi_is_paced_by_its_milestones(
     assert body["on_pace"] is True
 
 
-async def test_an_outcome_without_milestones_or_kpi_still_answers(
+async def test_an_outcome_with_nothing_to_measure_has_no_current_value(
     client: httpx.AsyncClient, goals_backend: GoalsBackend
 ) -> None:
     await goals_backend.outcome("O4")
     body = (await pace(client, "O4")).json()
-    assert (body["basis"], body["current_value"], body["target_value"]) == ("milestones", 0, 0)
+    # nothing to measure: no value, and never «on pace» by default
+    assert (body["basis"], body["target_value"]) == ("milestones", 0)
+    assert body["current_value"] is None
+    assert body["on_pace"] is None and body["projected_end"] is None
+    assert body["readings"] == []
 
 
 async def test_after_the_due_day_the_days_left_are_negative(
@@ -185,3 +189,86 @@ async def test_an_unknown_reference_is_a_404(
 
 async def test_the_pace_needs_a_user_device(client: httpx.AsyncClient) -> None:
     assert (await client.get("/v1/goals/O1/pace")).status_code == 401
+
+
+def at(monkeypatch: pytest.MonkeyPatch, year: int, month: int, day: int) -> None:
+    from datetime import UTC, datetime
+
+    now = datetime(year, month, day, 9, 0, tzinfo=UTC)
+    monkeypatch.setattr("yawmi.events.models.server_now", lambda: now)
+
+
+async def test_the_design_example_through_the_route(
+    client: httpx.AsyncClient, goals_backend: GoalsBackend, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    at(monkeypatch, 2026, 11, 16)
+    b = goals_backend
+    await b.outcome("O12", target=date(2026, 12, 31))
+    await b.kpi("workshops_count", "O12", target=12)
+    await b.reading("workshops_count", date(2026, 9, 1), 5)  # before the plan: never read
+    await b.reading("workshops_count", date(2026, 11, 2), 1)
+    await b.reading("workshops_count", date(2026, 11, 16), 2)
+    body = (await pace(client, "O12")).json()
+    assert body["expected_today"] == pytest.approx(12 * 16 / 61)  # 3.1475
+    assert body["projected_end"] == pytest.approx(7.625)
+    assert (body["on_pace"], body["days_left"], body["current_value"]) == (False, 45, 2)
+    assert [r["day"] for r in body["readings"]] == ["2026-11-02", "2026-11-16"]
+
+
+@pytest.mark.parametrize(
+    ("code", "kwargs"),
+    [
+        ("steps_avg", {"target": 8000, "unit": "خطوة", "frequency": "daily"}),  # an average
+        (
+            "strength_sessions",
+            {"target": 2, "unit": "جلسة", "frequency": "weekly"},
+        ),  # a weekly count
+        ("who5_raw", {"target": 18, "unit": "درجة", "frequency": "cycle"}),  # a level
+    ],
+)
+async def test_rates_averages_and_levels_are_never_a_pace_basis(
+    client: httpx.AsyncClient, goals_backend: GoalsBackend, code: str, kwargs: dict[str, object]
+) -> None:
+    b = goals_backend
+    await b.outcome("O1", target=date(2031, 12, 31))
+    await b.kpi(code, "O1", **kwargs)
+    await b.reading(code, date(2026, 11, 9), 6500)
+    for i in range(4):
+        await b.milestone(f"m{i}", "O1", done=i < 1)
+    for params in ({}, {"kpi": code}):  # asking for it by name does not make it a basis
+        body = (await pace(client, "O1", **params)).json()
+        assert (body["basis"], body["kpi_code"], body["readings"]) == ("milestones", None, [])
+        assert (body["current_value"], body["target_value"]) == (1, 4)
+        assert body["due_day"] == "2031-12-31"
+
+
+async def test_books_done_is_paced_over_the_current_year(
+    client: httpx.AsyncClient, goals_backend: GoalsBackend, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    b = goals_backend
+    await b.outcome("O6", target=date(2031, 12, 31))
+    await b.kpi("books_done", "O6", target=12, unit="كتاب", frequency="monthly")
+    await b.reading("books_done", date(2026, 11, 5), 2)
+    await b.reading("books_done", date(2027, 1, 20), 1)
+    # 2026: from the plan start to 31 December 2026, not to the outcome's due day
+    at(monkeypatch, 2026, 11, 10)
+    body = (await pace(client, "O6")).json()
+    assert (body["basis"], body["kpi_code"]) == ("kpi", "books_done")
+    assert (body["start_day"], body["due_day"], body["target_value"]) == (
+        "2026-10-31",
+        "2026-12-31",
+        12,
+    )
+    assert body["current_value"] == 2 and body["days_left"] == 51
+    assert body["expected_today"] == pytest.approx(12 * 10 / 61)
+    # 2027: from 1 January, and last year's readings do not count
+    at(monkeypatch, 2027, 3, 1)
+    body = (await pace(client, "O6")).json()
+    assert (body["start_day"], body["due_day"]) == ("2027-01-01", "2027-12-31")
+    assert body["current_value"] == 1
+    assert [r["day"] for r in body["readings"]] == ["2027-01-20"]
+    assert body["expected_today"] == pytest.approx(12 * 59 / 364)
+    # 2027 with no reading yet this year: no current value
+    at(monkeypatch, 2027, 1, 10)
+    await b.reading("books_done", date(2026, 12, 30), 11)
+    assert (await pace(client, "O6")).json()["current_value"] is None

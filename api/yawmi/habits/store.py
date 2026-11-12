@@ -69,6 +69,7 @@ class StoredHabit:
 
 
 Change = Callable[[StoredHabit], StoredHabit]
+Guard = Callable[[StoredHabit, bool], None]
 
 
 class HabitStore(Protocol):
@@ -82,8 +83,15 @@ class HabitStore(Protocol):
         """Insert the habit and its reminders; `False` (and nothing written) if the code exists."""
         ...
 
-    async def modify(self, code: str, change: Change) -> StoredHabit | None:
+    async def modify(
+        self, code: str, change: Change, guard: Guard | None = None
+    ) -> StoredHabit | None:
         """Lock the habit, store `change(habit)`, and return it; `None` if there is no such habit.
+
+        With a `guard`, it runs first, after the lock, as `guard(habit, has_logs)` where
+        `has_logs` says whether the habit has a log of any status; a log written concurrently
+        cannot slip in between (it needs a share lock on the locked habit row). Raising from the
+        guard aborts the edit.
 
         An exception raised by `change` aborts the edit with nothing written. Columns other than
         `code`, `system` and `created_by` are overwritten; reminders are reconciled by
@@ -210,6 +218,7 @@ UPDATE yawmi.habit_reminders SET active = FALSE WHERE id = ANY($1)
 INSERT_REMINDER = """
 INSERT INTO yawmi.habit_reminders (id, habit_code, at_time, weekday_mask) VALUES ($1, $2, $3, $4)
 """
+HAS_LOGS = "SELECT EXISTS (SELECT 1 FROM yawmi.habit_logs WHERE habit_code = $1)"
 LOGS = """
 SELECT habit_code, day, value, status
 FROM yawmi.habit_logs
@@ -248,6 +257,7 @@ ALL_SQL = (
     REMINDERS,
     DEACTIVATE_REMINDERS,
     INSERT_REMINDER,
+    HAS_LOGS,
     LOGS,
     MILESTONE,
     CARD,
@@ -302,12 +312,16 @@ class AsyncpgHabitStore:
                 )
         return True
 
-    async def modify(self, code: str, change: Change) -> StoredHabit | None:
+    async def modify(
+        self, code: str, change: Change, guard: Guard | None = None
+    ) -> StoredHabit | None:
         async with self._pool.acquire() as conn, conn.transaction():
             row = await conn.fetchrow(LOCK_HABIT, code)
             if row is None:
                 return None
             current = (await _reminder_rows(conn, [code])).get(code, [])
+            if guard is not None:
+                guard(_habit(row, current), await conn.fetchval(HAS_LOGS, code))
             habit = change(_habit(row, current))
             await conn.execute(UPDATE_HABIT, code, *_values(habit, EDITED_COLUMNS))
             deactivate, new = reconcile(current, habit.reminders)

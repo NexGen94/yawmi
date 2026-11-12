@@ -50,8 +50,11 @@ async def get_goals(sources: SourcesDep, settings: SettingsDep) -> GoalsOut:
     "/{ref}/pace",
     summary="خط وتيرة مخرج",
     description=(
-        "الأساس `kpi` لمخرج له مؤشر تراكمي أو صاعد بهدف واحد (`kpi` يختار واحداً منها)، وغير ذلك "
-        "`milestones` (المنجزة من كلها، من 2026-10-31). `days_left` سالب بعد الموعد."
+        "الأساس `kpi` لمخرج له مؤشر تراكمي (مجموع يُبلغ بالموعد) بهدف واحد، و`kpi` يختار واحداً "
+        "منها؛ والمؤشر السنوي `books_done` يُقاس على السنة الميلادية الحالية. العدّ الأسبوعي "
+        "والمتوسط والمستوى لا تكون أساساً. وغير ذلك `milestones` (المنجزة من كلها، من "
+        "2026-10-31)؛ ولا محطات: `current_value` و`on_pace` و`projected_end` بـ`null`. "
+        "`days_left` سالب بعد الموعد."
     ),
     responses={**NOT_FOUND, **INVALID},
 )

@@ -127,18 +127,8 @@ async def create_habit(body: HabitIn, store: HabitStoreDep) -> HabitOut:
     raise RuntimeError("could not pick a free habit code")  # 48 random bits: not expected
 
 
-async def _polarity_locked(store: HabitStore, code: str, sent: dict[str, Any]) -> bool:
-    """A new `polarity` for a habit that already has a log of any status.
-
-    The log is read before the edit, outside its lock: a log written in between is the one
-    case that can slip through, and it only changes the kind of a habit with a single log.
-    """
-    if "polarity" not in sent or not is_storable(code):
-        return False
-    stored = await store.get(code)
-    if stored is None or sent["polarity"] == stored.polarity:
-        return False
-    return bool(await store.logs(code, date.min, date.max))
+class PolarityLocked(Exception):
+    """A new `polarity` for a habit that already has a log of any status."""
 
 
 @router.patch(
@@ -158,14 +148,6 @@ async def patch_habit(
     code: Code, body: HabitPatch, store: HabitStoreDep
 ) -> HabitOut | JSONResponse:
     sent = body.model_dump(include=body.model_fields_set)
-    if await _polarity_locked(store, code, sent):
-        return JSONResponse(
-            status_code=422,
-            content={
-                "detail": POLARITY_LOCKED_MESSAGE,
-                "errors": [{"loc": ["body", "polarity"], "type": "polarity_locked"}],
-            },
-        )
 
     def change(stored: StoredHabit) -> StoredHabit:
         """Merge the patch into the locked habit; a 409 or 422 here aborts with nothing written."""
@@ -176,7 +158,21 @@ async def patch_habit(
         _refuse_if_invalid(merged)
         return from_api(merged)
 
-    habit = await store.modify(code, change) if is_storable(code) else None
+    def guard(stored: StoredHabit, has_logs: bool) -> None:
+        """Runs after the habit row is locked: no log can be written between check and edit."""
+        if "polarity" in sent and sent["polarity"] != stored.polarity and has_logs:
+            raise PolarityLocked
+
+    try:
+        habit = await store.modify(code, change, guard) if is_storable(code) else None
+    except PolarityLocked:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": POLARITY_LOCKED_MESSAGE,
+                "errors": [{"loc": ["body", "polarity"], "type": "polarity_locked"}],
+            },
+        )
     if habit is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND_MESSAGE)
     return habit_out(habit)

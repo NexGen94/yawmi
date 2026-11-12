@@ -47,7 +47,14 @@ PREFIX = "t13_"
 IN_CI = bool(os.environ.get("CI"))
 MIGRATIONS = Path(__file__).resolve().parents[1] / "db" / "migrations"
 STUB_SQL = Path(__file__).parent / "fixtures" / "raqib_stub.sql"
-KPI_CODES = ["workshops_count", "books_done", "steps_avg", "walks_week"]
+KPI_CODES = [
+    "workshops_count",
+    "books_done",
+    "steps_avg",
+    "walks_week",
+    "strength_sessions",
+    "who5_raw",
+]
 OUTCOMES = [f"O{n}" for n in range(1, 13)]
 LONG_AGO = datetime(2026, 1, 1, tzinfo=UTC)
 

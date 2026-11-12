@@ -60,8 +60,9 @@ class InMemoryGoalsReader:
                 newest[row.kpi_code] = row
         return newest
 
-    async def readings(self, kpi_code: str) -> list[ReadingRow]:
-        return sorted((r for r in self.reading_rows if r.kpi_code == kpi_code), key=lambda r: r.day)
+    async def readings(self, kpi_code: str, first: date, last: date) -> list[ReadingRow]:
+        mine = (r for r in self.reading_rows if r.kpi_code == kpi_code and first <= r.day <= last)
+        return sorted(mine, key=lambda r: r.day)
 
     async def last_synced(self) -> datetime | None:
         if self.synced is not None:

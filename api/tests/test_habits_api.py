@@ -32,7 +32,14 @@ from yawmi.auth.tokens import issue_access
 from yawmi.db.pool import create_pool, set_pool
 from yawmi.db.seed import load_habits, seed_habits
 from yawmi.habits.memory import InMemoryHabitStore, InMemoryMirrorReader
-from yawmi.habits.store import ALL_SQL, CardRef, KpiRef, MilestoneRef, StoredHabit
+from yawmi.habits.store import (
+    ALL_SQL,
+    AsyncpgHabitStore,
+    CardRef,
+    KpiRef,
+    MilestoneRef,
+    StoredHabit,
+)
 from yawmi.main import create_app
 from yawmi.settings import Settings
 from yawmi.today.reader import LogRow
@@ -1508,3 +1515,23 @@ async def test_a_polarity_change_together_with_other_fields_changes_nothing_when
     assert resp.status_code == 422
     listed = {h["code"]: h for h in (await client.get("/v1/habits", headers=auth())).json()}
     assert listed[habit["code"]]["title_ar"] == TITLE + "عادة أصلية"
+
+
+async def test_the_polarity_lock_is_checked_inside_the_edit_not_before_it(
+    client: httpx.AsyncClient, backend: Backend, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A log that lands after any earlier check still locks the polarity: the check runs after
+    the habit row is locked, so it cannot rely on a read made before the edit."""
+    habit = await create(client, title_ar=TITLE + "عادة سباق")
+    await backend.add_log(habit["code"], date(2026, 11, 9), "done", None)
+
+    async def stale_logs(self: object, code: str, first: date, last: date) -> list[LogRow]:
+        return []  # what a check made just before the log was written would have seen
+
+    monkeypatch.setattr(AsyncpgHabitStore, "logs", stale_logs)
+    monkeypatch.setattr(InMemoryHabitStore, "logs", stale_logs)
+    resp = await client.patch(
+        f"/v1/habits/{habit['code']}", json={"polarity": "abstain"}, headers=auth()
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == POLARITY_LOCKED

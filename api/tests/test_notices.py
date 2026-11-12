@@ -635,3 +635,29 @@ async def test_without_goal_sources_the_new_providers_say_nothing(
 )
 def test_count_items_in_arabic(n: int, text: str) -> None:
     assert count_items_ar(n) == text
+
+
+async def test_a_goal_reminder_claimed_for_a_day_is_valued_for_that_day(
+    backend: Backend, sender: FakeSender
+) -> None:
+    await backend.goals.pause_other_habits()
+    await backend.goals.outcome("O1", title="الصحة البدنية")
+    await backend.goals.habit("walk", outcome="O1", title="المشي")
+    await backend.goals.log("walk", DAY, None)  # the 10th: done, so the goal's habits are complete
+    await remind(backend, at="23:55", source="linked_habits")
+    # 00:02 on the 11th belongs to the 10th's reminder: valued for the 10th (complete: no send),
+    # not for the 11th (nothing logged yet: it would be sent as 0 of 100)
+    assert await _tick(backend, sender, _riyadh(11, 0, 2)) == 0
+    assert await backend.notice_rows() == 0
+
+
+async def test_a_goal_reminder_after_midnight_quotes_the_value_of_its_own_day(
+    backend: Backend, sender: FakeSender
+) -> None:
+    await backend.goals.pause_other_habits()
+    await backend.goals.outcome("O1", title="الصحة البدنية")
+    await backend.goals.habit("walk", outcome="O1", title="المشي")
+    await backend.goals.log("walk", date(2026, 11, 11), None)  # done on the 11th only
+    await remind(backend, at="23:55", source="linked_habits")
+    assert await _tick(backend, sender, _riyadh(11, 0, 2)) == 1  # the 10th: 0 of 100
+    assert sender.sent[0][1]["notification"]["body"] == "الصحة البدنية: 0 من 100"
