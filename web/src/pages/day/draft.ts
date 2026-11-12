@@ -99,9 +99,29 @@ export function discardDraft(day: Day, part: DayPart): void {
   clearSaved(day, part);
 }
 
-/** There are words that no event holds: a draft that was never queued, or edited after it was. */
-export function hasUnsavedDraft(day: Day, part: DayPart): boolean {
-  return readDraft(day, part) !== undefined && readSaved(day, part).length === 0;
+const filled = (v: unknown): boolean => typeof v === 'string' && v.trim() !== '';
+const anyFilled = (v: unknown): boolean => Array.isArray(v) && v.some(filled);
+
+/** The draft holds free text that a person wrote: not just a mood, a chosen minute, a moved
+ *  priority or a proposal nobody accepted (those are not words to keep a page for). */
+function hasText(part: DayPart, draft: Record<string, unknown>): boolean {
+  if (part === 'evening') {
+    // «تعلّمت» is hidden, and not sent, in the one-minute evening.
+    const learned = draft.oneMinute !== true && filled(draft.learned);
+    return filled(draft.win) || learned || anyFilled(draft.gratitude) || filled(draft.note);
+  }
+  const slots = Array.isArray(draft.slots) ? (draft.slots as { title?: unknown; mode?: unknown }[]) : [];
+  const own = slots.some((slot) => slot.mode !== 'suggested' && filled(slot.title));
+  return own || filled(draft.enthusiasm) || anyFilled(draft.gratitude) || filled(draft.note);
+}
+
+/** There are words that no event holds: free text in a draft that was never queued, or was edited
+ *  after it was, or whose queued events the server refused (`refusedIds`). */
+export function hasUnsavedDraft(day: Day, part: DayPart, refusedIds?: ReadonlySet<string>): boolean {
+  const draft = readDraft<Record<string, unknown>>(day, part);
+  if (draft === undefined || !hasText(part, draft)) return false;
+  const saved = readSaved(day, part);
+  return saved.length === 0 || (refusedIds !== undefined && saved.some((id) => refusedIds.has(id)));
 }
 
 /** Removes the drafts the server has accepted: those whose events are no longer in the queue and

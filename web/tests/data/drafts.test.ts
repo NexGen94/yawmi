@@ -123,6 +123,44 @@ describe('a saved draft waits for the server', () => {
     expect(hasUnsavedDraft(D, 'evening')).toBe(false);
   });
 
+  it('only free text counts as unsaved: a mood or a chosen minute alone does not', () => {
+    writeDraft(D, 'evening', { score: 4, feelings: ['calm'], activities: ['h'], win: '', learned: ' ', gratitude: ['', '', ''], note: '' });
+    expect(hasUnsavedDraft(D, 'evening')).toBe(false);
+    writeDraft(D, 'morning', {
+      slots: [{ title: 'اقتراح', mode: 'suggested' }, { title: '', mode: 'own' }, { title: '', mode: 'own' }],
+      planned: 90,
+      enthusiasm: '',
+      gratitude: ['', '', ''],
+      note: '',
+    });
+    expect(hasUnsavedDraft(D, 'morning')).toBe(false);
+  });
+
+  it('each free-text field makes a draft unsaved', () => {
+    const empty = { win: '', learned: '', gratitude: ['', '', ''], note: '' };
+    for (const field of [{ win: 'x' }, { learned: 'x' }, { gratitude: ['', 'x', ''] }, { note: 'x' }]) {
+      writeDraft(D, 'evening', { ...empty, ...field });
+      expect(hasUnsavedDraft(D, 'evening')).toBe(true);
+    }
+    const slots = (title: string, mode: string) => [{ title, mode }, { title: '', mode: 'own' }, { title: '', mode: 'own' }];
+    const morning = { slots: slots('', 'own'), enthusiasm: '', gratitude: ['', '', ''], note: '' };
+    for (const field of [{ slots: slots('أولويتي', 'own') }, { slots: slots('اقتراح', 'accepted') }, { enthusiasm: 'x' }, { gratitude: ['x', '', ''] }, { note: 'x' }]) {
+      writeDraft(D, 'morning', { ...morning, ...field });
+      expect(hasUnsavedDraft(D, 'morning')).toBe(true);
+    }
+  });
+
+  it('a draft whose queued events the server refused is unsaved again', () => {
+    writeDraft(D, 'evening', { note: 'نص' });
+    markSaved(D, 'evening', ['e1']);
+    expect(hasUnsavedDraft(D, 'evening')).toBe(false);
+    expect(hasUnsavedDraft(D, 'evening', new Set(['other']))).toBe(false);
+    expect(hasUnsavedDraft(D, 'evening', new Set(['e1']))).toBe(true);
+    // refused, but the words are gone from the draft: nothing to keep the page for
+    writeDraft(D, 'evening', { note: '' });
+    expect(hasUnsavedDraft(D, 'evening', new Set(['e1']))).toBe(false);
+  });
+
   it('reconcile removes the draft once its events are neither waiting nor refused', () => {
     writeDraft(D, 'morning', { note: 'نص' });
     markSaved(D, 'morning', ['e1']);

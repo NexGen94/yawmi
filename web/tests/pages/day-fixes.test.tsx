@@ -362,6 +362,137 @@ describe('midnight (I-3)', () => {
   });
 });
 
+const TOO_LONG_LEARNED = [{ loc: ['body', 'events', 0, 'payload', 'answers', 'learned'], type: 'string_too_long', msg: 'too long' }];
+
+/** The page's effects have run: the draft mirrors what is on screen. */
+const settle = (): Promise<void> =>
+  act(async () => {
+    await new Promise((r) => setTimeout(r, 40));
+  });
+
+describe('a refused save is not forgotten by a reload (N-1)', () => {
+  it('still says it was refused, with the reason and a retry', async () => {
+    stubApi();
+    const first = await openDay('/day/morning');
+    await screen.findByRole('button', { name: 'حفظ الصباح' });
+    type('اليومية', 'نص طويل');
+    click('حفظ الصباح');
+    await waitFor(async () => expect(await pendingOf('journal_saved')).toHaveLength(1));
+    const [event] = await pendingOf('journal_saved');
+    await refused([event?.id ?? ''], TOO_LONG_NOTE);
+    await screen.findByText(/تعذّر الحفظ/);
+    first.unmount();
+
+    await openDay('/day/morning');
+    await screen.findByRole('button', { name: 'حفظ الصباح' });
+    await screen.findByText(/تعذّر الحفظ/);
+    expect(screen.getByRole('alert').textContent).toContain('اليومية');
+    expect(screen.queryByText('أُرسل الحفظ')).toBeNull();
+    expect((screen.getByLabelText('اليومية') as HTMLTextAreaElement).value).toBe('نص طويل');
+
+    click('إعادة المحاولة');
+    await waitFor(async () => expect(await pendingOf('journal_saved')).toHaveLength(1));
+    await screen.findByText(/لم يُرسل بعد/);
+  });
+
+  it('is only shown under its own side', async () => {
+    stubEvening();
+    const first = await openDay('/day/morning');
+    await screen.findByRole('button', { name: 'حفظ الصباح' });
+    type('اليومية', 'نص');
+    click('حفظ الصباح');
+    await waitFor(async () => expect(await pendingOf('journal_saved')).toHaveLength(1));
+    const [event] = await pendingOf('journal_saved');
+    await refused([event?.id ?? ''], TOO_LONG_NOTE);
+    first.unmount();
+
+    await openDay('/day/evening');
+    await screen.findByRole('button', { name: 'إغلاق اليوم' });
+    await settle();
+    expect(screen.queryByText(/تعذّر الحفظ/)).toBeNull();
+  });
+
+  it('still holds the page at midnight, and still offers «فتحه» on the new day', async () => {
+    vi.setSystemTime(new Date(LATE));
+    stubEvening();
+    const first = await openDay('/day/evening');
+    await screen.findByRole('button', { name: 'إغلاق اليوم' });
+    type('تعلّمت', 'درس لم يقبله الخادم');
+    click('إغلاق اليوم');
+    await waitFor(async () => expect(await pendingOf('journal_saved')).toHaveLength(1));
+    const [event] = await pendingOf('journal_saved');
+    await refused([event?.id ?? ''], TOO_LONG_LEARNED);
+    first.unmount();
+
+    await openDay('/day/evening');
+    await screen.findByRole('button', { name: 'إغلاق اليوم' });
+    await screen.findByText(/تعذّر الحفظ/);
+    await crossMidnight();
+    await screen.findByText('نص يوم أمس لم يُحفظ بعد');
+    expect(dateLine()).toContain(fmt.day(DAY));
+    expect((screen.getByLabelText('تعلّمت') as HTMLTextAreaElement).value).toBe('درس لم يقبله الخادم');
+
+    click('الانتقال إلى اليوم');
+    await waitFor(() => expect(dateLine()).toContain(fmt.day(NEXT_DAY)));
+    await screen.findByRole('button', { name: 'فتحه' });
+  });
+});
+
+describe('only unsaved free text holds the page at midnight (N-2)', () => {
+  it.each([
+    ['a mood that was logged', true],
+    ['a mood that was only tapped', false],
+  ])('%s alone does not', async (_name, log) => {
+    vi.setSystemTime(new Date(LATE));
+    stubEvening();
+    await openDay('/day/evening');
+    await screen.findByRole('button', { name: 'إغلاق اليوم' });
+    click('4', 'radio');
+    click('هدوء');
+    if (log) {
+      click('تسجيل المزاج');
+      await waitFor(async () => expect(await pendingOf('mood_logged')).toHaveLength(1));
+    }
+    await settle();
+
+    await crossMidnight();
+    await waitFor(() => expect(dateLine()).toContain(fmt.day(NEXT_DAY)));
+    expect(screen.queryByText('نص يوم أمس لم يُحفظ بعد')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'حفظه ليوم أمس' })).toBeNull();
+    expect(await pendingOf('journal_saved')).toHaveLength(0);
+  });
+
+  it('a chosen minute and a moved priority alone do not hold the morning either', async () => {
+    vi.setSystemTime(new Date('2026-11-10T20:59:00Z'));
+    stubApi();
+    await openDay('/day/morning');
+    await screen.findByRole('button', { name: 'حفظ الصباح' });
+    click('90');
+    await settle();
+    await crossMidnight();
+    await waitFor(() => expect(dateLine()).toContain(fmt.day(NEXT_DAY)));
+    expect(screen.queryByText('نص يوم أمس لم يُحفظ بعد')).toBeNull();
+  });
+
+  it('«حفظه ليوم أمس» does not close a day whose text was cleared meanwhile', async () => {
+    vi.setSystemTime(new Date(LATE));
+    stubEvening();
+    await openDay('/day/evening');
+    await screen.findByRole('button', { name: 'إغلاق اليوم' });
+    type('تعلّمت', 'نص');
+    await settle();
+    await crossMidnight();
+    await screen.findByText('نص يوم أمس لم يُحفظ بعد');
+
+    type('تعلّمت', '');
+    await settle();
+    click('حفظه ليوم أمس');
+    await waitFor(() => expect(dateLine()).toContain(fmt.day(NEXT_DAY)));
+    expect(await pendingOf('journal_saved')).toHaveLength(0);
+    expect(screen.queryByText('نص يوم أمس لم يُحفظ بعد')).toBeNull();
+  });
+});
+
 describe('offline on a new day still lets the day be logged (I-4)', () => {
   it('shows the forms from the last copy, with today\'s date and none of yesterday\'s done marks', async () => {
     stubEvening();

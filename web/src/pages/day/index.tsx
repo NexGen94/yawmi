@@ -37,9 +37,9 @@ interface Snapshot {
 }
 
 /** The words of yesterday that no event holds yet, one entry per side. */
-function unsavedOfYesterday(today: Day): { day: Day; part: DayPart }[] {
+function unsavedOfYesterday(today: Day, refusedIds: ReadonlySet<string>): { day: Day; part: DayPart }[] {
   const day = addDays(today, -1);
-  return PARTS.map((p) => p.value).flatMap((part) => (hasUnsavedDraft(day, part) ? [{ day, part }] : []));
+  return PARTS.map((p) => p.value).flatMap((part) => (hasUnsavedDraft(day, part, refusedIds) ? [{ day, part }] : []));
 }
 
 function partOf(path: string): DayPart | null {
@@ -63,9 +63,10 @@ export default function DayPage() {
   // not saved: then it stays on the day that ended until they are saved there or the person moves on.
   const [held, setHeld] = useState<Day | null>(null);
   const [seenDay, setSeenDay] = useState(data.day);
+  const refusedIds = new Set(data.quarantine.map((e) => e.id));
   if (seenDay !== data.day) {
     setSeenDay(data.day);
-    if (held === null && part !== null && hasUnsavedDraft(seenDay, part)) setHeld(seenDay);
+    if (held === null && part !== null && hasUnsavedDraft(seenDay, part, refusedIds)) setHeld(seenDay);
   }
   const viewDay = held ?? data.day;
   const live = viewDay === data.day;
@@ -121,7 +122,7 @@ export default function DayPage() {
   const habitsKnown = live ? data.habitsKnown : (snapshot.current?.habitsKnown ?? false);
   const doneCodes = live ? data.doneCodes : (snapshot.current?.doneCodes ?? []);
   // Yesterday's unsaved words wait on the new day too, to be opened or thrown away on purpose.
-  const past = held === null ? unsavedOfYesterday(data.day) : [];
+  const past = held === null ? unsavedOfYesterday(data.day, refusedIds) : [];
   const noCopy = data.state === 'offline' && !data.stale;
 
   const skeleton = (
@@ -199,7 +200,14 @@ export default function DayPage() {
             <section class="day-notice" aria-label="نص يوم أمس">
               <p class="day-notice-text">نص يوم أمس لم يُحفظ بعد</p>
               <div class="day-notice-actions">
-                <Button variant="primary" onClick={() => void saveRef.current?.()}>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    // The words may have been cleared since: then there is nothing to save for that day.
+                    if (hasUnsavedDraft(held, part, refusedIds)) void saveRef.current?.();
+                    else setHeld(null);
+                  }}
+                >
                   حفظه ليوم أمس
                 </Button>
                 <Button onClick={() => setHeld(null)}>الانتقال إلى اليوم</Button>

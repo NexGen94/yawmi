@@ -6,6 +6,7 @@ import { fmt } from '../../lib/format';
 import { discard, type OutboxEvent, type QuarantinedEvent, requeue, scheduleFlush } from '../../sync/outbox';
 import { Button } from '../../ui/Button';
 import type { DayPart } from './part';
+import { readSaved } from './draft';
 import { refusalReason } from './refusal';
 
 /** What a save queued: the ids of its events, which day and side it was for, and what the form
@@ -101,7 +102,15 @@ export function useSaveStatus(args: SaveStatusArgs): { onSaved(record: SaveRecor
   const refused = useMemo(() => new Map(quarantine.map((e) => [e.id, e])), [quarantine]);
   const refusedIds = useMemo(() => new Set(refused.keys()), [refused]);
 
-  const record = last?.record ?? null;
+  // After a reload the line is gone with the page, but a refused save is still on the device: its
+  // draft names the events, and the outbox holds them in quarantine. Say so again.
+  const restored = useMemo<SaveRecord | null>(() => {
+    const ids = readSaved(viewDay, part);
+    return ids.some((id) => refusedIds.has(id)) ? { ids, day: viewDay, part } : null;
+  }, [viewDay, part, refusedIds]);
+  const current = last !== null && last.record.part === part && last.record.day === viewDay ? last : null;
+  const record = current?.record ?? restored ?? last?.record ?? null;
+  const undone = current?.undone ?? (restored === null ? (last?.undone ?? false) : false);
   const outcome = record === null ? null : saveOutcome(record.ids, pendingIds, refusedIds);
 
   // Tell the form once when its save was refused (a mood form then lets it be logged again).
@@ -138,14 +147,16 @@ export function useSaveStatus(args: SaveStatusArgs): { onSaved(record: SaveRecor
     await Promise.all(record.ids.filter((id) => refusedIds.has(id)).map((id) => requeue(id)));
     scheduleFlush(0);
     await refreshPending();
+    // A record restored from a draft is no longer «refused»: from here on the page keeps following it.
+    setLast({ record, undone: false });
   }, [record, refusedIds, refreshPending]);
 
   // The line belongs to its side. A line about another day goes once the server has accepted it.
   const visible = record !== null && record.part === part && (record.day === viewDay || outcome !== 'accepted');
 
   let node: ComponentChildren = <p class="visually-hidden" role="status" />;
-  if (visible && last !== null && record !== null && outcome !== null) {
-    if (last.undone) {
+  if (visible && record !== null && outcome !== null) {
+    if (undone) {
       node = (
         <p class="day-status" role="status">
           أُلغي الحفظ
