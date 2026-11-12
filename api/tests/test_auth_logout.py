@@ -116,3 +116,40 @@ async def test_logout_with_wrong_refresh_token_does_not_revoke_device(
         json={"device_id": paired["device_id"], "refresh_token": rotated_rt},
     )
     assert after.status_code == 401
+
+
+async def test_logout_leaves_other_devices_untouched(
+    client: httpx.AsyncClient, store: DeviceStore
+) -> None:
+    code_a = f"{uuid4().int % 100_000_000:08d}"
+    code_b = f"{uuid4().int % 100_000_000:08d}"
+    assert await store.add_pairing_code(code_a, "web", datetime.now(UTC) + timedelta(minutes=10))
+    assert await store.add_pairing_code(code_b, "iphone", datetime.now(UTC) + timedelta(minutes=10))
+
+    paired_a = await client.post(
+        "/v1/devices/pair", json={"code": code_a, "name": "متصفح A", "kind": "web"}
+    )
+    assert paired_a.status_code == 200
+    cookie_a = cookie_pair(paired_a)
+
+    paired_b = (
+        await client.post(
+            "/v1/devices/pair", json={"code": code_b, "name": "آيفون B", "kind": "iphone"}
+        )
+    ).json()
+
+    # Logout device A
+    logout_a = await client.post("/v1/auth/logout", headers={"Cookie": cookie_a})
+    assert logout_a.status_code == 204
+
+    # Device A is revoked
+    refresh_a = await client.post("/v1/auth/refresh", headers={"Cookie": cookie_a})
+    assert refresh_a.status_code == 401
+
+    # Device B is untouched and refreshes successfully
+    refresh_b = await client.post(
+        "/v1/auth/refresh",
+        json={"device_id": paired_b["device_id"], "refresh_token": paired_b["refresh_token"]},
+    )
+    assert refresh_b.status_code == 200
+    assert "access_token" in refresh_b.json()

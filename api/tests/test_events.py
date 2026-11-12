@@ -100,6 +100,8 @@ class Backend(Protocol):
     async def event_count(self, ids: list[UUID]) -> int: ...
     async def focus_rows(self, ids: list[UUID]) -> list[dict[str, Any]]: ...
     async def breath_rows(self, ids: list[UUID]) -> list[dict[str, Any]]: ...
+    async def journal_count(self) -> int: ...
+    async def mood_count(self) -> int: ...
     async def seed_events(self, count: int, received_at: datetime) -> list[UUID]: ...
     def make_store(self, clock: Callable[[], datetime] | None = None) -> EventStore: ...
 
@@ -162,6 +164,14 @@ class MemoryBackend:
     async def breath_rows(self, ids: list[UUID]) -> list[dict[str, Any]]:
         assert self.store is not None
         return [asdict(s) for s in self.store.breath_sessions if s.event_id in ids]
+
+    async def journal_count(self) -> int:
+        assert self.store is not None
+        return len(self.store.journal_entries)
+
+    async def mood_count(self) -> int:
+        assert self.store is not None
+        return len(self.store.mood_logs)
 
     async def seed_events(self, count: int, received_at: datetime) -> list[UUID]:
         assert self.store is not None
@@ -267,6 +277,12 @@ class PostgresBackend:
             "SELECT * FROM yawmi.breath_sessions WHERE event_id = ANY($1)", ids
         )
         return [dict(r) for r in rows]
+
+    async def journal_count(self) -> int:
+        return await self.pool.fetchval("SELECT count(*) FROM yawmi.journal_entries")
+
+    async def mood_count(self) -> int:
+        return await self.pool.fetchval("SELECT count(*) FROM yawmi.mood_logs")
 
     async def seed_events(self, count: int, received_at: datetime) -> list[UUID]:
         ids = sorted(uuid4() for _ in range(count))
@@ -855,6 +871,61 @@ async def test_session_events_are_projected_once_even_when_replayed(
     ids = [UUID(e["id"]) for e in batch]
     assert len(await backend.focus_rows(ids)) == 1
     assert len(await backend.breath_rows(ids)) == 1
+
+
+async def test_journal_and_mood_events_are_projected_once_even_when_replayed(
+    client: httpx.AsyncClient, backend: Backend, iphone: Device
+) -> None:
+    batch = [
+        event(
+            "journal_saved",
+            {"part": "morning", "answers": {"planned_minutes": 60, "priorities": []}},
+        ),
+        event("mood_logged", {"score": 4, "feelings": ["calm"], "activities": ["walk"]}),
+    ]
+    res1 = await post(client, iphone, batch)
+    assert res1.json() == {"accepted": 2, "duplicates": 0}
+
+    res2 = await post(client, iphone, batch)
+    assert res2.json() == {"accepted": 0, "duplicates": 2}
+
+    assert await backend.journal_count() == 1
+    assert await backend.mood_count() == 1
+
+
+async def test_projected_journal_and_mood_events_are_stored_verbatim_in_events(
+    client: httpx.AsyncClient, backend: Backend, iphone: Device
+) -> None:
+    journal_ev = event(
+        "journal_saved",
+        {
+            "day": "2026-11-10",
+            "part": "morning",
+            "answers": {"planned_minutes": 90, "note": "صباح هادئ ومثمر"},
+        },
+    )
+    mood_ev = event(
+        "mood_logged",
+        {
+            "day": "2026-11-10",
+            "score": 5,
+            "feelings": ["calm", "grateful"],
+            "activities": ["read", "walk"],
+        },
+    )
+    res = await post(client, iphone, [journal_ev, mood_ev])
+    assert res.json() == {"accepted": 2, "duplicates": 0}
+
+    pulled = (await pull(client, iphone))["events"]
+    pulled_by_id = {e["id"]: e for e in pulled}
+
+    stored_j = pulled_by_id[journal_ev["id"]]
+    assert stored_j["type"] == "journal_saved"
+    assert stored_j["payload"] == journal_ev["payload"]
+
+    stored_m = pulled_by_id[mood_ev["id"]]
+    assert stored_m["type"] == "mood_logged"
+    assert stored_m["payload"] == mood_ev["payload"]
 
 
 @pytest.mark.parametrize(
