@@ -67,7 +67,7 @@
   color: var(--c-surface);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: var(--c-ink-2);
 }
 
@@ -77,7 +77,7 @@
   border-color: var(--c-blue);
 }
 
-.btn-quiet:hover {
+.btn-quiet:hover:not(:disabled) {
   background: var(--c-blue-pale);
 }
 
@@ -119,24 +119,30 @@
   color: var(--c-bg);
 }
 
-:is(.hero-card, .on-ink) .btn-primary {
+:is(.hero-card, .on-ink) .btn-primary:not(:disabled) {
   background: var(--c-bg);
   color: var(--c-ink);
 }
 
-:is(.hero-card, .on-ink) .btn-primary:hover {
+:is(.hero-card, .on-ink) .btn-primary:hover:not(:disabled) {
   background: var(--c-blue-light);
   color: var(--c-ink);
 }
 
-:is(.hero-card, .on-ink) .btn-quiet {
+:is(.hero-card, .on-ink) .btn-quiet:not(:disabled) {
   background: transparent;
   color: var(--c-bg);
   border-color: var(--c-blue-light);
 }
 
-:is(.hero-card, .on-ink) .btn-quiet:hover {
+:is(.hero-card, .on-ink) .btn-quiet:hover:not(:disabled) {
   background: var(--c-ink-2);
+}
+
+:is(.hero-card, .on-ink) .chip[aria-pressed='true'] {
+  border-color: var(--c-blue-light);
+  background: var(--c-ink-2);
+  color: var(--c-surface);
 }
 
 :is(.hero-card, .on-ink) :is(.check-note, .field-label, .field-hint, .slider-label, .state-text, .heat-key) {
@@ -174,24 +180,30 @@
   border-color: var(--c-bg);
 }
 
-:is(.dialog, .drawer) .btn-primary {
+:is(.dialog, .drawer) .btn-primary:not(:disabled) {
   background: var(--c-ink);
   color: var(--c-surface);
 }
 
-:is(.dialog, .drawer) .btn-primary:hover {
+:is(.dialog, .drawer) .btn-primary:hover:not(:disabled) {
   background: var(--c-ink-2);
   color: var(--c-surface);
 }
 
-:is(.dialog, .drawer) .btn-quiet {
+:is(.dialog, .drawer) .btn-quiet:not(:disabled) {
   background: var(--c-surface);
   color: var(--c-ink);
   border-color: var(--c-blue);
 }
 
-:is(.dialog, .drawer) .btn-quiet:hover {
+:is(.dialog, .drawer) .btn-quiet:hover:not(:disabled) {
   background: var(--c-blue-pale);
+}
+
+:is(.dialog, .drawer) .chip[aria-pressed='true'] {
+  border-color: var(--c-ink);
+  background: var(--c-ink);
+  color: var(--c-surface);
 }
 
 :is(.dialog, .drawer) :is(.check-note, .field-label, .field-hint, .slider-label, .state-text, .heat-key) {
@@ -648,9 +660,8 @@
 
 /* ---------- Dialog and Drawer ---------- */
 
-:root:has(.layer),
-body:has(.layer) {
-  overflow: hidden;
+:root {
+  scrollbar-gutter: stable;
 }
 
 .layer {

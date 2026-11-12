@@ -170,6 +170,76 @@ describe('Button', () => {
       expect(getComputedStyle(screen.getByRole('button', { name })).getPropertyValue('min-block-size')).toBe('44px');
     }
   });
+
+  it('keeps the disabled look inside Dialog, Drawer, HeroCard and .on-ink', () => {
+    withStyles();
+    render(
+      <>
+        <HeroCard title="بطاقة بارزة">
+          <Button variant="primary">بارز مفعّل في البطاقة</Button>
+          <Button variant="primary" disabled>
+            بارز معطّل في البطاقة
+          </Button>
+          <Button variant="quiet">هادئ مفعّل في البطاقة</Button>
+          <Button variant="quiet" disabled>
+            هادئ معطّل في البطاقة
+          </Button>
+        </HeroCard>
+        <div class="on-ink">
+          <Button variant="primary" disabled>
+            بارز معطّل على الحبر
+          </Button>
+          <Button variant="quiet" disabled>
+            هادئ معطّل على الحبر
+          </Button>
+        </div>
+        <Dialog open title="حوار" onClose={() => undefined}>
+          <Button variant="primary">بارز مفعّل في الحوار</Button>
+          <Button variant="primary" disabled>
+            بارز معطّل في الحوار
+          </Button>
+          <Button variant="quiet">هادئ مفعّل في الحوار</Button>
+          <Button variant="quiet" disabled>
+            هادئ معطّل في الحوار
+          </Button>
+        </Dialog>
+        <Drawer open title="درج" onClose={() => undefined}>
+          <Button variant="primary" disabled>
+            بارز معطّل في الدرج
+          </Button>
+          <Button variant="quiet" disabled>
+            هادئ معطّل في الدرج
+          </Button>
+        </Drawer>
+      </>,
+    );
+
+    const disabledNames = [
+      'بارز معطّل في البطاقة',
+      'هادئ معطّل في البطاقة',
+      'بارز معطّل على الحبر',
+      'هادئ معطّل على الحبر',
+      'بارز معطّل في الحوار',
+      'هادئ معطّل في الحوار',
+      'بارز معطّل في الدرج',
+      'هادئ معطّل في الدرج',
+    ];
+    for (const name of disabledNames) {
+      const btn = screen.getByRole('button', { name, hidden: true });
+      const style = getComputedStyle(btn);
+      expect(style.getPropertyValue('background'), name).toBe('#DCEFEF');
+      expect(style.getPropertyValue('color'), name).toBe('#3B6A89');
+      expect(style.getPropertyValue('border-color'), name).toBe('transparent');
+      expect(style.getPropertyValue('cursor'), name).toBe('not-allowed');
+    }
+
+    expect(
+      getComputedStyle(screen.getByRole('button', { name: 'بارز مفعّل في الحوار', hidden: true })).getPropertyValue('background'),
+    ).toBe('#1D3557');
+    expect(
+      getComputedStyle(screen.getByRole('button', { name: 'بارز مفعّل في البطاقة', hidden: true })).getPropertyValue('background'),
+    ).toBe('#F1FAEE');
+  });
 });
 
 describe('every control meets the 44px target', () => {
@@ -721,11 +791,66 @@ describe('components.css', () => {
     expect(sheet).toMatch(/:where\(\.dialog,\s*\.drawer\)\s+:focus-visible\s*\{[^}]*box-shadow:\s*var\(--focus\)/);
   });
 
-  it('pins Drawer to full block-size and contains overscroll on modal layers', () => {
+  it('pins Drawer to full block-size, reserves scrollbar-gutter: stable on :root, and keeps a single scroll-lock mechanism', () => {
     expect(sheet).toMatch(/\.drawer\s*\{[^}]*block-size:\s*100%;[^}]*max-block-size:\s*100%;/s);
     expect(sheet).toMatch(/\.dialog\s*\{[^}]*overscroll-behavior:\s*contain;/s);
     expect(sheet).toMatch(/\.drawer\s*\{[^}]*overscroll-behavior:\s*contain;/s);
     expect(sheet).toMatch(/\.layer\s*\{[^}]*overscroll-behavior:\s*contain;/s);
+    expect(sheet).toMatch(/:root\s*\{[^}]*scrollbar-gutter:\s*stable;/s);
+    expect(sheet).not.toMatch(/:has\(\.layer\)/);
+  });
+
+  it('never restyles a button under Dialog, Drawer, HeroCard or .on-ink without excluding :disabled', () => {
+    const unguardedScopedButtonRules = (cssText: string): string[] => {
+      const stripped = cssText.replace(/\/\*[\s\S]*?\*\//g, '');
+      const offenders: string[] = [];
+      for (const [, rawSelector] of stripped.matchAll(/([^{}@]+)\{[^}]*\}/g)) {
+        const selector = (rawSelector ?? '').trim();
+        if (
+          /(?:\.dialog|\.drawer|\.hero-card|\.on-ink)\b[^{]*\s+[^{]*(?:\.btn(?:-[\w-]+)?|\bbutton\b)/.test(selector) &&
+          !selector.includes(':not(:disabled)') &&
+          !selector.includes(':disabled')
+        ) {
+          offenders.push(selector);
+        }
+      }
+      return offenders;
+    };
+
+    expect(unguardedScopedButtonRules(outside)).toEqual([]);
+    expect(unguardedScopedButtonRules(`${outside}\n.dialog .btn-primary { background: var(--c-ink); }`)).toHaveLength(1);
+    expect(unguardedScopedButtonRules(`${outside}\n.drawer .btn-quiet { background: var(--c-surface); }`)).toHaveLength(1);
+    expect(unguardedScopedButtonRules(`${outside}\n.hero-card .btn-primary { background: var(--c-bg); }`)).toHaveLength(1);
+    expect(unguardedScopedButtonRules(`${outside}\n.on-ink .btn-quiet { color: var(--c-bg); }`)).toHaveLength(1);
+  });
+
+  it('gives a pressed Chip on ink a visible shape distinct from the --c-ink ground', () => {
+    expect(sheet).toMatch(
+      /:is\(\.hero-card,\s*\.on-ink\)\s+\.chip\[aria-pressed='true'\]\s*\{[^}]*border-color:\s*var\(--c-blue-light\);[^}]*background:\s*var\(--c-ink-2\);/s,
+    );
+    expect(sheet).toMatch(
+      /:is\(\.dialog,\s*\.drawer\)\s+\.chip\[aria-pressed='true'\]\s*\{[^}]*border-color:\s*var\(--c-ink\);[^}]*background:\s*var\(--c-ink\);/s,
+    );
+
+    withStyles();
+    render(
+      <div class="on-ink">
+        <Chips
+          label="المشاعر"
+          options={[
+            { value: 'calm', label: 'هدوء' },
+            { value: 'tired', label: 'تعب' },
+          ]}
+          selected={['calm']}
+          onChange={() => undefined}
+        />
+      </div>,
+    );
+    const pressed = getComputedStyle(screen.getByRole('button', { name: 'هدوء' }));
+    expect(pressed.getPropertyValue('background')).not.toBe('#1D3557');
+    expect(pressed.getPropertyValue('border-color')).not.toBe('#1D3557');
+    expect(pressed.getPropertyValue('background')).toBe('#3B6A89');
+    expect(pressed.getPropertyValue('border-color')).toBe('#A8DADC');
   });
 
   it('provides on-ink variants for WeekBars, Sparkline, Heatmap, Disclosure, and secondary text inside HeroCard and .on-ink', () => {
