@@ -8,7 +8,7 @@ by insertion, as the SQL breaks them by id.
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from yawmi.notion.changes import EditStatus, GoalEdit, GoalEditOut
+from yawmi.notion.changes import CANCELLABLE, EditStatus, GoalEdit, GoalEditOut
 
 
 class InMemoryEditStore:
@@ -18,9 +18,11 @@ class InMemoryEditStore:
     def _ordered(self) -> list[GoalEditOut]:
         return sorted(self.rows, key=lambda e: e.created_at)  # stable: insertion breaks ties
 
-    def _set(self, edit_id: UUID, **changes: object) -> GoalEditOut | None:
+    def _set(
+        self, edit_id: UUID, states: tuple[str, ...] = ("pending",), **changes: object
+    ) -> GoalEditOut | None:
         for i, row in enumerate(self.rows):
-            if row.id == edit_id and row.status == "pending":
+            if row.id == edit_id and row.status in states:
                 self.rows[i] = row.model_copy(update=changes)
                 return self.rows[i]
         return None
@@ -74,8 +76,11 @@ class InMemoryEditStore:
     async def get(self, edit_id: UUID) -> GoalEditOut | None:
         return next((e for e in self.rows if e.id == edit_id), None)
 
-    async def cancel(self, edit_id: UUID) -> GoalEditOut | None:
-        return self._set(edit_id, status="superseded")
+    async def cancel(self, edit_id: UUID, note_line: str) -> GoalEditOut | None:
+        row = await self.get(edit_id)
+        if row is None:
+            return None
+        return self._set(edit_id, CANCELLABLE, status="cancelled", note=row.note + note_line)
 
     async def finish(
         self, edit_id: UUID, status: EditStatus, applied_at: datetime | None, error: str | None

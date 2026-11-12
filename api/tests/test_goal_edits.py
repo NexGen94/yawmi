@@ -105,7 +105,11 @@ async def test_a_due_date_edit_is_pending_with_its_dated_note(
     resp = await edit_milestone(client, page, due_date="2026-11-14")
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert (body["page_id"], body["due_date"], body["pending"]) == (page, "2026-11-14", ["due_date"])
+    assert (body["page_id"], body["due_date"], body["pending"]) == (
+        page,
+        "2026-11-14",
+        ["due_date"],
+    )
     [row] = await edits(client, "pending")
     assert (row["target_kind"], row["page_id"], row["field"]) == ("milestone", page, "due_date")
     assert (row["old_value"], row["new_value"]) == ("2026-11-07", "2026-11-14")
@@ -289,8 +293,7 @@ async def test_cancelling_a_pending_edit_brings_back_the_mirror_value(
     body = resp.json()
     assert (body["id"], body["status"]) == (row["id"], "cancelled")
     # a dated note is added, the first one kept: nothing is deleted
-    assert body["note"] == NOTE_0714 + "
-2026-11-12 · يومي: إلغاء التعديل"
+    assert body["note"] == NOTE_0714 + "\n2026-11-12 · يومي: إلغاء التعديل"
     assert [r["status"] for r in await edits(client, "cancelled")] == ["cancelled"]
     m = await shown(client, page)
     assert (m["due_date"], m["pending"]) == ("2026-11-07", [])
@@ -332,7 +335,9 @@ async def test_an_applied_or_unknown_edit_cannot_be_cancelled(
     await apply(goals_backend, FakeNotionApplier(live={(page, "due_date"): "2026-11-07"}))
     [row] = await edits(client)
     assert row["status"] == "applied"
-    assert (await client.post(f"/v1/goal-edits/{row['id']}/cancel", headers=auth())).status_code == 409
+    assert (
+        await client.post(f"/v1/goal-edits/{row['id']}/cancel", headers=auth())
+    ).status_code == 409
     unknown = await client.post(f"/v1/goal-edits/{uuid4()}/cancel", headers=auth())
     assert unknown.status_code == 404
 

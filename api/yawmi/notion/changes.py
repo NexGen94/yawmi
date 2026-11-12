@@ -21,7 +21,9 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 TargetKind = Literal["milestone", "card"]
-EditStatus = Literal["pending", "applied", "failed", "superseded", "conflict"]
+EditStatus = Literal["pending", "applied", "failed", "superseded", "conflict", "cancelled"]
+# the states a cancel closes: a conflict is never applied, so it must be closable too
+CANCELLABLE: tuple[EditStatus, ...] = ("pending", "conflict")
 EditValue = bool | str | None
 
 EDITABLE: dict[str, frozenset[str]] = {
@@ -78,6 +80,11 @@ def note_for(field: str, old: object, new: object, today: date) -> str:
     return (
         f"{today.isoformat()} · يومي: {FIELD_LABELS[field]} من «{_shown(old)}» إلى «{_shown(new)}»"
     )
+
+
+def cancel_note(today: date) -> str:
+    """The dated line a cancel appends to an edit's note (nothing is deleted)."""
+    return f"\n{today.isoformat()} · يومي: إلغاء التعديل"
 
 
 @dataclass(frozen=True)

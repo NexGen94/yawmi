@@ -54,9 +54,7 @@ async def changes(client: httpx.AsyncClient, **params: Any) -> list[dict[str, An
 
 
 async def result(client: httpx.AsyncClient, change_id: str, **body: Any) -> httpx.Response:
-    return await client.post(
-        f"/v1/notion/changes/{change_id}/result", json=body, headers=service()
-    )
+    return await client.post(f"/v1/notion/changes/{change_id}/result", json=body, headers=service())
 
 
 async def log(client: httpx.AsyncClient) -> dict[str, dict[str, Any]]:
@@ -84,7 +82,9 @@ async def test_the_service_reads_the_pending_changes_in_creation_order(
     await goals_backend.outcome("O1")
     first = await goals_backend.milestone("m1", "O1", due=date(2026, 11, 7))
     second = await goals_backend.milestone("m2", "O1", due=date(2026, 12, 1))
-    for i, (page, body) in enumerate(((second, {"done": True}), (first, {"due_date": "2026-11-14"}))):
+    for i, (page, body) in enumerate(
+        ((second, {"done": True}), (first, {"due_date": "2026-11-14"}))
+    ):
         at = datetime(2026, 11, 10, 12, i, tzinfo=UTC)
         monkeypatch.setattr("yawmi.events.models.server_now", lambda at=at: at)
         resp = await client.patch(f"/v1/milestones/{page}", json=body, headers=web())

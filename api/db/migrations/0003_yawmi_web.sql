@@ -126,7 +126,9 @@ CREATE TABLE yawmi.goal_edits (
   new_value jsonb NOT NULL,
   note text NOT NULL,
   status text NOT NULL DEFAULT 'pending'
-  CHECK (status IN ('pending', 'applied', 'failed', 'superseded', 'conflict')),
+  CHECK (
+    status IN ('pending', 'applied', 'failed', 'superseded', 'conflict', 'cancelled')
+  ),
   device_id uuid,
   created_at timestamptz NOT NULL DEFAULT now(),
   applied_at timestamptz,

@@ -1,7 +1,7 @@
 """The I/O around the pure goals functions: load the sources, build `GoalsOut` and `PaceOut`.
 
-`GoalSources` bundles the four readers the goals need: the Notion mirror, the habits and logs,
-the user's tasks and the stored indicators. The route and the push notices both use
+`GoalSources` bundles the readers the goals need: the Notion mirror, the habits and logs, the
+user's tasks, the stored indicators and the goal edits laid over the mirror. The route and the push notices both use
 `load_goals`, so the goal indicator that a reminder quotes is the one the screen shows.
 """
 
@@ -12,6 +12,7 @@ from datetime import date
 from yawmi.domain.habits import kpi_prefill_kind
 from yawmi.domain.periods import WeekStart
 from yawmi.goals.assemble import build_goals
+from yawmi.goals.edits_store import EditStore
 from yawmi.goals.models import GoalsOut, PaceOut, PaceReading
 from yawmi.goals.pace import pace_line
 from yawmi.goals.reader import GoalsReader, KpiRow
@@ -31,6 +32,7 @@ class GoalSources:
     today: TodayReader
     tasks: GoalTaskStore
     indicators: IndicatorStore
+    edits: EditStore | None = None
 
 
 async def load_goals(sources: GoalSources, today: date, week_start: WeekStart) -> GoalsOut:
@@ -60,6 +62,7 @@ async def load_goals(sources: GoalSources, today: date, week_start: WeekStart) -
         stored=stored,
         today=today,
         week_start=week_start,
+        edits=await sources.edits.current() if sources.edits is not None else (),
     )
 
 

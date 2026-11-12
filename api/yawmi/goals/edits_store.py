@@ -6,9 +6,10 @@ the pending one under a transaction-scoped advisory lock on `(page_id, field)`, 
 edits of the same field serialise instead of failing on the index. Nothing is ever deleted (the
 role has no `DELETE` on the table): a cancelled edit becomes `superseded`.
 
-Only a pending edit changes state afterwards: `cancel` (to `superseded`) and `finish` (to
-`applied`, `conflict` or `failed`) are conditional updates, and return `None` for an edit that is
-not pending (or does not exist), so a late result never overwrites a newer state.
+Only a pending edit takes a result: `finish` (to `applied`, `conflict` or `failed`) is a
+conditional update that returns `None` for an edit that is not pending, so a late result never
+overwrites a newer state. `cancel` closes a pending or conflicting edit as `cancelled` and appends
+a dated line to its note; `applied`, `failed`, `superseded` and `cancelled` are final.
 """
 
 import json
@@ -54,8 +55,9 @@ class EditStore(Protocol):
 
     async def get(self, edit_id: UUID) -> GoalEditOut | None: ...
 
-    async def cancel(self, edit_id: UUID) -> GoalEditOut | None:
-        """A pending edit becomes `superseded`; `None` if it is not pending."""
+    async def cancel(self, edit_id: UUID, note_line: str) -> GoalEditOut | None:
+        """A pending or conflicting edit becomes `cancelled`, `note_line` appended to its note;
+        `None` if it is in any other state (or does not exist)."""
         ...
 
     async def finish(
@@ -125,8 +127,8 @@ GET_EDIT = f"SELECT {_COLUMNS} FROM yawmi.goal_edits WHERE id = $1"
 
 CANCEL_EDIT = f"""
 UPDATE yawmi.goal_edits
-SET status = 'superseded'
-WHERE id = $1 AND status = 'pending'
+SET status = 'cancelled', note = note || $2
+WHERE id = $1 AND status IN ('pending', 'conflict')
 RETURNING {_COLUMNS}
 """
 
@@ -216,8 +218,8 @@ class AsyncpgEditStore:
         row = await self._pool.fetchrow(GET_EDIT, edit_id)
         return None if row is None else edit_out(row)
 
-    async def cancel(self, edit_id: UUID) -> GoalEditOut | None:
-        row = await self._pool.fetchrow(CANCEL_EDIT, edit_id)
+    async def cancel(self, edit_id: UUID, note_line: str) -> GoalEditOut | None:
+        row = await self._pool.fetchrow(CANCEL_EDIT, edit_id, note_line)
         return None if row is None else edit_out(row)
 
     async def finish(
