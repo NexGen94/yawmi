@@ -50,16 +50,14 @@ class HabitDue(BaseModel):
     unit: HabitUnit = Field(description="`''` للعادة بلا وحدة، كما في `/v1/habits`")
     target_per_period: float
     period: Period
-    anchor: Anchor = Field(default="free", description="مرسى العادة في اليوم")
-    outcome: str | None = None
-    goal_ref: str | None = None
+    anchor: Anchor = Field(description="مرسى العادة في اليوم")
+    outcome: str | None = Field(description="رمز المخرج المرتبط إن وُجد")
+    goal_ref: str | None = Field(description="رمز الهدف المرتبط إن وُجد")
     done_today: bool = Field(description="سجل اليوم (آخر ما كُتب له من أي جهاز) إنجاز (`done`)")
     status_today: TodayStatus | None = Field(
-        default=None, description="حالة سجل اليوم (`done` أو `skip` أو `vacation` أو `null`)"
+        description="حالة سجل اليوم (`done` أو `skip` أو `vacation` أو `null`)"
     )
-    value_today: float | None = Field(
-        default=None, description="قيمة سجل اليوم إن كان `done` وله قيمة"
-    )
+    value_today: float | None = Field(description="قيمة سجل اليوم إن كان `done` وله قيمة")
     period_progress: PeriodProgressOut = Field(
         description="تقدّم الفترة الحالية (يوم أو أسبوع أو شهر)"
     )
@@ -261,13 +259,13 @@ class CardHabit(BaseModel):
     code: str
     title_ar: str
     adherence: float | None
-    total_done: float = 0.0
+    total_done: float
 
 
 class OutcomeOut(BaseModel):
     code: str
     title: str
-    track: str = ""
+    track: str
     target_date: date
     status: str
     milestones_total: int
@@ -277,7 +275,6 @@ class OutcomeOut(BaseModel):
         description="أقرب محطة مفتوحة بموعدها (ثم بالدورة)، المتأخرة منها أولاً"
     )
     habits: list[CardHabit] = Field(
-        default_factory=list,
         description="العادات النشطة المرتبطة بالمخرج (`outcome`)، بالرمز، مع التزامها وإجمالي إنجازها",
     )
 
@@ -319,9 +316,9 @@ def _card_habit(
 def build_outcomes(
     goals: Iterable[GoalRow],
     milestones: Sequence[MilestoneRow],
+    today: date,
     habits: Iterable[HabitRow] = (),
     logs: Iterable[LogRow] = (),
-    today: date | None = None,
     week_start: WeekStart = "sun",
 ) -> list[OutcomeOut]:
     """O1..O12 from `raqib.goals`, each with its milestones' completion, next open one, and habits.
@@ -329,7 +326,7 @@ def build_outcomes(
     Completion counts milestones as Notion does (done ÷ all); the habits never change it.
     """
     by_habit = _logs_by_habit(logs)
-    ref_day = today or date(2026, 11, 10)
+    ref_day = today
     by_outcome: dict[str, list[CardHabit]] = defaultdict(list)
     for row in sorted(habits, key=lambda h: h.code):
         if row.outcome is not None:

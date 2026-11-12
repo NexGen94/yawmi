@@ -51,7 +51,13 @@ def install_extra_schemas(app: FastAPI) -> None:
         )
         schemas = schema.setdefault("components", {}).setdefault("schemas", {})
         for name, definition in top.get("$defs", {}).items():
-            schemas.setdefault(name, definition)
+            if name in schemas:
+                assert schemas[name] == definition, (
+                    f"Schema collision for '{name}' with different definitions: "
+                    f"{schemas[name]!r} != {definition!r}"
+                )
+            else:
+                schemas[name] = definition
         app.openapi_schema = schema
         return schema
 

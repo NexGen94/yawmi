@@ -90,7 +90,12 @@ async def get_overview(reader: TodayReaderDep, settings: SettingsDep) -> Overvie
     logs = await reader.habit_logs_of([h.code for h in linked], first, day) if linked else []
     return OverviewOut(
         outcomes=build_outcomes(
-            await reader.goals(), milestones, linked, logs, day, settings.week_start
+            goals=await reader.goals(),
+            milestones=milestones,
+            today=day,
+            habits=linked,
+            logs=logs,
+            week_start=settings.week_start,
         ),
         cards=build_cards(await reader.cards(), linked, logs, day, settings.week_start, milestones),
     )

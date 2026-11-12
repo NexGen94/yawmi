@@ -82,7 +82,7 @@ class GoalRow:
     title: str
     target_date: date
     status: str
-    track: str = "مسار"
+    track: str
 
 
 @dataclass(frozen=True)
@@ -155,6 +155,7 @@ HABIT_LOGS_RANGE = """
 SELECT habit_code, day, value, status
 FROM yawmi.habit_logs
 WHERE day BETWEEN $1 AND $2 AND ($3::text IS NULL OR habit_code = $3)
+  AND status IS NOT NULL
 ORDER BY day, habit_code
 """
 

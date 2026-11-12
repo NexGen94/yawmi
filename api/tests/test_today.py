@@ -189,10 +189,10 @@ def test_outcome_number() -> None:
 
 def test_outcomes_have_completion_and_the_next_open_milestone() -> None:
     goals = [
-        GoalRow("O2", "الصحة النفسية", date(2031, 12, 14), "active"),
-        GoalRow("O1", "الصحة الجسدية", date(2031, 12, 14), "active"),
-        GoalRow("O3", "نظام", date(2031, 12, 20), "active"),
-        GoalRow("weight", "ليس مخرجاً", date(2031, 1, 1), "active"),
+        GoalRow("O2", "الصحة النفسية", date(2031, 12, 14), "active", "الصحة"),
+        GoalRow("O1", "الصحة الجسدية", date(2031, 12, 14), "active", "الصحة"),
+        GoalRow("O3", "نظام", date(2031, 12, 20), "active", "النظام"),
+        GoalRow("weight", "ليس مخرجاً", date(2031, 1, 1), "active", "أخرى"),
     ]
     milestones = [
         milestone("a", "O1", due=date(2027, 1, 1), done=True),
@@ -202,7 +202,7 @@ def test_outcomes_have_completion_and_the_next_open_milestone() -> None:
         milestone("e", "O2", due=None, cycle=3),
         milestone("f", "O2", due=None, cycle=2),
     ]
-    out = build_outcomes(goals, milestones)
+    out = build_outcomes(goals, milestones, today=date(2026, 11, 10))
     assert [o.code for o in out] == ["O1", "O2", "O3"]
     o1, o2, o3 = out
     assert (o1.milestones_total, o1.milestones_done, o1.completion) == (4, 1, 0.25)
@@ -546,8 +546,8 @@ async def test_overview_lists_outcomes_and_cards_without_private_text(
     client: httpx.AsyncClient, backend: Backend
 ) -> None:
     await backend.add(
-        GoalRow("O1", "الصحة الجسدية", date(2031, 12, 14), "active"),
-        GoalRow("O2", "الصحة النفسية العالية", date(2031, 12, 14), "active"),
+        GoalRow("O1", "الصحة الجسدية", date(2031, 12, 14), "active", "مسار"),
+        GoalRow("O2", "الصحة النفسية العالية", date(2031, 12, 14), "active", "مسار"),
         milestone("a", "O1", due=date(2026, 12, 20), done=True),
         milestone("b", "O1", due=date(2027, 2, 1), cycle=2),
     )
@@ -788,7 +788,7 @@ async def test_overview_links_outcome_habits_and_milestone_card_habits(
     await backend.add(
         GoalRow("O7", "الاستقلال المالي", date(2031, 12, 14), "active", "المال"),
         milestone("M", "O7", card_page_ids=(card_c,)),
-        habit("sys-o7", outcome="O7", start_day=date(2026, 11, 8)),
+        habit("sys-o7", title_ar="عادة نظامية sys-o7", outcome="O7", start_day=date(2026, 11, 8)),
         habit("ms-habit", goal_ref=ms_m, start_day=date(2026, 11, 8)),
         log("sys-o7", day=date(2026, 11, 8), status="done"),
         log("ms-habit", day=date(2026, 11, 8), status="done"),

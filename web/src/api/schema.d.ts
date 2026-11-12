@@ -499,10 +499,7 @@ export interface components {
             code: string;
             /** Title Ar */
             title_ar: string;
-            /**
-             * Total Done
-             * @default 0
-             */
+            /** Total Done */
             total_done: number;
         };
         /** CardOut */
@@ -913,7 +910,6 @@ export interface components {
             /**
              * Anchor
              * @description مرسى العادة في اليوم
-             * @default free
              * @enum {string}
              */
             anchor: "after_wake" | "before_sleep" | "free";
@@ -924,15 +920,21 @@ export interface components {
              * @description سجل اليوم (آخر ما كُتب له من أي جهاز) إنجاز (`done`)
              */
             done_today: boolean;
-            /** Goal Ref */
-            goal_ref?: string | null;
+            /**
+             * Goal Ref
+             * @description رمز الهدف المرتبط إن وُجد
+             */
+            goal_ref: string | null;
             /**
              * Kind
              * @enum {string}
              */
             kind: "boolean" | "count" | "duration";
-            /** Outcome */
-            outcome?: string | null;
+            /**
+             * Outcome
+             * @description رمز المخرج المرتبط إن وُجد
+             */
+            outcome: string | null;
             /**
              * Period
              * @enum {string}
@@ -944,7 +946,7 @@ export interface components {
              * Status Today
              * @description حالة سجل اليوم (`done` أو `skip` أو `vacation` أو `null`)
              */
-            status_today?: ("done" | "skip" | "vacation") | null;
+            status_today: ("done" | "skip" | "vacation") | null;
             /** Target Per Period */
             target_per_period: number;
             /** Title Ar */
@@ -959,7 +961,7 @@ export interface components {
              * Value Today
              * @description قيمة سجل اليوم إن كان `done` وله قيمة
              */
-            value_today?: number | null;
+            value_today: number | null;
         };
         /**
          * HabitIn
@@ -1420,7 +1422,7 @@ export interface components {
              * Habits
              * @description العادات النشطة المرتبطة بالمخرج (`outcome`)، بالرمز، مع التزامها وإجمالي إنجازها
              */
-            habits?: components["schemas"]["CardHabit"][];
+            habits: components["schemas"]["CardHabit"][];
             /** Milestones Done */
             milestones_done: number;
             /** Milestones Total */
@@ -1436,10 +1438,7 @@ export interface components {
             target_date: string;
             /** Title */
             title: string;
-            /**
-             * Track
-             * @default
-             */
+            /** Track */
             track: string;
         };
         /** OverviewOut */

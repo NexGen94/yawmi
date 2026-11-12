@@ -211,3 +211,17 @@ def test_event_types_and_named_payload_schemas_in_components(exporter: ModuleTyp
         "GoalTaskSetPayload",
     ):
         assert name in schemas, name
+
+
+def test_first_screen_contract_requires_all_fields_server_sends(exporter: ModuleType) -> None:
+    schemas = exporter.build_spec()["components"]["schemas"]
+    habit_due = schemas["HabitDue"]
+    for prop in ("anchor", "goal_ref", "outcome", "status_today", "value_today"):
+        assert prop in habit_due.get("required", []), f"{prop} not in HabitDue.required"
+
+    outcome = schemas["OutcomeOut"]
+    for prop in ("habits", "track"):
+        assert prop in outcome.get("required", []), f"{prop} not in OutcomeOut.required"
+
+    card_habit = schemas["CardHabit"]
+    assert "total_done" in card_habit.get("required", []), "total_done not in CardHabit.required"
