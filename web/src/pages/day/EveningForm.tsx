@@ -76,7 +76,8 @@ function mergePriorities(
   return base.map((p) => ({ title: p.title, state: earlier.get(p.title) ?? 'open' }));
 }
 
-const sorted = (a: readonly string[]): string[] => [...a].sort();
+const byCode = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+const sorted = (a: readonly string[]): string[] => [...a].sort(byCode);
 const signature = (score: number | null, feelings: readonly string[], activities: readonly string[]): string =>
   JSON.stringify([score, sorted(feelings), sorted(activities)]);
 

@@ -657,7 +657,7 @@ describe('the unsent draft', () => {
     expect(
       Object.keys(localStorage)
         .filter((k) => k.startsWith('yawmi.draft.'))
-        .sort(),
+        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
     ).toEqual(['yawmi.draft.day.2026-11-09.morning', `yawmi.draft.day.${DAY}.morning`]);
   });
 

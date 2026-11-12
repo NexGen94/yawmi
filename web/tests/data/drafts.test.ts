@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearAllDrafts, DRAFT_PREFIX } from '../../src/data/drafts';
 import { clearDraft, pruneOldDrafts, readDraft, writeDraft } from '../../src/pages/day/draft';
 
-const keys = (): string[] => Object.keys(localStorage).sort();
+const byKey = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+const keys = (): string[] => Object.keys(localStorage).sort(byKey);
 
 beforeEach(() => localStorage.clear());
 afterEach(() => {
