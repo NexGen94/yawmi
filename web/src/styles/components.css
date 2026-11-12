@@ -1008,6 +1008,21 @@
   fill: var(--c-ink-2);
 }
 
+.heat-none {
+  stroke: var(--c-ink-2);
+  stroke-width: 1.5;
+}
+
+.heat-future {
+  stroke: var(--c-blue-pale);
+  stroke-width: 1.5;
+}
+
+.heat-today {
+  stroke: var(--c-ink);
+  stroke-width: 2;
+}
+
 :is(.hero-card, .on-ink) .heat-done {
   fill: var(--c-blue-light);
 }

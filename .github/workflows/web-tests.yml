@@ -5,6 +5,7 @@ on:
     paths:
       - "web/**"
       - "contracts/domain-vectors/**"
+      - "contracts/view-cases/**"
       - "openapi/openapi.json"
       - ".github/workflows/web-tests.yml"
   push:
@@ -12,6 +13,7 @@ on:
     paths:
       - "web/**"
       - "contracts/domain-vectors/**"
+      - "contracts/view-cases/**"
       - "openapi/openapi.json"
       - ".github/workflows/web-tests.yml"
 
