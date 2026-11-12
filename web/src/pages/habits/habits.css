@@ -226,6 +226,10 @@
   list-style: none;
 }
 
+.goal-list > li {
+  flex: none;
+}
+
 .goal-item {
   display: flex;
   flex-direction: column;
@@ -349,4 +353,18 @@ li.goal-item.goal-off {
   .editor-date-pair {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.editor-lock-note {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-card);
+  background: var(--c-blue-pale);
+  color: var(--c-ink);
+  font-size: var(--fs-note);
+}
+
+/* A segmented choice that wraps (six chips on a phone) keeps rounded corners, not a pill. */
+.editor-group .segmented {
+  border-radius: calc(var(--hit) / 2 + var(--sp-1));
 }

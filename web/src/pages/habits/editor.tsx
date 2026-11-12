@@ -165,7 +165,8 @@ function EditorForm({ initial, data, prefill, notice }: EditorFormProps) {
   const type = habitType(form);
   const typeLocked = system || polarityLocked;
   const hintFor = (field: keyof HabitForm): string | undefined => {
-    if (system) return SYSTEM_HINT;
+    // A system habit says it once, at the top of the form, not under every locked field.
+    if (system) return undefined;
     if (form.polarity === 'abstain' && locked.has(field)) return ABSTAIN_HINT;
     if (form.measure === 'average' && locked.has(field)) return AVERAGE_HINT;
     return undefined;
@@ -221,6 +222,11 @@ function EditorForm({ initial, data, prefill, notice }: EditorFormProps) {
     <div class="page-cols editor-cols">
       <div class="editor-main">
         <Card title="العادة" class="editor-card">
+          {system && (
+            <p class="editor-lock-note">
+              <strong>{SYSTEM_HINT}</strong> <span>يُعدَّل المرسى والتذكيرات وجملة الهوية فقط.</span>
+            </p>
+          )}
           {original === undefined ? (
             <>
               <LockedGroup label="المصدر">
@@ -253,7 +259,7 @@ function EditorForm({ initial, data, prefill, notice }: EditorFormProps) {
           <LockedGroup
             label="النوع"
             locked={typeLocked}
-            hint={system ? SYSTEM_HINT : POLARITY_LOCKED_HINT}
+            hint={system ? undefined : POLARITY_LOCKED_HINT}
             error={errors.kind ?? errors.polarity}
           >
             <Segmented

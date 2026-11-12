@@ -4,11 +4,18 @@ import type { ReminderIn } from '../../habits/types';
 import { fmt } from '../../lib/format';
 import { Button } from '../../ui/Button';
 import { Chips } from '../../ui/Chips';
+import { Disclosure } from '../../ui/Disclosure';
 import { Field } from '../../ui/Field';
 
 const DAY_OPTIONS = WEEKDAYS.map((name) => ({ value: name, label: name }));
 /** A new reminder: the morning, every day. */
 const NEW_REMINDER: ReminderIn = { time: '07:00', days_mask: ALL_DAYS };
+
+/** The days of a reminder in a few words: «كل يوم» or the names. */
+function daysWord(mask: number): string {
+  if (mask === ALL_DAYS) return 'كل يوم';
+  return namesOf(mask).join('، ') || 'لا يوم';
+}
 
 export interface ReminderFieldsProps {
   reminders: ReminderIn[];
@@ -29,12 +36,14 @@ export function ReminderFields({ reminders, error, onChange }: ReminderFieldsPro
         return (
           <div class="reminder-row" key={i}>
             <Field label={`وقت التذكير ${fmt.num(n)}`} type="time" value={reminder.time} onInput={(time) => set(i, { ...reminder, time })} />
-            <Chips
-              label={`أيام التذكير ${fmt.num(n)}`}
-              options={DAY_OPTIONS}
-              selected={namesOf(reminder.days_mask)}
-              onChange={(names) => set(i, { ...reminder, days_mask: maskOf(names) })}
-            />
+            <Disclosure summary={`الأيام: ${daysWord(reminder.days_mask)}`}>
+              <Chips
+                label={`أيام التذكير ${fmt.num(n)}`}
+                options={DAY_OPTIONS}
+                selected={namesOf(reminder.days_mask)}
+                onChange={(names) => set(i, { ...reminder, days_mask: maskOf(names) })}
+              />
+            </Disclosure>
             <Button onClick={() => onChange(reminders.filter((_, j) => j !== i))} aria-label={`حذف التذكير ${fmt.num(n)}`}>
               حذف
             </Button>
