@@ -19,13 +19,14 @@ export interface CheckRowProps {
  *  the state never rests on colour alone. */
 export function CheckRow({ checked, label, note, badge, shape = 'circle', disabled, onToggle }: CheckRowProps) {
   const id = useId();
+  const described = [note && `${id}-note`, badge && `${id}-badge`].filter(Boolean).join(' ') || undefined;
   return (
     <button
       type="button"
       class="check-row"
       aria-pressed={checked ? 'true' : 'false'}
       aria-labelledby={`${id}-label`}
-      aria-describedby={note ? `${id}-note` : undefined}
+      aria-describedby={described}
       disabled={disabled}
       onClick={() => onToggle(!checked)}
     >
@@ -44,7 +45,11 @@ export function CheckRow({ checked, label, note, badge, shape = 'circle', disabl
           </span>
         )}
       </span>
-      {badge && <span class="check-badge">{badge}</span>}
+      {badge && (
+        <span id={`${id}-badge`} class="check-badge">
+          {badge}
+        </span>
+      )}
     </button>
   );
 }

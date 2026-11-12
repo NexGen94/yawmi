@@ -57,14 +57,16 @@ export function StateFrame(props: StateFrameProps) {
     case 'loading':
       body = (
         <>
-          <span class="visually-hidden">{TEXT.loading}</span>
+          <span class="visually-hidden" role="status">
+            {TEXT.loading}
+          </span>
           {skeleton ?? <DefaultSkeleton />}
         </>
       );
       break;
     case 'error':
       body = (
-        <div class="state-message">
+        <div class="state-message" role="alert">
           <p class="state-text">{TEXT.error}</p>
           <Button onClick={onRetry}>{TEXT.retry}</Button>
         </div>
