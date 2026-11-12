@@ -95,9 +95,7 @@ test('without a connection a tick and two quick adds are kept, shown after a rel
     .toBe(firstValue + 10);
 
   await expect(page.locator('.connection')).toHaveAttribute('data-state', 'online');
-  // The page does not refetch by itself when the connection returns; a reload shows the live data.
-  await page.reload();
-  await expect(page.getByRole('heading', { level: 1, name: 'الرئيسية' })).toBeVisible();
+  // The page asks the server again by itself when the connection returns: no reload.
   await expect(page.getByText('نسخة محفوظة · بلا اتصال')).toBeHidden();
   await expect(tickRow.locator('.check-row')).toHaveAttribute('aria-pressed', 'true');
   await expect(minutesRow.locator('.check-note')).toContainText(`${firstValue + 10} من`);

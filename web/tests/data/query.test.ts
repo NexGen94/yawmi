@@ -118,4 +118,40 @@ describe('useQuery', () => {
     expect(screen.getByTestId('data').textContent).toBe('');
     expect(screen.getByTestId('stale').textContent).toBe('false');
   });
+
+  it('refetches when the browser goes back online, and only while it shows the offline copy', async () => {
+    vi.restoreAllMocks(); // the cache spies of the tests above stay installed
+    await writeCache('online-key', { message: 'نسخة سابقة' });
+    const fetcher = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue({ message: 'من الخادم' });
+
+    render(h(QueryHarness, { queryKey: 'online-key', fetcher }));
+    await screen.findByText('offline');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    fireEvent(window, new Event('online'));
+
+    await screen.findByText('ready');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('stale').textContent).toBe('false');
+    expect(screen.getByTestId('data').textContent).toBe(JSON.stringify({ message: 'من الخادم' }));
+
+    // A page that is ready has nothing to refetch.
+    fireEvent(window, new Event('online'));
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops listening for online when the page unmounts', async () => {
+    vi.restoreAllMocks();
+    const fetcher = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const { unmount } = render(h(QueryHarness, { queryKey: 'unmount-key', fetcher }));
+    await screen.findByText('offline');
+
+    unmount();
+    fireEvent(window, new Event('online'));
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
 });

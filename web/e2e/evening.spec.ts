@@ -6,9 +6,15 @@ interface MoodList {
   logs: { day: string; score: number }[];
 }
 
+interface JournalList {
+  entries: { part: string; answers: { win?: string | null } }[];
+}
+
 test('the evening logs the mood of the project and closes the day', async ({ paired: page, api, projectName }) => {
   const { mood } = PROJECT_DATA[projectName];
   const today = riyadhToday();
+  // Different in every run (see morning.spec.ts): proves this close reached the server.
+  const marker = `إنجاز ${projectName} ${Date.now()}`;
 
   await page.getByRole('link', { name: /إغلاق اليوم/ }).click();
   await expect(page).toHaveURL(/\/day\/evening$/);
@@ -19,12 +25,23 @@ test('the evening logs the mood of the project and closes the day', async ({ pai
   await page.getByRole('radio', { name: String(mood), exact: true }).check();
   await expect(page.getByRole('radio', { name: String(mood), exact: true })).toBeChecked();
 
+  await page.getByLabel('إنجاز اليوم').fill(marker);
+
   await expectNoSeriousA11y(page);
   await expectNoHorizontalScroll(page);
   await shot(page, 'evening-form');
 
   await page.getByRole('button', { name: 'إغلاق اليوم' }).click();
 
+  await expect
+    .poll(
+      async () => {
+        const { entries } = await api.get<JournalList>(`/v1/journal?from=${today}&to=${today}`);
+        return entries.find((e) => e.part === 'evening')?.answers.win;
+      },
+      { timeout: SYNC_TIMEOUT },
+    )
+    .toBe(marker);
   await expect
     .poll(
       async () => {
