@@ -2,6 +2,9 @@
 import { fireEvent, render, screen } from '@testing-library/preact';
 import { describe, expect, it, vi } from 'vitest';
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { HabitRow } from '../../src/habits/HabitRow';
 import type { HabitTodayItem } from '../../src/habits/useHabitsToday';
 import type { PeriodProgress } from '../../src/domain/types';
@@ -131,5 +134,117 @@ describe('HabitRow: a build habit', () => {
   it('a yes/no habit has no «+» button', () => {
     renderRow({ ...build(), habit: habit('walk', 'المشي'), progress: progress({ done: 0, reached: false }) });
     expect(screen.queryByRole('button', { name: /^\+/ })).toBeNull();
+  });
+});
+
+describe('HabitRow: the identity sentence', () => {
+  const withIdentity = (over: Partial<HabitTodayItem['habit']> = {}): HabitTodayItem => ({
+    habit: habit('read', 'القراءة', { identity_text: 'أنا شخص يقرأ كل يوم', ...over }),
+    progress: progress({ done: 0, reached: false, completion: 0 }),
+    statusToday: null,
+    valueToday: null,
+    group: 'free',
+    state: 'active',
+    dueToday: true,
+  });
+
+  it('shows under the title of a build habit when it exists', () => {
+    renderRow(withIdentity());
+    expect(screen.getByText('أنا شخص يقرأ كل يوم')).toBeTruthy();
+    const button = screen.getByRole('button', { pressed: false });
+    expect(button.textContent).toContain('أنا شخص يقرأ كل يوم');
+  });
+
+  it('shows under the title of an abstain habit too', () => {
+    renderRow(withIdentity({ polarity: 'abstain' }));
+    expect(screen.getByText('أنا شخص يقرأ كل يوم')).toBeTruthy();
+  });
+
+  it('draws nothing when there is none', () => {
+    renderRow(withIdentity({ identity_text: null }));
+    expect(document.querySelector('.habit-identity')).toBeNull();
+  });
+});
+
+describe('HabitRow: a habit that is not live today', () => {
+  const staticItem = (state: HabitTodayItem['state'], over: Partial<HabitTodayItem['habit']> = {}, dueToday = false): HabitTodayItem => ({
+    habit: habit('challenge', 'تحدٍّ', over),
+    progress: progress({ done: 0, reached: false, completion: 0 }),
+    statusToday: null,
+    valueToday: null,
+    group: 'free',
+    state,
+    dueToday,
+  });
+
+  it('an ended habit says «انتهت مدتها» and offers no tick, no skip', () => {
+    renderRow(staticItem('ended', { end_day: '2026-10-30' }));
+    expect(screen.getByText('انتهت مدتها')).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('an upcoming habit says when it starts', () => {
+    renderRow(staticItem('upcoming', { start_day: '2026-11-15' }));
+    expect(screen.getByText('تبدأ في 2026-11-15')).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('an archived habit says «مؤرشفة»', () => {
+    renderRow(staticItem('archived', { active: false }));
+    expect(screen.getByText('مؤرشفة')).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('a live habit that is not scheduled today says so and logs nothing', () => {
+    renderRow(staticItem('active', { schedule_kind: 'weekdays', weekday_mask: 64 }));
+    expect(screen.getByText('غير مجدولة اليوم')).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('keeps the outcome badge', () => {
+    renderRow(staticItem('ended', { outcome: 'O4' }));
+    expect(screen.getByText('O4')).toBeTruthy();
+  });
+});
+
+describe('HabitRow: the state words of the habits page (showState)', () => {
+  const live = (state: HabitTodayItem['state']): HabitTodayItem => ({
+    habit: habit('read', 'القراءة'),
+    progress: progress({ done: 1, reached: state === 'done' }),
+    statusToday: state === 'done' ? 'done' : null,
+    valueToday: null,
+    group: 'free',
+    state,
+    dueToday: true,
+  });
+  const renderShown = (item: HabitTodayItem) =>
+    render(
+      <ul>
+        <HabitRow item={item} showState onTick={vi.fn()} onAdd={vi.fn()} onUntick={vi.fn()} onSkip={vi.fn()} />
+      </ul>,
+    );
+
+  it('a habit that reached its period says «تحقق هدف الفترة»', () => {
+    renderShown(live('done'));
+    expect(screen.getByText(/تحقق هدف الفترة/)).toBeTruthy();
+  });
+
+  it('a late habit carries the badge «متأخرة»', () => {
+    renderShown(live('late'));
+    expect(screen.getByText('متأخرة')).toBeTruthy();
+  });
+
+  it('the home list says neither (no showState)', () => {
+    renderRow(live('done'));
+    expect(screen.queryByText(/تحقق هدف الفترة/)).toBeNull();
+    renderRow(live('late'));
+    expect(screen.queryByText('متأخرة')).toBeNull();
+  });
+});
+
+describe('the notice leaves room at the end of the page', () => {
+  it('a page with a toast pads its block end so the last card is never covered', () => {
+    const layout = readFileSync(resolve(import.meta.dirname, '../../src/styles/layout.css'), 'utf8');
+    expect(layout).toMatch(/\.page:has\(\.toast\)\s*\{[^}]*padding-block-end:/);
   });
 });

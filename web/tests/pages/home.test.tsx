@@ -437,17 +437,37 @@ describe('home: the note stays until the next action or a dismissal', () => {
     await waitFor(() => expect(screen.queryByText('سُجّل: إطفاء الشاشات')).toBeNull());
   });
 
-  it('after a keyboard tap focus goes to «تراجع», and back to the habit after the undo', async () => {
+  it('after a keyboard tap focus stays on the row (it never jumps to «تراجع»), and the notice is a button in the tab order', async () => {
     await renderStory();
     const tick = within(row('إطفاء الشاشات')).getByRole('button', { pressed: false });
     tick.focus();
     fireEvent.keyDown(tick, { key: 'Enter' });
     fireEvent.click(tick);
     const undo = await screen.findByRole('button', { name: 'تراجع' });
-    await waitFor(() => expect(document.activeElement).toBe(undo));
-    fireEvent.click(undo);
-    await screen.findByText('3 من 6');
-    await waitFor(() => expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true));
+    await screen.findByText('4 من 6');
+    expect(document.activeElement).not.toBe(undo);
+    expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true);
+    expect(undo.tabIndex).toBeGreaterThanOrEqual(0);
+  });
+
+  it('Escape dismisses the notice and focus stays where it was', async () => {
+    await renderStory();
+    const tick = within(row('إطفاء الشاشات')).getByRole('button', { pressed: false });
+    tick.focus();
+    fireEvent.keyDown(tick, { key: 'Enter' });
+    fireEvent.click(tick);
+    await screen.findByText('سُجّل: إطفاء الشاشات');
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByText('سُجّل: إطفاء الشاشات')).toBeNull());
+    expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true);
+    // The tick itself stays: only the note went.
+    await screen.findByText('4 من 6');
+  });
+
+  it('Escape with no notice does nothing', async () => {
+    await renderStory();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.getByText('3 من 6')).toBeTruthy();
   });
 
   it('after a mouse tap focus stays where it is', async () => {

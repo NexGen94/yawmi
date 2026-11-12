@@ -3,8 +3,9 @@
 //
 // The note stays until the next logging action or until it is dismissed: a person on the keyboard
 // needs time to reach it (WCAG 2.2.1), so no timer closes it. It is announced (the Toast is a
-// polite live region), and after a tap made with the keyboard focus moves to «تراجع», then comes
-// back to the habit when the note is used or dismissed.
+// polite live region) and its buttons are in the tab order, but focus never leaves the habit that
+// was logged: moving it to «تراجع» after every keyboard tap would pull a person out of a list
+// they are working through. Escape dismisses the note from wherever focus is.
 
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
@@ -25,46 +26,31 @@ export interface LogNote {
 export function useLogNote(habits: Pick<UseHabitsToday, 'last' | 'clearLast' | 'undo' | 'release'>): LogNote {
   const { last, clearLast, undo, release } = habits;
   const [notice, setNotice] = useState('');
-  const keyboard = useRef(false);
-  const returnTo = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    const onKey = () => {
-      keyboard.current = true;
-    };
-    const onPointer = () => {
-      keyboard.current = false;
-    };
-    document.addEventListener('keydown', onKey, true);
-    document.addEventListener('pointerdown', onPointer, true);
-    return () => {
-      document.removeEventListener('keydown', onKey, true);
-      document.removeEventListener('pointerdown', onPointer, true);
-    };
-  }, []);
-
-  const restoreFocus = useCallback(() => {
-    const element = returnTo.current;
-    returnTo.current = null;
-    if (element?.isConnected) element.focus();
-  }, []);
-
-  // A new log replaces the note. After a keyboard tap, «تراجع» takes the focus.
+  // A new log replaces the note.
   useEffect(() => {
     setNotice('');
-    if (!last || !keyboard.current) return;
-    const active = document.activeElement;
-    if (returnTo.current === null && active instanceof HTMLElement && !active.closest('.toast')) {
-      returnTo.current = active;
-    }
-    document.querySelector<HTMLElement>('.toast-action')?.focus();
   }, [last?.eventId]);
+
+  // Escape dismisses the note from anywhere. The listener lives as long as the page, and reads
+  // through a ref whether a note is showing, so it never misses a note that has just appeared.
+  const showing = useRef(false);
+  showing.current = Boolean(notice) || last !== null;
+  const clearRef = useRef(clearLast);
+  clearRef.current = clearLast;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || !showing.current) return;
+      clearRef.current();
+      setNotice('');
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   const dismiss = useCallback(() => {
     clearLast();
     setNotice('');
-    restoreFocus();
-  }, [clearLast, restoreFocus]);
+  }, [clearLast]);
 
   const untick = useCallback(
     (code: string) => {
@@ -78,7 +64,6 @@ export function useLogNote(habits: Pick<UseHabitsToday, 'last' | 'clearLast' | '
   const takeBack = (eventId: string) => {
     void undo(eventId).then((taken) => {
       if (!taken) setNotice(SENT_NOTE);
-      restoreFocus();
     });
   };
 

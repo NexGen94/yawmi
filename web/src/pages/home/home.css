@@ -88,101 +88,6 @@
   color: var(--c-ink-2);
 }
 
-/* ---------- Habits ---------- */
-
-.habit-group + .habit-group {
-  margin-block-start: var(--sp-5);
-}
-
-.group-title {
-  margin: 0 0 var(--sp-2);
-  color: var(--c-ink-2);
-  font-size: var(--fs-note);
-  font-weight: 600;
-}
-
-.habit-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.habit-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: var(--sp-2);
-}
-
-.habit-row .check-row {
-  min-inline-size: 0;
-}
-
-.habit-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-1);
-}
-
-.habit-act {
-  min-block-size: var(--hit);
-  min-inline-size: var(--hit);
-  padding-inline: var(--sp-3);
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--c-ink-2);
-  font: inherit;
-  font-size: var(--fs-note);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.habit-act:hover {
-  background: var(--c-blue-pale);
-}
-
-.habit-act:focus-visible {
-  outline: 2px solid transparent;
-  box-shadow: var(--focus);
-}
-
-/* The quick increment and the slip button are real actions: they carry a border. */
-.habit-plus {
-  border-color: var(--c-blue);
-  color: var(--c-ink);
-}
-
-.habit-abstain-body {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-2);
-}
-
-.habit-abstain-body .check-text {
-  flex: 1;
-  min-inline-size: 0;
-}
-
-/* A state, not a control: a small pale rounded square, never the 44px circle of a done button. */
-.habit-abstain-mark {
-  flex: none;
-  inline-size: var(--sp-5);
-  block-size: var(--sp-5);
-  margin-inline: var(--sp-3);
-  border: 1.5px solid var(--c-blue);
-  border-radius: var(--sp-2);
-  background: var(--c-blue-pale);
-}
-
-.habit-abstain-clean {
-  background: var(--c-blue-light);
-}
-
 /* ---------- Quick access and the day summary ---------- */
 
 .quick-list {
@@ -256,15 +161,5 @@ p.summary-note {
 
   .hero-count {
     font-size: calc(var(--fs-num-lg) * 0.75);
-  }
-
-  /* A row with the «+» button drops its actions under the title, in line with the text, so the
-     title keeps its width. A row with «تخطي» alone keeps it on the same line. */
-  .habit-row:has(.habit-plus) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .habit-row:has(.habit-plus) .habit-actions {
-    padding-inline-start: calc(var(--sp-2) + var(--hit) + var(--sp-3));
   }
 }

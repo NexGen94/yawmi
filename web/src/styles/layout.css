@@ -211,6 +211,12 @@
   padding-block: var(--sp-4) var(--sp-8);
 }
 
+/* The notice (.toast) is fixed at the bottom of the window: while it shows, the page ends below it,
+   so it never covers the last card, whether the window is 1280 or 390 wide. */
+.page:has(.toast) {
+  padding-block-end: calc(3 * var(--sp-8));
+}
+
 .page h1 {
   margin: 0;
   margin-block-end: var(--sp-6);
