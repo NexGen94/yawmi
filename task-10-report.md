@@ -3,7 +3,7 @@
 ## 1. Executive Summary & Verification State
 - **Task**: Task 10 — habits, settings, indicators, notices, abstain habit rules, habit states, and KPI draft rulings.
 - **Branch**: `task/10-habits-settings-indicators`
-- **Head Commit**: `bc773ea` (`bc773ea3251ef3858ebd4f13eaf97d7edceda052`)
+- **Head Commit**: `2d76159` (`2d76159e2170364d9dbd2eb9753df186985c4794`)
 - **Pull Request**: [#36](https://github.com/NexGen94/yawmi/pull/36)
 - **Status**: DONE (waiting for controller review, not merged).
 
