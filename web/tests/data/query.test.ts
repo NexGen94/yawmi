@@ -6,6 +6,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { h } from 'preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as cacheModule from '../../src/data/cache';
 import { writeCache } from '../../src/data/cache';
 import { useQuery } from '../../src/data/query';
 import { closeDb } from '../../src/sync/outbox';
@@ -94,5 +95,27 @@ describe('useQuery', () => {
 
     await screen.findByText(JSON.stringify({ count: 2 }));
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('failed cache write does not discard successful fetch, showing data with state ready', async () => {
+    vi.spyOn(cacheModule, 'writeCache').mockRejectedValue(new Error('QuotaExceededError'));
+    const fetcher = vi.fn().mockResolvedValue({ message: 'نجاح بعد عطل التخزين' });
+
+    render(h(QueryHarness, { queryKey: 'write-fail-key', fetcher }));
+
+    await screen.findByText('ready');
+    expect(screen.getByTestId('data').textContent).toBe(JSON.stringify({ message: 'نجاح بعد عطل التخزين' }));
+    expect(screen.getByTestId('stale').textContent).toBe('false');
+  });
+
+  it('failed cache read while offline ends in offline with undefined data, never stuck on loading', async () => {
+    vi.spyOn(cacheModule, 'readCache').mockRejectedValue(new Error('DatabaseCorrupted'));
+    const fetcher = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+
+    render(h(QueryHarness, { queryKey: 'read-fail-key', fetcher }));
+
+    await screen.findByText('offline');
+    expect(screen.getByTestId('data').textContent).toBe('');
+    expect(screen.getByTestId('stale').textContent).toBe('false');
   });
 });

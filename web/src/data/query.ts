@@ -42,15 +42,19 @@ export function useQuery<T>(key: string, fetcher: () => Promise<T>): QueryResult
       try {
         const result = await fetcherRef.current();
         if (cancelled) return;
-        await writeCache(key, result);
-        if (cancelled) return;
         setData(result);
         setState('ready');
         setStale(false);
+        void writeCache(key, result).catch(() => {});
       } catch (error: unknown) {
         if (cancelled) return;
         if (isNetworkError(error)) {
-          const cached = await readCache<T>(key);
+          let cached: { value: T; savedAt: string } | undefined;
+          try {
+            cached = await readCache<T>(key);
+          } catch {
+            cached = undefined;
+          }
           if (cancelled) return;
           if (cached !== undefined) {
             setData(cached.value);
