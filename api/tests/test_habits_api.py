@@ -14,7 +14,7 @@ and the seeded codes of `REAL_KPIS`, whose prefill rule is keyed by code).
 import os
 import re
 from collections.abc import AsyncIterator
-from datetime import date, time
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
@@ -54,6 +54,8 @@ REAL_KPIS = (
     "sleep_7h_nights",
     "emergency_months",
     "side_income_sar",
+    "measured_projects",
+    "workshops_count",
 )
 SYSTEM_START = date(2026, 11, 1)
 SYSTEM_LOCKED = "عادة نظامية: يُعدَّل المرسى والتذكيرات فقط"
@@ -239,6 +241,8 @@ class PostgresBackend:
         unit: str = "صفحة",
         frequency: str = "weekly",
     ) -> None:
+        await self.pool.execute("DELETE FROM raqib.kpi_readings WHERE kpi_code = $1", code)
+        await self.pool.execute("DELETE FROM raqib.kpis WHERE code = $1", code)
         await self.pool.execute(
             "INSERT INTO raqib.kpis (code, name, unit, direction, target, frequency)"
             " VALUES ($1, 'مؤشر', $3, $4, $2, $5)",
@@ -280,7 +284,7 @@ class PostgresBackend:
         )
         await self.pool.execute("DELETE FROM yawmi.habits WHERE title_ar LIKE $1", like)
         await self.pool.execute(
-            "UPDATE yawmi.habits SET anchor = NULL, start_day = $1 WHERE code = 'english_minutes'",
+            "UPDATE yawmi.habits SET anchor = NULL, start_day = $1, active = true WHERE code = 'english_minutes'",
             SYSTEM_START,
         )
         await self.pool.execute(
@@ -408,6 +412,8 @@ async def test_create_returns_201_and_the_habit_is_listed(client: httpx.AsyncCli
         "anchor": "free",
         "start_day": "2026-11-10",
         "end_day": None,
+        "polarity": "build",
+        "identity_text": None,
         "system": False,
         "created_by": "user",
         "active": True,
@@ -458,6 +464,8 @@ async def test_create_keeps_every_field_it_was_given(client: httpx.AsyncClient) 
         "anchor": "after_wake",
         "start_day": "2026-11-09",
         "end_day": "2026-12-08",
+        "polarity": "build",
+        "identity_text": None,
         "system": False,
         "created_by": "user",
         "active": True,
@@ -577,6 +585,12 @@ async def test_system_habit_changes_only_its_anchor_and_reminders(
     assert response.status_code == 200, response.text
     assert response.json()["anchor"] == "after_wake"
     assert response.json()["target_per_period"] == 285.0
+    # identity_text can be edited on a system habit (SYSTEM_EDITABLE)
+    ident_resp = await client.patch(
+        path, json={"identity_text": "أنا شخص قارئ ومستمع"}, headers=auth()
+    )
+    assert ident_resp.status_code == 200, ident_resp.text
+    assert ident_resp.json()["identity_text"] == "أنا شخص قارئ ومستمع"
     # sending a locked field with its current value changes nothing, so it is allowed
     same = await client.patch(
         path,
@@ -799,6 +813,8 @@ async def test_milestone_with_a_cumulative_kpi_prefills_a_count_habit(
         "anchor": "free",
         "start_day": "2026-11-10",
         "end_day": None,
+        "polarity": "build",
+        "identity_text": None,
         "reminders": [],
     }
     daily = await client.post(
@@ -816,10 +832,10 @@ async def test_milestone_without_a_due_date_uses_the_outcome_deadline(
 ) -> None:
     await backend.add_goal("O9", date(2027, 1, 31))
     await backend.add_milestone(MilestoneRef("محطة", "O9", None), PAGE + "m2")
-    await backend.add_kpi(BOOKS, "30", [], unit="كتاب", frequency="monthly")
+    await backend.add_kpi("measured_projects", "30", [], unit="مشروع", frequency="monthly")
     response = await client.post(
         f"/v1/goals/{PAGE}m2/to-habit",
-        json={"kpi_code": BOOKS, "period": "month"},
+        json={"kpi_code": "measured_projects", "period": "month"},
         headers=auth(),
     )
     assert response.status_code == 200, response.text
@@ -883,16 +899,17 @@ async def test_a_per_period_kpi_prefills_its_own_target_when_the_periods_match(
 
 
 @pytest.mark.parametrize(
-    ("code", "unit", "target", "habit_unit"),
+    ("code", "expected_kind", "unit", "target", "habit_unit"),
     [
-        ("strength_sessions", "جلسة", "2", "session"),
-        ("sleep_7h_nights", "ليلة", "5", ""),
+        ("strength_sessions", "count", "جلسة", "2", "session"),
+        ("sleep_7h_nights", "boolean", "ليلة", "5", ""),
     ],
 )
 async def test_a_per_period_count_maps_the_kpi_unit_when_the_habit_has_one(
     client: httpx.AsyncClient,
     backend: Backend,
     code: str,
+    expected_kind: str,
     unit: str,
     target: str,
     habit_unit: str,
@@ -902,7 +919,7 @@ async def test_a_per_period_count_maps_the_kpi_unit_when_the_habit_has_one(
     response = await client.post(
         f"/v1/goals/{PAGE}card/to-habit", json={"kpi_code": code, "period": "week"}, headers=auth()
     )
-    assert kind_period_target(response) == ("count", "week", float(target))
+    assert kind_period_target(response) == (expected_kind, "week", float(target))
     assert response.json()["unit"] == habit_unit
     saved = await client.post(
         "/v1/habits",
@@ -1300,3 +1317,109 @@ async def test_every_draft_can_be_posted_back(
         headers=auth(),
     )
     assert saved.status_code == 201, saved.text
+
+
+async def test_create_abstain_habit_and_identity_text_validation(
+    client: httpx.AsyncClient,
+) -> None:
+    # polarity: "abstain" with kind: "count" -> 422
+    resp_invalid = await client.post(
+        "/v1/habits",
+        json={
+            "title_ar": "امتناع غير صالح",
+            "kind": "count",
+            "target_per_period": 1,
+            "period": "day",
+            "polarity": "abstain",
+        },
+        headers=auth(),
+    )
+    assert resp_invalid.status_code == 422, resp_invalid.text
+
+    # polarity: "abstain" with boolean daily target 1 -> 201
+    resp_valid = await client.post(
+        "/v1/habits",
+        json={
+            "title_ar": "امتناع صالح",
+            "kind": "boolean",
+            "target_per_period": 1,
+            "period": "day",
+            "polarity": "abstain",
+            "identity_text": "أنا شخص منضبط",
+        },
+        headers=auth(),
+    )
+    assert resp_valid.status_code == 201, resp_valid.text
+    data = resp_valid.json()
+    assert data["polarity"] == "abstain"
+    assert data["identity_text"] == "أنا شخص منضبط"
+
+    # identity_text with 301 chars -> 422
+    resp_301 = await client.post(
+        "/v1/habits",
+        json={
+            "title_ar": "عادة بهوية طويلة",
+            "kind": "boolean",
+            "target_per_period": 1,
+            "period": "day",
+            "identity_text": "أ" * 301,
+        },
+        headers=auth(),
+    )
+    assert resp_301.status_code == 422, resp_301.text
+
+
+async def test_books_done_kpi_target_m5(
+    client: httpx.AsyncClient, backend: Backend, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from yawmi.events import models as event_models
+
+    monkeypatch.setattr(
+        event_models, "server_now", lambda: datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
+    )
+
+    page_ref = PAGE + "m_b1"
+    await backend.add_milestone(MilestoneRef("قراءة 12 كتاباً", "O9", date(2027, 6, 30)), page_ref)
+    await backend.add_kpi(
+        BOOKS,
+        "12",
+        [(date(2026, 10, 15), "3")],
+        unit="كتاب",
+        frequency="monthly",
+    )
+    resp_month = await client.post(
+        f"/v1/goals/{page_ref}/to-habit",
+        json={"kpi_code": BOOKS, "period": "month"},
+        headers=auth(),
+    )
+    assert resp_month.status_code == 200, resp_month.text
+    assert resp_month.json()["target_per_period"] == 5.0
+
+    resp_week = await client.post(
+        f"/v1/goals/{page_ref}/to-habit",
+        json={"kpi_code": BOOKS, "period": "week"},
+        headers=auth(),
+    )
+    assert resp_week.status_code == 200, resp_week.text
+    assert resp_week.json()["target_per_period"] == 2.0
+
+    # Without reading in 2026:
+    page_ref_zero = PAGE + "m_b0"
+    await backend.add_milestone(
+        MilestoneRef("كتب بلا قراءة 2026", "O9", date(2027, 6, 30)), page_ref_zero
+    )
+    # Target 12, but reading was in 2025:
+    await backend.add_kpi(
+        BOOKS,
+        "12",
+        [(date(2025, 12, 10), "4")],
+        unit="كتاب",
+        frequency="monthly",
+    )
+    resp_zero = await client.post(
+        f"/v1/goals/{page_ref_zero}/to-habit",
+        json={"kpi_code": BOOKS, "period": "month"},
+        headers=auth(),
+    )
+    assert resp_zero.status_code == 200, resp_zero.text
+    assert resp_zero.json()["target_per_period"] == 6.0

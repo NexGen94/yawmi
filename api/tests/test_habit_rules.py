@@ -964,6 +964,25 @@ def test_a_per_period_draft_takes_its_kind_and_unit_from_the_kpi_unit(unit, shap
     assert kpi_habit_shape(unit) == shape
 
 
+def test_kpi_habit_shape_m4_d067_ruling():
+    """D-067 item 5 ruling:
+
+    «مؤشرات الأيام والليالي تُقترح «نعم/لا» بهدف أسبوعي كعادات البذرة (M-4)»
+    """
+    # meditation_days: unit "يوم", target 5, period "week" -> ("boolean", "")
+    assert kpi_habit_shape("يوم", 5, "week") == ("boolean", "")
+    # sleep_7h_nights: unit "ليلة", target 5, period "week" -> ("boolean", "")
+    assert kpi_habit_shape("ليلة", 5, "week") == ("boolean", "")
+    # family_halfday: unit "نعم/لا", target 1, period "week" -> ("boolean", "")
+    assert kpi_habit_shape("نعم/لا", 1, "week") == ("boolean", "")
+    # english_minutes: stays ("duration", "min")
+    assert kpi_habit_shape("دقيقة", 285, "week") == ("duration", "min")
+    # Target exceeding BOOLEAN_MAX_TARGET reverts to count
+    assert kpi_habit_shape("يوم", 8, "week") == ("count", "")
+    assert kpi_habit_shape("يوم", 2, "day") == ("count", "")
+    assert kpi_habit_shape("يوم", 1.5, "week") == ("count", "")
+
+
 @pytest.mark.parametrize(
     ("frequency", "period"),
     [

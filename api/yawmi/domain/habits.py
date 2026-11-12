@@ -586,8 +586,34 @@ def per_period_prefill(target: float, frequency: str, period: Period) -> float |
     return float(target) if KPI_FREQUENCY_PERIOD.get(frequency) == period else None
 
 
-def kpi_habit_shape(unit: str | None) -> tuple[HabitKind, str]:
-    """نوع عادة مؤشر العدّ في الفترة ووحدتها من وحدة المؤشر: «دقيقة» مدة بـ`min` (285 دقيقة في
-    الأسبوع تبقى 285 دقيقة)، و«جلسة» عدّ بـ`session`، وغيرهما عدّ بلا وحدة.
+BOOLEAN_MAX_TARGET: dict[str, int] = {"day": 1, "week": 7, "month": 28}
+_BOOLEAN_UNITS: frozenset[str] = frozenset({"يوم", "ليلة", "نعم/لا"})
+
+
+def kpi_habit_shape(
+    unit: str | None, target: float | None = None, period: Period | None = None
+) -> tuple[HabitKind, str]:
+    """نوع عادة مؤشر العدّ في الفترة ووحدتها من وحدة المؤشر (M-4):
+
+    - «دقيقة»: مدة بـ`min` (285 دقيقة في الأسبوع تبقى 285 دقيقة).
+    - «جلسة»: عدّ بـ`session`.
+    - «يوم» و«ليلة» و«نعم/لا»: عادة منطقية `("boolean", "")` حين يكون الهدف عدداً صحيحاً
+      ضمن `BOOLEAN_MAX_TARGET` للفترة، وإلا عدّ بلا وحدة `("count", "")`.
+    - ما عدا ذلك: عدّ بلا وحدة `("count", "")`.
     """
-    return _KPI_UNIT_SHAPE.get((unit or "").strip(), ("count", ""))
+    clean = (unit or "").strip()
+    if clean == "دقيقة":
+        return ("duration", "min")
+    if clean == "جلسة":
+        return ("count", "session")
+    if clean in _BOOLEAN_UNITS:
+        if (
+            target is not None
+            and period is not None
+            and period in BOOLEAN_MAX_TARGET
+            and float(target).is_integer()
+            and 1 <= int(target) <= BOOLEAN_MAX_TARGET[period]
+        ):
+            return ("boolean", "")
+        return ("count", "")
+    return ("count", "")

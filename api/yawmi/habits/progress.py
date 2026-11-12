@@ -73,6 +73,7 @@ def spec_of(habit: StoredHabit) -> HabitSpec:
         anchor_day=habit.anchor_day,
         start_day=habit.start_day,
         end_day=habit.end_day,
+        polarity=habit.polarity,  # type: ignore[arg-type]
     )
 
 
