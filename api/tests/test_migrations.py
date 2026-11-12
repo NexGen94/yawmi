@@ -248,6 +248,13 @@ async def test_one_pending_edit_per_page_and_field(migrated: asyncpg.Connection)
 
 
 @needs_db
+async def test_a_cancelled_edit_is_a_status_and_frees_the_field(migrated: asyncpg.Connection):
+    first = await _insert_edit(migrated)
+    await migrated.execute("UPDATE yawmi.goal_edits SET status = 'cancelled' WHERE id = $1", first)
+    await _insert_edit(migrated)
+
+
+@needs_db
 async def test_goal_edit_checks(migrated: asyncpg.Connection):
     with pytest.raises(pgerr.CheckViolationError):
         await _insert_edit(migrated, status="done")
@@ -1352,6 +1359,7 @@ STORE_MODULES = (
     "yawmi.indicators.store",
     "yawmi.goals.reader",
     "yawmi.goals.tasks_store",
+    "yawmi.goals.edits_store",
 )
 _SQL_START = re.compile(r"\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b", re.IGNORECASE)
 

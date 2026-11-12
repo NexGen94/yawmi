@@ -115,7 +115,7 @@ def test_the_base_value_is_the_mirror_without_an_applied_edit() -> None:
     assert base_value("2026-11-07", None, []) == "2026-11-07"
     pending = stored("pending", "2026-11-14")
     assert base_value("2026-11-07", None, [pending]) == "2026-11-07"  # pending never counts
-    for status in ("superseded", "failed", "conflict"):
+    for status in ("superseded", "failed", "conflict", "cancelled"):
         assert base_value("2026-11-07", None, [stored(status, "2026-11-14")]) == "2026-11-07"
 
 
