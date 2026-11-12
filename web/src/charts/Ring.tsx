@@ -1,6 +1,5 @@
-import { fmt } from '../lib/format';
 import { x } from './rtl';
-import { ratio, ratioLabel } from './scale';
+import { ratio, ratioLabel, ratioPct } from './scale';
 
 export interface RingProps {
   /** Share done, 0 to 1. Values outside are clamped; a missing value shows a dash. */
@@ -15,7 +14,7 @@ export interface RingProps {
  *  direction (counter-clockwise, because the page reads from the right). */
 export function Ring({ value, label, size = 120 }: RingProps) {
   const v = ratio(value);
-  const stroke = Math.max(6, Math.round(size / 12));
+  const stroke = Math.max(4, Math.round(size / 12));
   const c = x(0, 1, size);
   const r = (size - stroke) / 2;
   const circumference = 2 * Math.PI * r;
@@ -45,17 +44,19 @@ export function Ring({ value, label, size = 120 }: RingProps) {
         stroke-dasharray={`${dash} ${circumference}`}
         transform={toReadingDirection}
       />
-      <text
-        class="ring-value"
-        x={c}
-        y={c}
-        direction="rtl"
-        text-anchor="middle"
-        dominant-baseline="central"
-        font-size={Math.round(size * 0.22)}
-      >
-        {v === undefined ? '—' : fmt.pct(v)}
-      </text>
+      {size >= 40 && (
+        <text
+          class="ring-value"
+          x={c}
+          y={c}
+          direction="rtl"
+          text-anchor="middle"
+          dominant-baseline="central"
+          font-size={Math.max(12, Math.round(size * 0.22))}
+        >
+          {ratioPct(v)}
+        </text>
+      )}
     </svg>
   );
 }

@@ -79,12 +79,26 @@ describe('Ring', () => {
     expect(container.textContent).not.toContain('NaN');
   });
 
-  it('honours size and anchors its number', () => {
+  it('honours size, keeps small rings readable, and does not round 0.999 to 100%', () => {
     const { container } = render(<Ring value={0.25} label="ج" size={160} />);
     const svg = chart(container);
     expect(svg.getAttribute('width')).toBe('160');
     expect(svg.getAttribute('height')).toBe('160');
     expectAnchoredText(container);
+
+    const mid = render(<Ring value={0.5} label="وسط" size={48} />);
+    expect(Number(mid.container.querySelector('.ring-value')?.getAttribute('font-size'))).toBeGreaterThanOrEqual(12);
+    mid.unmount();
+
+    const tiny = render(<Ring value={0.5} label="صغير" size={24} />);
+    expect(tiny.container.querySelector('.ring-value')).toBeNull();
+    expect(chart(tiny.container).getAttribute('aria-label')).toContain('50%');
+    tiny.unmount();
+
+    const almost = render(<Ring value={0.999} label="قرب التمام" />);
+    expect(almost.container.querySelector('.ring-value')?.textContent).toBe('99%');
+    expect(chart(almost.container).getAttribute('aria-label')).toBe('قرب التمام: 99%');
+    almost.unmount();
   });
 
   it('fills from the top towards the inline end (counter-clockwise in RTL), mirrored through rtl.ts', () => {
@@ -165,6 +179,31 @@ describe('WeekBars', () => {
     const { container } = render(<WeekBars values={[]} label="أ" />);
     expect(chart(container).getAttribute('aria-label')).toBe('أ: لا بيانات بعد');
   });
+
+  it('does not turn NaN or negative values into 0 in its label, says «لا بيانات» for missing slots, and clamps negatives explicitly', () => {
+    const { container } = render(<WeekBars values={[Number.NaN, -3, 5]} label="آخر الفترات" />);
+    const svg = chart(container);
+    const label = svg.getAttribute('aria-label') ?? '';
+    expect(label).not.toContain('الأدنى 0');
+    expect(label).toContain('لا بيانات');
+    expect(label).toContain('مقصوص');
+    const bars = [...svg.querySelectorAll('.bars-bar')];
+    expect(bars).toHaveLength(2);
+    expect(Number(bars[0]?.getAttribute('height'))).toBe(2);
+
+    const trailingMissing = render(<WeekBars values={[2, 5, Number.NaN]} label="فترة" />);
+    expect(chart(trailingMissing.container).getAttribute('aria-label')).toContain('الأحدث لا بيانات');
+    expect(trailingMissing.container.textContent).not.toContain('NaN');
+    trailingMissing.unmount();
+  });
+
+  it('keeps the latest number inside the chart bounds even with 60 bars and a 4-digit value', () => {
+    const values = [...Array.from({ length: 59 }, (_, i) => (i % 10) + 1), 1059];
+    const { container } = render(<WeekBars values={values} label="ستون" />);
+    const text = container.querySelector('.bars-value');
+    expect(text?.textContent).toBe('1,059');
+    expect(Number(text?.getAttribute('x'))).toBeGreaterThanOrEqual(20);
+  });
 });
 
 describe('Sparkline', () => {
@@ -180,6 +219,17 @@ describe('Sparkline', () => {
     const xAt = (i: number): number => Number(points[i]?.split(',')[0]);
     expect(xAt(0)).toBeGreaterThan(xAt(3));
     expectAnchoredText(container);
+  });
+
+  it('keeps finite points at their true slot positions when a middle value is NaN', () => {
+    const { container } = render(<Sparkline values={[2, Number.NaN, 4, 9]} label="المؤشر" />);
+    const svg = chart(container);
+    const points = (svg.querySelector('.spark-line')?.getAttribute('points') ?? '').trim().split(/\s+/);
+    expect(points).toHaveLength(3);
+    const xAt = (i: number): number => Number(points[i]?.split(',')[0]);
+    expect(xAt(0)).toBe(x(0, 4, 160));
+    expect(xAt(1)).toBe(x(2, 4, 160));
+    expect(xAt(2)).toBe(x(3, 4, 160));
   });
 
   it('says there is no data when there are no values', () => {
@@ -243,5 +293,10 @@ describe('Heatmap', () => {
     expect(xOf(cells[0])).toBeGreaterThan(xOf(cells[6]));
     expect(xOf(cells[0])).toBe(xOf(cells[7]));
     expect(yOf(cells[7])).toBeGreaterThan(yOf(cells[0]));
+  });
+
+  it('says «لا بيانات بعد» when there are no days', () => {
+    const { container } = render(<Heatmap days={[]} label="أيام الدورة" />);
+    expect(chart(container).getAttribute('aria-label')).toBe('أيام الدورة: لا بيانات بعد');
   });
 });

@@ -2,6 +2,7 @@ import { useId } from 'preact/hooks';
 
 import { fmt } from '../lib/format';
 import { x } from './rtl';
+import { emptyLabel } from './scale';
 
 export type DayState = 'done' | 'missed' | 'skipped' | 'off';
 
@@ -67,8 +68,10 @@ export function Heatmap({ days, label }: HeatmapProps) {
   const counts: Record<DayState, number> = { done: 0, missed: 0, skipped: 0, off: 0 };
   for (const d of days) counts[d.state] += 1;
   const sentence =
-    `${label}، ${fmt.count(n, 'day')}: ` +
-    ORDER.map((s, i) => `${i === 0 ? '' : 'و'}${WORDS[s]} ${fmt.num(counts[s])}`).join('، ');
+    n === 0
+      ? emptyLabel(label)
+      : `${label}، ${fmt.count(n, 'day')}: ` +
+        ORDER.map((s, i) => `${i === 0 ? '' : 'و'}${WORDS[s]} ${fmt.num(counts[s])}`).join('، ');
 
   return (
     <div class="heatmap">
