@@ -120,3 +120,14 @@ describe('habitSpecOf on the shared vectors', () => {
     expect(isScheduled(c.input.day, habitSpecOf(c.input.habit))).toBe(c.expect.value);
   });
 });
+
+describe('habitSpecOf: polarity', () => {
+  it('carries an abstain habit as the same polarity', () => {
+    const spec = habitSpecOf({ ...stored, polarity: 'abstain', kind: 'boolean', unit: '', period: 'day', target_per_period: 1, schedule_kind: 'every_day', every_n: null, anchor_day: null });
+    expect(spec.polarity).toBe('abstain');
+  });
+
+  it('leaves a build habit without the field, as the rules read a missing one as build', () => {
+    expect('polarity' in habitSpecOf(stored)).toBe(false);
+  });
+});
