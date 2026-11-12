@@ -292,26 +292,32 @@ describe('every control meets the 44px target', () => {
 });
 
 describe('CheckRow', () => {
-  it('is a toggle button: aria-pressed, named by its label, described by its note and badge', () => {
+  it('is a toggle button: aria-pressed, named by everything it shows (label, note, badge), described by its hint', () => {
     const onToggle = vi.fn();
-    render(<CheckRow checked={false} label="المشي" note="بعد الاستيقاظ" badge={<Badge tone="signal">متأخر</Badge>} onToggle={onToggle} />);
-    const row = screen.getByRole('button', { name: 'المشي' });
+    render(
+      <CheckRow
+        checked={false}
+        label="المشي"
+        note="بعد الاستيقاظ"
+        hint="التسجيل لم يُرسل بعد"
+        badge={<Badge tone="signal">متأخر</Badge>}
+        onToggle={onToggle}
+      />,
+    );
+    // WCAG 2.5.3 (axe: label-content-name-mismatch): the words on the button are in its name.
+    const row = screen.getByRole('button', { name: 'المشي بعد الاستيقاظ متأخر' });
     expect(row.getAttribute('aria-pressed')).toBe('false');
     const describedIds = (row.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean);
-    expect(describedIds).toHaveLength(2);
-    const describedText = describedIds.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
-    expect(describedText).toContain('بعد الاستيقاظ');
-    expect(describedText).toContain('متأخر');
+    expect(describedIds).toHaveLength(1);
+    expect(document.getElementById(describedIds[0] as string)?.textContent).toBe('التسجيل لم يُرسل بعد');
     fireEvent.click(row);
     expect(onToggle).toHaveBeenCalledWith(true);
   });
 
-  it('announces its badge via aria-describedby even when there is no note', () => {
+  it('puts its badge in its name even when there is no note, and has no description without a hint', () => {
     render(<CheckRow checked={false} label="قراءة 20 صفحة" badge={<Badge>O1</Badge>} onToggle={() => undefined} />);
-    const row = screen.getByRole('button', { name: 'قراءة 20 صفحة' });
-    const describedId = row.getAttribute('aria-describedby') ?? '';
-    expect(describedId).not.toBe('');
-    expect(document.getElementById(describedId)?.textContent).toBe('O1');
+    const row = screen.getByRole('button', { name: 'قراءة 20 صفحة O1' });
+    expect(row.getAttribute('aria-describedby')).toBeNull();
   });
 
   it('visually distinguishes a disabled row from an enabled one', () => {
@@ -344,14 +350,19 @@ describe('CheckRow', () => {
     expect(hint?.classList.contains('visually-hidden')).toBe(true);
   });
 
-  it('describes the note, the hint and the badge together, in that order', () => {
+  it('names the label, the note and the badge together, in that order, and describes with the hint alone', () => {
     render(<CheckRow checked={false} label="المشي" note="بعد الاستيقاظ" hint="تلميح" badge={<Badge>O1</Badge>} onToggle={() => undefined} />);
-    const row = screen.getByRole('button', { name: 'المشي' });
-    const text = (row.getAttribute('aria-describedby') ?? '')
+    const row = screen.getByRole('button', { name: 'المشي بعد الاستيقاظ O1' });
+    const name = (row.getAttribute('aria-labelledby') ?? '')
       .split(' ')
       .map((id) => document.getElementById(id)?.textContent)
       .join('|');
-    expect(text).toBe('بعد الاستيقاظ|تلميح|O1');
+    expect(name).toBe('المشي|بعد الاستيقاظ|O1');
+    const description = (row.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent)
+      .join('|');
+    expect(description).toBe('تلميح');
   });
 
   it('adds no description for a hint that is not given', () => {

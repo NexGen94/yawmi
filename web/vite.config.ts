@@ -65,4 +65,12 @@ export default defineConfig({
       '/v1': 'http://localhost:8000',
     },
   },
+  preview: {
+    proxy: {
+      // The end-to-end suite (web/e2e) serves the build with `vite preview` and a local API on
+      // port 8000. By address, not by name: the test server listens on IPv4 loopback only, and a
+      // proxy that resolves `localhost` to ::1 would be refused.
+      '/v1': 'http://127.0.0.1:8000',
+    },
+  },
 });
