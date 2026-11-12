@@ -5,10 +5,10 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 
 import { api } from '../../api/client';
 import type { components } from '../../api/schema';
+import { unwrap } from '../../api/unwrap';
 import { applyPendingJournal } from '../../data/pending';
 import { type QueryState, useQuery } from '../../data/query';
 import type { Day } from '../../domain/types';
-import { unwrap } from '../../habits/todayData';
 import { listPending, type OutboxEvent } from '../../sync/outbox';
 
 type JournalEntryOut = components['schemas']['JournalEntryOut'];

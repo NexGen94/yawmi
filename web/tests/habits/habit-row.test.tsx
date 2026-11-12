@@ -29,7 +29,7 @@ function abstainItem(status: HabitTodayItem['statusToday'], over: Partial<Period
 }
 
 function renderRow(item: HabitTodayItem) {
-  const handlers = { onTick: vi.fn(), onValue: vi.fn(), onSkip: vi.fn() };
+  const handlers = { onTick: vi.fn(), onAdd: vi.fn(), onUntick: vi.fn(), onSkip: vi.fn() };
   render(
     <ul>
       <HabitRow item={item} {...handlers} />
@@ -39,6 +39,13 @@ function renderRow(item: HabitTodayItem) {
 }
 
 describe('HabitRow: an abstain habit', () => {
+  it('has no check mark and no pressed state: its marker is not a done button', () => {
+    renderRow(abstainItem(null));
+    expect(document.querySelector('.check-mark')).toBeNull();
+    expect(document.querySelector('[aria-pressed]')).toBeNull();
+    expect(document.querySelector('.habit-abstain-mark')?.tagName).toBe('SPAN');
+  });
+
   it('says «نظيف اليوم» when nothing is logged and the day is kept', () => {
     renderRow(abstainItem(null));
     expect(screen.getByText('نظيف اليوم')).toBeTruthy();
@@ -92,17 +99,29 @@ describe('HabitRow: a build habit', () => {
     ...over,
   });
 
-  it('«+5» calls onValue with the day total', () => {
-    const { onValue } = renderRow(build());
+  it('«+5» calls onAdd with the step, never with a total computed from the render', () => {
+    const { onAdd } = renderRow(build());
     fireEvent.click(screen.getByRole('button', { name: /^\+5/ }));
-    expect(onValue).toHaveBeenCalledWith(10);
+    expect(onAdd).toHaveBeenCalledWith(5);
   });
 
-  it('a tap on a row that is already done does not log again', () => {
+  it('a tap on a row that is already done calls onUntick, not onTick', () => {
     const done = build({ progress: progress({ done: 20, target: 20 }), valueToday: 20 });
-    const { onTick } = renderRow(done);
+    const { onTick, onUntick } = renderRow(done);
     fireEvent.click(screen.getByRole('button', { pressed: true }));
+    expect(onUntick).toHaveBeenCalledTimes(1);
     expect(onTick).not.toHaveBeenCalled();
+  });
+
+  it('describes a done row as unsent or sent, so the tap says what it will do', () => {
+    const done = build({ progress: progress({ done: 20, target: 20 }), valueToday: 20, unsent: true });
+    renderRow(done);
+    const button = screen.getByRole('button', { pressed: true });
+    const text = (button.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+    expect(text).toContain('لم يُرسل بعد');
   });
 
   it('a yes/no habit has no «+» button', () => {

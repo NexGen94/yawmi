@@ -1,16 +1,18 @@
 import { CheckRow } from '../ui/CheckRow';
 import { Badge } from '../ui/Badge';
-import { nextDayValue } from '../data/pending';
 import { fmt, type Noun } from '../lib/format';
-import { isCleanToday, isDoneToday, polarityOf, type HabitTodayItem } from './useHabitsToday';
+import { isCleanToday, isDoneToday, polarityOf, roundUpNeed, type HabitTodayItem } from './useHabitsToday';
 import type { HabitUnit } from './types';
 
 export interface HabitRowProps {
   item: HabitTodayItem;
   /** The check mark: logs the habit done (a count or duration: today's share). */
   onTick(): void;
-  /** Logs `value` as today's total (the «+5» button). */
-  onValue(value: number): void;
+  /** The «+5» button: adds `step` to the day's value. The page adds to the latest value, so two
+   *  quick taps add up; the row never sends a total it computed from its own render. */
+  onAdd(step: number): void;
+  /** A tap on a row that is already done: takes the log back if it is unsent, else says so. */
+  onUntick(): void;
   onSkip(): void;
 }
 
@@ -26,6 +28,9 @@ const STEP: Record<HabitUnit, { step: number; noun: string }> = {
 
 /** Keeps a phrase whole when a note wraps. */
 const NBSP = String.fromCharCode(0xa0);
+
+const DONE_UNSENT = 'التسجيل لم يُرسل بعد؛ النقر يتراجع عنه';
+const DONE_SENT = 'التسجيل مُرسل؛ التصحيح بتخطي اليوم';
 
 const PERIOD_WORD = { day: 'اليوم', week: 'هذا الأسبوع', month: 'هذا الشهر' } as const;
 
@@ -46,7 +51,7 @@ function buildNote(item: HabitTodayItem): string | undefined {
   parts.push(`${fmt.num(progress.done)} من ${amount(progress.target, unit)} ${PERIOD_WORD[habit.period]}`);
   if (habit.period !== 'day' && !progress.reached && progress.needPerDay > 0) {
     // Non-breaking spaces keep the phrase whole when the note wraps.
-    parts.push(`المطلوب${NBSP}يومياً:${NBSP}${amount(Math.ceil(progress.needPerDay * 10 - 1e-9) / 10, unit).replace(' ', NBSP)}`);
+    parts.push(`المطلوب${NBSP}يومياً:${NBSP}${amount(roundUpNeed(progress.needPerDay, unit), unit).replace(' ', NBSP)}`);
   }
   return parts.join(' · ');
 }
@@ -62,7 +67,7 @@ function abstainNote(item: HabitTodayItem): string {
 /** One habit due today: the check mark, the title and progress, the outcome code, and the quick
  *  actions. An abstain habit has no check mark: its row says «نظيف اليوم», and one tap on
  *  «تسجيل انزلاق» logs the slip. */
-export function HabitRow({ item, onTick, onValue, onSkip }: HabitRowProps) {
+export function HabitRow({ item, onTick, onAdd, onUntick, onSkip }: HabitRowProps) {
   const { habit } = item;
   const badge = habit.outcome ? <Badge>{habit.outcome}</Badge> : undefined;
   const skip = (
@@ -76,11 +81,7 @@ export function HabitRow({ item, onTick, onValue, onSkip }: HabitRowProps) {
     return (
       <li class="habit-row habit-abstain" data-code={habit.code}>
         <div class="habit-abstain-body">
-          <span class={clean ? 'habit-abstain-mark habit-abstain-clean' : 'habit-abstain-mark'} aria-hidden="true">
-            <svg viewBox="0 0 24 24" focusable="false">
-              {clean && <path d="M5.5 12.5l4.25 4.25L18.5 8" fill="none" stroke="currentColor" />}
-            </svg>
-          </span>
+          <span class={clean ? 'habit-abstain-mark habit-abstain-clean' : 'habit-abstain-mark'} aria-hidden="true" />
           <span class="check-text">
             <span class="check-label">{habit.title_ar}</span>
             <span class="check-note">{abstainNote(item)}</span>
@@ -107,8 +108,9 @@ export function HabitRow({ item, onTick, onValue, onSkip }: HabitRowProps) {
         label={habit.title_ar}
         note={buildNote(item)}
         badge={badge}
-        // A habit already done stays done: the correction is «تخطي», or «تراجع» while it is unsent.
-        onToggle={(next) => next && onTick()}
+        hint={isDoneToday(item) ? (item.unsent ? DONE_UNSENT : DONE_SENT) : undefined}
+        // A tap on a done row never does nothing: it takes an unsent log back, else it says so.
+        onToggle={(next) => (next ? onTick() : onUntick())}
       />
       <div class="habit-actions">
         {quick && (
@@ -116,7 +118,7 @@ export function HabitRow({ item, onTick, onValue, onSkip }: HabitRowProps) {
             type="button"
             class="habit-act habit-plus"
             aria-label={`+${fmt.num(quick.step)} ${quick.noun} · ${habit.title_ar}`}
-            onClick={() => onValue(nextDayValue(item.valueToday, quick.step))}
+            onClick={() => onAdd(quick.step)}
           >
             <bdi dir="ltr">+{fmt.num(quick.step)}</bdi>
           </button>

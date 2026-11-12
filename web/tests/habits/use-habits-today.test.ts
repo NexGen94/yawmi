@@ -203,3 +203,80 @@ describe('useHabitsToday: abstain habits', () => {
     expect(result.current.items[0]?.statusToday).toBe('skip');
   });
 });
+
+describe('useHabitsToday: done today for weekly and monthly habits', () => {
+  const weekly = habit('week_walk', 'مشي أسبوعي', { period: 'week', target_per_period: 5 });
+
+  it('a weekly habit logged done today is done today although its week target is not reached', async () => {
+    const { result } = await ready({
+      habits: [weekly],
+      logs: [{ habit_code: 'week_walk', day: DAY, status: 'done', value: null }],
+    });
+    expect(result.current.items[0]?.progress.reached).toBe(false);
+    expect(result.current.done).toBe(1);
+  });
+
+  it('a weekly habit with nothing logged today is not done', async () => {
+    const { result } = await ready({ habits: [weekly], logs: [] });
+    expect(result.current.done).toBe(0);
+  });
+});
+
+describe('useHabitsToday: the ring and the badge with abstain habits', () => {
+  const abstain = { ...habit('no_sugar', 'ترك السكر'), polarity: 'abstain' } as ReturnType<typeof habit>;
+
+  it('counts a clean abstain habit as done and leaves it out of the badge', async () => {
+    const { result } = await ready({ habits: [...STORY_HABITS, abstain] });
+    expect(result.current.due).toBe(7);
+    expect(result.current.done).toBe(4);
+    expect(result.current.badge).toBe(3);
+  });
+
+  it('a slip today is not done, and the badge does not change', async () => {
+    const { result } = await ready({
+      habits: [...STORY_HABITS, abstain],
+      logs: [...STORY_LOGS, { habit_code: 'no_sugar', day: DAY, status: 'done', value: null }],
+    });
+    expect(result.current.done).toBe(3);
+    expect(result.current.badge).toBe(3);
+  });
+});
+
+describe('useHabitsToday: quick additions and taking back', () => {
+  it('add() twice in the same tick queues 30 then 35', async () => {
+    const { result } = await ready();
+    await act(async () => {
+      void result.current.add(ENGLISH.code, 5);
+      void result.current.add(ENGLISH.code, 5);
+    });
+    await waitFor(async () => expect(await listPending()).toHaveLength(2));
+    const values = (await listPending()).map((e) => (e.payload as { value?: number }).value);
+    expect(values).toEqual([30, 35]);
+  });
+
+  it('release() takes back the newest unsent event of the habit, and says false when none is unsent', async () => {
+    const { result } = await ready();
+    let taken = true;
+    await act(async () => {
+      await result.current.tick(SLEEP_1.code);
+    });
+    await act(async () => {
+      taken = await result.current.release(SLEEP_1.code);
+    });
+    expect(taken).toBe(true);
+    expect(await listPending()).toHaveLength(0);
+    await act(async () => {
+      taken = await result.current.release(SLEEP_1.code);
+    });
+    expect(taken).toBe(false);
+  });
+
+  it('marks an item unsent while its event waits in the outbox', async () => {
+    const { result } = await ready();
+    expect(result.current.items.find((i) => i.habit.code === SLEEP_1.code)?.unsent).toBe(false);
+    await act(async () => {
+      await result.current.tick(SLEEP_1.code);
+    });
+    expect(result.current.items.find((i) => i.habit.code === SLEEP_1.code)?.unsent).toBe(true);
+  });
+});

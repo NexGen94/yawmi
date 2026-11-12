@@ -1,4 +1,5 @@
 import type { components } from '../../api/schema';
+import { fmt } from '../../lib/format';
 import { Card } from '../../ui/Card';
 
 type JournalEntryOut = components['schemas']['JournalEntryOut'];
@@ -52,13 +53,13 @@ export function openCountText(n: number): string {
   if (n === 0) return 'لا أولويات مفتوحة';
   if (n === 1) return 'أولوية واحدة مفتوحة';
   if (n === 2) return 'أولويتان مفتوحتان';
-  return `${n} أولويات مفتوحة`;
+  return `${fmt.num(n)} أولويات مفتوحة`;
 }
 
 function sourcesText(n: number): string {
   if (n === 1) return 'استناداً إلى مصدر واحد';
   if (n === 2) return 'استناداً إلى مصدرين';
-  return `استناداً إلى ${n} مصادر`;
+  return `استناداً إلى ${fmt.num(n)} مصادر`;
 }
 
 /** The works of the day: the three priorities of the morning, and the AI's two lines with their
@@ -73,8 +74,8 @@ export function DaySummary({ morning, evening, insight }: DaySummaryProps) {
       ) : (
         <>
           <ul class="summary-list">
-            {priorities.map((p) => (
-              <li key={p.title}>
+            {priorities.map((p, i) => (
+              <li key={`${i}-${p.title}`}>
                 {p.title}
                 {STATE_NOTE[p.state] && <span class="summary-note"> · {STATE_NOTE[p.state]}</span>}
               </li>
@@ -86,8 +87,8 @@ export function DaySummary({ morning, evening, insight }: DaySummaryProps) {
       {insight && (
         <div class="summary-insight">
           <p class="summary-kicker">{insight.kicker} · تقدير</p>
-          {insight.lines.slice(0, 2).map((line) => (
-            <p key={line} class="summary-line">
+          {insight.lines.slice(0, 2).map((line, i) => (
+            <p key={`${i}-${line}`} class="summary-line">
               {line}
             </p>
           ))}

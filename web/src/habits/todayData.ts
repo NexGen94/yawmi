@@ -4,6 +4,7 @@
 
 import { api } from '../api/client';
 import type { components } from '../api/schema';
+import { unwrap } from '../api/unwrap';
 import { fromOrdinal, toOrdinal } from '../domain/days';
 import type { Day } from '../domain/types';
 import type { HabitLogOut } from '../data/pending';
@@ -26,23 +27,6 @@ export const todayQueryKey = (day: Day): string => `habits-today:${day}`;
 /** The first day of the 62-day window that ends on `day`. */
 export function logsFrom(day: Day): Day {
   return fromOrdinal(toOrdinal(day) - LOG_WINDOW_DAYS);
-}
-
-/** A response that is not a success: carries the HTTP status, so the page tells an outage from a refusal. */
-export class HttpError extends Error {
-  readonly status: number;
-
-  constructor(status: number) {
-    super(`HTTP ${status}`);
-    this.name = 'HttpError';
-    this.status = status;
-  }
-}
-
-/** The data of an openapi-fetch result, or a thrown `HttpError`. A network failure has already thrown a `TypeError`. */
-export function unwrap<T>(result: { data?: T; response: Response }): T {
-  if (!result.response.ok || result.data === undefined) throw new HttpError(result.response.status);
-  return result.data;
 }
 
 export async function loadTodayBundle(day: Day): Promise<TodayBundle> {

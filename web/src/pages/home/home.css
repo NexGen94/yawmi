@@ -163,29 +163,24 @@
   padding: var(--sp-2);
 }
 
+.habit-abstain-body .check-text {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+/* A state, not a control: a small pale rounded square, never the 44px circle of a done button. */
 .habit-abstain-mark {
   flex: none;
-  display: grid;
-  place-items: center;
-  inline-size: var(--hit);
-  block-size: var(--hit);
-  border: 2px solid var(--c-blue);
-  border-radius: 50%;
-  background: var(--c-surface);
-  color: var(--c-surface);
+  inline-size: var(--sp-5);
+  block-size: var(--sp-5);
+  margin-inline: var(--sp-3);
+  border: 1.5px solid var(--c-blue);
+  border-radius: var(--sp-2);
+  background: var(--c-blue-pale);
 }
 
 .habit-abstain-clean {
-  border-color: var(--c-ink);
-  background: var(--c-ink);
-}
-
-.habit-abstain-mark svg {
-  inline-size: 24px;
-  block-size: 24px;
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  background: var(--c-blue-light);
 }
 
 /* ---------- Quick access and the day summary ---------- */

@@ -5,7 +5,8 @@ import { Card } from '../../ui/Card';
 export interface DueHabitsProps {
   items: HabitTodayItem[];
   onTick(code: string): void;
-  onValue(code: string, value: number): void;
+  onAdd(code: string, step: number): void;
+  onUntick(code: string): void;
   onSkip(code: string): void;
 }
 
@@ -18,7 +19,7 @@ const GROUPS: readonly { key: HabitGroup; title: string }[] = [
 
 /** The habits due today in three groups, each row with its one-tap actions. A group with no
  *  habit is not drawn. */
-export function DueHabits({ items, onTick, onValue, onSkip }: DueHabitsProps) {
+export function DueHabits({ items, onTick, onAdd, onUntick, onSkip }: DueHabitsProps) {
   return (
     <Card title="العادات المستحقة" class="due-habits">
       {GROUPS.map(({ key, title }) => {
@@ -33,7 +34,8 @@ export function DueHabits({ items, onTick, onValue, onSkip }: DueHabitsProps) {
                   key={item.habit.code}
                   item={item}
                   onTick={() => onTick(item.habit.code)}
-                  onValue={(value) => onValue(item.habit.code, value)}
+                  onAdd={(step) => onAdd(item.habit.code, step)}
+                  onUntick={() => onUntick(item.habit.code)}
                   onSkip={() => onSkip(item.habit.code)}
                 />
               ))}

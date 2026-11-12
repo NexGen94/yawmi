@@ -1,10 +1,9 @@
 /// <reference types="vite/client" />
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect } from 'preact/hooks';
 
 import type { QueryState } from '../../data/query';
 import { useHabitsToday } from '../../habits/useHabitsToday';
 import { fmt } from '../../lib/format';
-import { setBadge } from '../../push/subscribe';
 import { StateFrame } from '../../ui/StateFrame';
 import { Toast } from '../../ui/Toast';
 import { DayCards } from './DayCards';
@@ -14,14 +13,11 @@ import { HomeSkeleton } from './HomeSkeleton';
 import { QuickAccess } from './QuickAccess';
 import { TodayHero } from './TodayHero';
 import { type DayEntries, useDayEntries } from './useDayEntries';
+import { useLogNote } from './useLogNote';
 import './home.css';
 
 /** Days in a cycle (design section 4, the 56-day grid). */
 const CYCLE_DAYS = 56;
-/** How long the «تراجع» note stays. The outbox sends after about five seconds; after that the
- *  note would only say it was sent. */
-const NOTE_MS = 8000;
-const SENT_NOTE = 'أُرسل التسجيل؛ التصحيح بتخطي اليوم';
 
 interface Loaded {
   state: QueryState;
@@ -57,49 +53,20 @@ function summaryInsight(
   };
 }
 
-const LOGGED_PREFIX = { done: 'سُجّل', skip: 'سُجّل تخطّي اليوم', vacation: 'سُجّلت إجازة اليوم' } as const;
-
 export default function HomePage() {
   const habits = useHabitsToday();
   const entries = useDayEntries(habits.day);
   const { state, stale } = combine(habits, entries);
-  const { done, due, last, clearLast, undo, day } = habits;
+  const { done, due, badge, day } = habits;
+  const note = useLogNote(habits);
 
-  // The note after a tap: «تراجع» while the event is unsent, the truth («أُرسل التسجيل…») after.
-  const [notice, setNotice] = useState('');
-  useEffect(() => {
-    setNotice('');
-  }, [last?.eventId]);
-  useEffect(() => {
-    if (!last && !notice) return;
-    const timer = setTimeout(() => {
-      clearLast();
-      setNotice('');
-    }, NOTE_MS);
-    return () => clearTimeout(timer);
-  }, [last?.eventId, notice, clearLast]);
-
-  // The badge on the app icon: habits still to do today.
+  // The badge on the app icon: build habits still to do today. The push module is loaded on demand,
+  // so it stays out of the first load.
   const counted = state === 'ready' || (state === 'offline' && stale);
   useEffect(() => {
-    if (counted) void setBadge(Math.max(0, due - done));
-  }, [counted, due, done]);
-
-  const takeBack = (eventId: string) => {
-    void undo(eventId).then((taken) => {
-      if (!taken) setNotice(SENT_NOTE);
-    });
-  };
-  const toast = notice
-    ? { message: notice, action: undefined }
-    : {
-        message: last ? `${LOGGED_PREFIX[last.status]}: ${last.title}` : '',
-        action: last ? { label: 'تراجع', onAction: () => takeBack(last.eventId) } : undefined,
-      };
-  const dismissToast = () => {
-    clearLast();
-    setNotice('');
-  };
+    if (!counted) return;
+    void import('../../push/subscribe').then((push) => push.setBadge(badge)).catch(() => undefined);
+  }, [counted, badge]);
 
   const plan = habits.today?.plan;
   const insight = summaryInsight(habits.today?.insight ?? null, entries);
@@ -134,7 +101,8 @@ export default function HomePage() {
               <DueHabits
                 items={habits.items}
                 onTick={(code) => void habits.tick(code)}
-                onValue={(code, value) => void habits.setValue(code, value)}
+                onAdd={(code, step) => void habits.add(code, step)}
+                onUntick={note.untick}
                 onSkip={(code) => void habits.skip(code)}
               />
             )}
@@ -148,7 +116,7 @@ export default function HomePage() {
           </div>
         </div>
       </StateFrame>
-      <Toast message={toast.message} action={toast.action} onDismiss={toast.message ? dismissToast : undefined} />
+      <Toast message={note.message} action={note.action} onDismiss={note.message ? note.dismiss : undefined} />
     </>
   );
 }

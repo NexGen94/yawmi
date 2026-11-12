@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { type QueryState, useQuery } from '../data/query';
-import { applyPendingLogs, toDomainLogs } from '../data/pending';
+import { applyPendingLogs, nextDayValue, toDomainLogs } from '../data/pending';
 import { logHabit, type LogHabitInput } from '../data/events';
 import { periodProgress } from '../domain/habits';
 import type { Day, HabitSpec, PeriodProgress } from '../domain/types';
@@ -17,7 +17,7 @@ import { onDayChange, todayRiyadh } from '../lib/today';
 import { discard, listPending, type OutboxEvent } from '../sync/outbox';
 import { habitSpecOf } from './spec';
 import { loadTodayBundle, type TodayBundle, type TodayOut, todayQueryKey } from './todayData';
-import type { HabitOut } from './types';
+import type { HabitOut, HabitUnit } from './types';
 
 export type HabitGroup = 'after_wake' | 'free' | 'before_sleep';
 
@@ -30,6 +30,8 @@ export interface HabitTodayItem {
   /** Today's value when today's log is a `done` with a value. */
   valueToday: number | null;
   group: HabitGroup;
+  /** Today's log for this habit is still in the outbox: a tap on the done row can take it back. */
+  unsent?: boolean;
 }
 
 /** The last thing the person logged, for the «تراجع» note. */
@@ -74,9 +76,10 @@ export function isCleanToday(item: HabitTodayItem): boolean {
 }
 
 /** Done for today. A daily habit is done when its day target is reached; a weekly or monthly one
- *  also when it was logged done today (its period target is for the whole period). */
+ *  also when it was logged done today (its period target is for the whole period). An abstain habit
+ *  is done for the day unless a slip is logged today (the controller's ruling for the ring). */
 export function isDoneToday(item: HabitTodayItem): boolean {
-  if (polarityOf(item.habit) === 'abstain') return isCleanToday(item);
+  if (polarityOf(item.habit) === 'abstain') return item.statusToday !== 'done';
   if (item.habit.period === 'day') return item.progress.reached;
   return item.progress.reached || item.statusToday === 'done';
 }
@@ -86,9 +89,21 @@ function specOf(habit: HabitOut, day: Day): HabitSpec {
   return polarityOf(habit) === 'abstain' ? { ...spec, polarity: 'abstain' } : spec;
 }
 
-/** Builds the items for the habits due, over the logs with the outbox applied. */
-export function buildItems(bundle: TodayBundle, events: OutboxEvent[], day: Day): HabitTodayItem[] {
-  const logs = applyPendingLogs(bundle.logs, events, day);
+const HABIT_EVENTS: ReadonlySet<string> = new Set(['habit_logged', 'habit_skipped', 'habit_vacation']);
+
+/** The events of a habit's log for `day` that are still in the outbox. */
+export function unsentFor(code: string, unsent: OutboxEvent[], day: Day): OutboxEvent[] {
+  return unsent.filter((event) => {
+    if (!HABIT_EVENTS.has(event.type)) return false;
+    const payload = event.payload as { habit_code?: string; day?: string | null };
+    return payload.habit_code === code && (payload.day ?? todayRiyadh(new Date(event.occurred_at))) === day;
+  });
+}
+
+/** Builds the items for the habits due. `sent` are events the outbox already sent that the loaded
+ *  data may not hold yet; `unsent` are the ones still waiting. Both are laid over the logs. */
+export function buildItems(bundle: TodayBundle, sent: OutboxEvent[], unsent: OutboxEvent[], day: Day): HabitTodayItem[] {
+  const logs = applyPendingLogs(bundle.logs, [...sent, ...unsent], day);
   const byCode = new Map(bundle.habits.map((h) => [h.code, h]));
   const items: HabitTodayItem[] = [];
   for (const due of bundle.today.habits_due) {
@@ -105,18 +120,33 @@ export function buildItems(bundle: TodayBundle, events: OutboxEvent[], day: Day)
     const log = logs.find((l) => l.habit_code === habit.code && l.day === day);
     const statusToday = log?.status === 'done' || log?.status === 'skip' || log?.status === 'vacation' ? log.status : null;
     const valueToday = log?.status === 'done' && log.value !== null && log.value !== undefined ? Number(log.value) : null;
-    items.push({ habit, progress, statusToday, valueToday, group: habit.anchor });
+    items.push({
+      habit,
+      progress,
+      statusToday,
+      valueToday,
+      group: habit.anchor,
+      unsent: unsentFor(habit.code, unsent, day).length > 0,
+    });
   }
   return items;
 }
 
+/** A daily need in the habit's own steps: whole minutes, sessions or times, and halves of an hour.
+ *  Always rounded up, so a share is never fractional and never short. */
+export function roundUpNeed(n: number, unit: HabitUnit): number {
+  if (unit === 'hour') return Math.ceil(n * 2 - 1e-9) / 2;
+  return Math.ceil(n - 1e-9);
+}
+
 /** What a tap on the check mark logs: yes/no habits `done`; counts and durations the day's share
- *  (the rest of the target for a daily one, today's part of the need for a weekly one). */
-export function tickInput(item: HabitTodayItem): LogHabitInput | null {
+ *  (the rest of the target for a daily one, today's part of the need for a weekly one), in whole
+ *  units. `valueToday` overrides the rendered value with the latest one the person logged. */
+export function tickInput(item: HabitTodayItem, valueToday: number | null = item.valueToday): LogHabitInput | null {
   if (polarityOf(item.habit) === 'abstain' || item.habit.kind === 'boolean') return { status: 'done' };
-  const share = Math.ceil(item.progress.needPerDay * 100 - 1e-9) / 100;
+  const share = roundUpNeed(item.progress.needPerDay, item.habit.unit);
   if (!(share > 0)) return null;
-  return { status: 'done', value: (item.valueToday ?? 0) + share };
+  return { status: 'done', value: nextDayValue(valueToday, share) };
 }
 
 export interface UseHabitsToday {
@@ -126,9 +156,16 @@ export interface UseHabitsToday {
   /** Habits that count in the ring, and how many of them are done today. */
   done: number;
   due: number;
+  /** What the app icon shows: build habits still to do today (abstain habits are not counted). */
+  badge: number;
   tick(code: string): Promise<void>;
   /** Logs `value` as the day's total, not an increment. */
   setValue(code: string, value: number): Promise<void>;
+  /** Adds `delta` to the latest value the person logged for the habit today, including logs that
+   *  are still being queued, so two quick taps add up. */
+  add(code: string, delta: number): Promise<void>;
+  /** Takes back the newest unsent log of the habit. False: none is unsent (it was already sent). */
+  release(code: string): Promise<boolean>;
   skip(code: string): Promise<void>;
   vacation(code: string): Promise<void>;
   /** Takes back a log that is still in the outbox. False: it was already sent. */
@@ -213,7 +250,7 @@ export function useHabitsToday(): UseHabitsToday {
   const state: QueryState = query.state === 'loading' && bundle !== undefined ? 'ready' : query.state;
 
   const items = useMemo(
-    () => (bundle === undefined ? [] : buildItems(bundle, [...sent, ...pending], day)),
+    () => (bundle === undefined ? [] : buildItems(bundle, sent, pending, day)),
     [bundle, sent, pending, day],
   );
   const itemsRef = useRef(items);
@@ -222,21 +259,47 @@ export function useHabitsToday(): UseHabitsToday {
   const ringItems = items.filter((item) => countsInRing(item.habit));
   const due = ringItems.length;
   const done = ringItems.filter(isDoneToday).length;
+  const badge = ringItems.filter((item) => polarityOf(item.habit) === 'build' && !isDoneToday(item)).length;
+
+  // Logs are queued one after the other, so the events keep the order the person made them in, and
+  // the value of a habit that is still being queued is kept here: a second quick tap adds to it
+  // instead of to the value the screen had drawn when the first one landed.
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const inflight = useRef(new Map<string, { count: number; value: number | null }>());
 
   const record = useCallback(
-    async (item: HabitTodayItem, input: LogHabitInput) => {
-      const eventId = await logHabit(item.habit.code, input);
-      setLast({ eventId, code: item.habit.code, title: item.habit.title_ar, status: input.status });
-      await refreshPending();
+    (item: HabitTodayItem, input: LogHabitInput): Promise<void> => {
+      const code = item.habit.code;
+      const entry = inflight.current.get(code) ?? { count: 0, value: null };
+      entry.count += 1;
+      entry.value = input.status === 'done' && input.value !== undefined ? input.value : null;
+      inflight.current.set(code, entry);
+      const run = chain.current
+        .then(async () => {
+          const eventId = await logHabit(code, input);
+          setLast({ eventId, code, title: item.habit.title_ar, status: input.status });
+          await refreshPending();
+        })
+        .finally(() => {
+          entry.count -= 1;
+          if (entry.count === 0) inflight.current.delete(code);
+        });
+      chain.current = run.catch(() => undefined);
+      return run;
     },
     [refreshPending],
   );
   const itemOf = (code: string): HabitTodayItem | undefined => itemsRef.current.find((i) => i.habit.code === code);
+  /** The latest value of the habit today: one still being queued, else the one on screen. */
+  const latestValue = (item: HabitTodayItem): number | null => {
+    const queued = inflight.current.get(item.habit.code);
+    return queued && queued.count > 0 ? queued.value : item.valueToday;
+  };
 
   const tick = useCallback(
     async (code: string) => {
       const item = itemOf(code);
-      const input = item && tickInput(item);
+      const input = item && tickInput(item, latestValue(item));
       if (item && input) await record(item, input);
     },
     [record],
@@ -245,6 +308,13 @@ export function useHabitsToday(): UseHabitsToday {
     async (code: string, value: number) => {
       const item = itemOf(code);
       if (item) await record(item, { status: 'done', value });
+    },
+    [record],
+  );
+  const add = useCallback(
+    async (code: string, delta: number) => {
+      const item = itemOf(code);
+      if (item) await record(item, { status: 'done', value: nextDayValue(latestValue(item), delta) });
     },
     [record],
   );
@@ -279,14 +349,26 @@ export function useHabitsToday(): UseHabitsToday {
     [commit, markSent],
   );
 
+  const release = useCallback(
+    async (code: string): Promise<boolean> => {
+      const waiting = unsentFor(code, pendingRef.current, day);
+      const newest = waiting[waiting.length - 1];
+      return newest === undefined ? false : undo(newest.id);
+    },
+    [day, undo],
+  );
+
   return {
     state,
     stale: query.stale,
     items,
     done,
     due,
+    badge,
     tick,
     setValue,
+    add,
+    release,
     skip,
     vacation,
     undo,

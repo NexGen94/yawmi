@@ -39,7 +39,8 @@ export function DayCards({ morning, closed }: DayCardsProps) {
           {morning ? (
             <LinkButton href="/day/morning">عرض يومية الصباح</LinkButton>
           ) : (
-            <LinkButton href="/day/morning" variant="primary">
+            // The sequence ends at «إغلاق اليوم»: once the day is closed nothing is prominent.
+            <LinkButton href="/day/morning" variant={closed ? 'quiet' : 'primary'}>
               بدء يومية الصباح
             </LinkButton>
           )}
