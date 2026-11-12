@@ -776,6 +776,57 @@ async def test_progress_total_done_sums_duration_minutes(
     assert out["total_done"] == 85.0
 
 
+async def test_progress_total_of_an_abstain_habit_counts_clean_days_not_slips(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    """For an abstain habit `done` is a slip: the total is the scheduled days up to today that are
+    clean (no slip, no skip, no vacation), so a slip lowers it instead of raising it."""
+    abstain = await create(
+        client,
+        kind="boolean",
+        period="day",
+        target_per_period=1,
+        polarity="abstain",
+        start_day="2026-11-05",
+    )
+    code = abstain["code"]
+    path = f"/v1/habits/{code}/progress"
+    # the 5th to the 10th: six scheduled days, all clean
+    assert (await client.get(path, headers=auth())).json()["total_done"] == 6.0
+    await backend.add_log(code, date(2026, 11, 7), "done", None)  # a slip
+    await backend.add_log(code, date(2026, 11, 8), "skip", None)  # neither clean nor a slip
+    await backend.add_log(code, date(2026, 11, 9), "vacation", None)
+    out = (await client.get(path, headers=auth())).json()
+    assert out["total_done"] == 3.0  # the 5th, the 6th and today
+    await backend.add_log(code, DAY, "done", None)  # a slip today
+    assert (await client.get(path, headers=auth())).json()["total_done"] == 2.0
+
+
+async def test_progress_total_of_an_abstain_habit_stops_at_its_end_day(
+    client: httpx.AsyncClient,
+) -> None:
+    abstain = await create(
+        client,
+        kind="boolean",
+        period="day",
+        target_per_period=1,
+        polarity="abstain",
+        start_day="2026-11-01",
+        end_day="2026-11-07",
+    )
+    out = (await client.get(f"/v1/habits/{abstain['code']}/progress", headers=auth())).json()
+    assert out["total_done"] == 7.0
+
+
+async def test_progress_total_of_a_build_habit_is_unchanged_by_the_abstain_rule(
+    client: httpx.AsyncClient, backend: Backend
+) -> None:
+    build = await create(client, kind="boolean", period="day", start_day="2026-11-05")
+    await backend.add_log(build["code"], date(2026, 11, 7), "done", None)
+    out = (await client.get(f"/v1/habits/{build['code']}/progress", headers=auth())).json()
+    assert out["total_done"] == 1.0
+
+
 async def test_progress_of_a_weekly_habit_keeps_eight_periods(
     client: httpx.AsyncClient, backend: Backend
 ) -> None:

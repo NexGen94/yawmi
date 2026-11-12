@@ -3,8 +3,11 @@
 //
 // The note stays until the next logging action or until it is dismissed: a person on the keyboard
 // needs time to reach it (WCAG 2.2.1), so no timer closes it. It is announced (the Toast is a
-// polite live region), and after a tap made with the keyboard focus moves to «تراجع», then comes
-// back to the habit when the note is used or dismissed.
+// polite live region) and its buttons are in the tab order, but focus never leaves the habit that
+// was logged: moving it to «تراجع» after every keyboard tap would pull a person out of a list
+// they are working through. Escape dismisses the note from wherever focus is. When the note is used
+// from the keyboard («تراجع», ×, Escape) its button goes away with it, so focus is given back to
+// the element that held it when the log was made, instead of falling to the page body.
 
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
@@ -25,46 +28,61 @@ export interface LogNote {
 export function useLogNote(habits: Pick<UseHabitsToday, 'last' | 'clearLast' | 'undo' | 'release'>): LogNote {
   const { last, clearLast, undo, release } = habits;
   const [notice, setNotice] = useState('');
-  const keyboard = useRef(false);
+  // The element that held focus outside the note when the log was made (the habit's row).
   const returnTo = useRef<HTMLElement | null>(null);
+  // Set when the note is used while one of its own buttons has focus: that button is about to go.
+  const giveBack = useRef(false);
 
+  // Follows focus as it moves, so the element is known the moment the log is made, not when an
+  // effect gets to run.
   useEffect(() => {
-    const onKey = () => {
-      keyboard.current = true;
+    const onFocus = (event: FocusEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || target.closest('.toast')) return;
+      returnTo.current = target;
+      giveBack.current = false; // focus is on the page again: nothing to give back
     };
-    const onPointer = () => {
-      keyboard.current = false;
-    };
-    document.addEventListener('keydown', onKey, true);
-    document.addEventListener('pointerdown', onPointer, true);
-    return () => {
-      document.removeEventListener('keydown', onKey, true);
-      document.removeEventListener('pointerdown', onPointer, true);
-    };
+    document.addEventListener('focusin', onFocus);
+    return () => document.removeEventListener('focusin', onFocus);
   }, []);
+  const noteHasFocus = (): boolean => Boolean(document.activeElement?.closest('.toast'));
 
-  const restoreFocus = useCallback(() => {
-    const element = returnTo.current;
-    returnTo.current = null;
-    if (element?.isConnected) element.focus();
-  }, []);
-
-  // A new log replaces the note. After a keyboard tap, «تراجع» takes the focus.
+  // A new log replaces the note.
   useEffect(() => {
     setNotice('');
-    if (!last || !keyboard.current) return;
-    const active = document.activeElement;
-    if (returnTo.current === null && active instanceof HTMLElement && !active.closest('.toast')) {
-      returnTo.current = active;
-    }
-    document.querySelector<HTMLElement>('.toast-action')?.focus();
   }, [last?.eventId]);
 
+  // After the render that removed the note's button, focus that fell to the body goes back.
+  useEffect(() => {
+    if (!giveBack.current) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    giveBack.current = false;
+    if (returnTo.current?.isConnected) returnTo.current.focus();
+  });
+
+  // Escape dismisses the note from anywhere. The listener lives as long as the page, and reads
+  // through a ref whether a note is showing, so it never misses a note that has just appeared.
+  const showing = useRef(false);
+  showing.current = Boolean(notice) || last !== null;
+  const clearRef = useRef(clearLast);
+  clearRef.current = clearLast;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || !showing.current) return;
+      giveBack.current = noteHasFocus();
+      clearRef.current();
+      setNotice('');
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   const dismiss = useCallback(() => {
+    giveBack.current = noteHasFocus();
     clearLast();
     setNotice('');
-    restoreFocus();
-  }, [clearLast, restoreFocus]);
+  }, [clearLast]);
 
   const untick = useCallback(
     (code: string) => {
@@ -76,9 +94,9 @@ export function useLogNote(habits: Pick<UseHabitsToday, 'last' | 'clearLast' | '
   );
 
   const takeBack = (eventId: string) => {
+    giveBack.current = noteHasFocus();
     void undo(eventId).then((taken) => {
       if (!taken) setNotice(SENT_NOTE);
-      restoreFocus();
     });
   };
 

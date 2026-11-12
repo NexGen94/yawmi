@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { useEffect } from 'preact/hooks';
 
-import type { QueryState } from '../../data/query';
+import { combine } from '../../data/combine';
 import { useHabitsToday } from '../../habits/useHabitsToday';
 import { fmt } from '../../lib/format';
 import { StateFrame } from '../../ui/StateFrame';
@@ -18,22 +18,6 @@ import './home.css';
 
 /** Days in a cycle (design section 4, the 56-day grid). */
 const CYCLE_DAYS = 56;
-
-interface Loaded {
-  state: QueryState;
-  stale: boolean;
-}
-
-/** Two queries make one page state: an error shows first, then loading, then no connection (with a
- *  saved copy only if every one that is offline has one), else ready. */
-function combine(a: Loaded, b: Loaded): Loaded {
-  const both = [a, b];
-  if (both.some((q) => q.state === 'error')) return { state: 'error', stale: false };
-  if (both.some((q) => q.state === 'loading')) return { state: 'loading', stale: false };
-  const offline = both.filter((q) => q.state === 'offline');
-  if (offline.length > 0) return { state: 'offline', stale: offline.every((q) => q.stale) };
-  return { state: 'ready', stale: false };
-}
 
 /** The two lines under the day summary: the saved evening review once the day is closed, else the
  *  morning insight from `GET /v1/today` (which is not shown after closing). */

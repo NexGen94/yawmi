@@ -16,6 +16,7 @@ import {
   SLEEP_1,
   STORY_HABITS,
   STORY_LOGS,
+  todayOut,
   WAKE_1,
 } from '../helpers/today-fixtures';
 
@@ -65,11 +66,12 @@ describe('useHabitsToday: the items', () => {
     expect(sleep?.valueToday).toBeNull();
   });
 
-  it('counts three done of six due, and countsInRing is true for every habit for now', async () => {
+  it('counts three done of six due, and countsInRing is true for a build habit and false for an abstain one', async () => {
     const { result } = await ready();
     expect(result.current.due).toBe(6);
     expect(result.current.done).toBe(3);
     for (const h of STORY_HABITS) expect(countsInRing(h)).toBe(true);
+    expect(countsInRing(habit('no_sugar', 'ترك السكر', { polarity: 'abstain' }))).toBe(false);
   });
 
   it('asks for the logs of the last 62 days of the Riyadh day', async () => {
@@ -172,8 +174,8 @@ describe('useHabitsToday: logging', () => {
 });
 
 describe('useHabitsToday: abstain habits', () => {
-  const abstain = (over: Record<string, unknown> = {}) =>
-    ({ ...habit('no_sugar', 'ترك السكر', { anchor: 'free' }), polarity: 'abstain', ...over }) as ReturnType<typeof habit>;
+  const abstain = (over: Partial<ReturnType<typeof habit>> = {}) =>
+    habit('no_sugar', 'ترك السكر', { anchor: 'free', polarity: 'abstain', ...over });
 
   it('reads the polarity of a habit, build when it is missing', () => {
     expect(polarityOf(abstain())).toBe('abstain');
@@ -223,22 +225,85 @@ describe('useHabitsToday: done today for weekly and monthly habits', () => {
 });
 
 describe('useHabitsToday: the ring and the badge with abstain habits', () => {
-  const abstain = { ...habit('no_sugar', 'ترك السكر'), polarity: 'abstain' } as ReturnType<typeof habit>;
+  const abstain = habit('no_sugar', 'ترك السكر', { polarity: 'abstain' });
 
-  it('counts a clean abstain habit as done and leaves it out of the badge', async () => {
+  it('leaves an abstain habit out of the ring and the badge: three done of six build habits', async () => {
     const { result } = await ready({ habits: [...STORY_HABITS, abstain] });
-    expect(result.current.due).toBe(7);
-    expect(result.current.done).toBe(4);
+    expect(result.current.due).toBe(6);
+    expect(result.current.done).toBe(3);
     expect(result.current.badge).toBe(3);
+    expect(result.current.items).toHaveLength(7);
   });
 
-  it('a slip today is not done, and the badge does not change', async () => {
+  it('a slip today changes neither the ring nor the badge', async () => {
     const { result } = await ready({
       habits: [...STORY_HABITS, abstain],
       logs: [...STORY_LOGS, { habit_code: 'no_sugar', day: DAY, status: 'done', value: null }],
     });
+    expect(result.current.due).toBe(6);
     expect(result.current.done).toBe(3);
     expect(result.current.badge).toBe(3);
+  });
+});
+
+describe('useHabitsToday: the state of each habit', () => {
+  it('gives every item its state, from the logs with the outbox over them', async () => {
+    const { result } = await ready();
+    const byCode = Object.fromEntries(result.current.items.map((i) => [i.habit.code, i.state]));
+    // The first three are reached today; english is 25 of 45 and sleep_screen has no log yesterday.
+    expect(byCode[WAKE_1.code]).toBe('done');
+    expect(byCode[ENGLISH.code]).toBe('late');
+    expect(byCode[SLEEP_1.code]).toBe('late');
+  });
+
+  it('an abstain habit with a slip yesterday is late, and a clean one is active', async () => {
+    const slipped = await ready({
+      habits: [habit('no_sugar', 'ترك السكر', { polarity: 'abstain' })],
+      logs: [{ habit_code: 'no_sugar', day: '2026-11-09', status: 'done', value: null }],
+    });
+    expect(slipped.result.current.items[0]?.state).toBe('late');
+    slipped.unmount();
+    const clean = await ready({ habits: [habit('no_sugar', 'ترك السكر', { polarity: 'abstain' })], logs: [] });
+    expect(clean.result.current.items[0]?.state).toBe('active');
+  });
+});
+
+describe('useHabitsToday: every habit, not only those due', () => {
+  const ended = habit('challenge', 'تحدٍّ', { start_day: '2026-10-01', end_day: '2026-10-30' });
+  const upcoming = habit('later', 'عادة قادمة', { start_day: '2026-11-15' });
+  const archived = habit('old', 'عادة قديمة', { active: false });
+  const saturdays = habit('sat', 'يوم السبت', { schedule_kind: 'weekdays', weekday_mask: 64 });
+
+  async function all() {
+    const habits = [...STORY_HABITS, ended, upcoming, archived, saturdays];
+    routeFetch(fetchMock, { habits, today: todayOut(STORY_HABITS) });
+    const hook = renderHook(() => useHabitsToday('all'));
+    await waitFor(() => expect(hook.result.current.state).toBe('ready'));
+    return hook;
+  }
+
+  it('lists the habits that are not due too, each with its state and whether it is due today', async () => {
+    const { result } = await all();
+    const items = result.current.items;
+    expect(items).toHaveLength(10);
+    const of = (code: string) => items.find((i) => i.habit.code === code);
+    expect(of('challenge')).toMatchObject({ state: 'ended', dueToday: false });
+    expect(of('later')).toMatchObject({ state: 'upcoming', dueToday: false });
+    expect(of('old')).toMatchObject({ state: 'archived', dueToday: false });
+    expect(of('sat')).toMatchObject({ dueToday: false });
+    expect(of(WAKE_1.code)).toMatchObject({ dueToday: true });
+  });
+
+  it('keeps the ring and the badge on the habits due today', async () => {
+    const { result } = await all();
+    expect(result.current.due).toBe(6);
+    expect(result.current.done).toBe(3);
+    expect(result.current.badge).toBe(3);
+  });
+
+  it('exposes the logs with the outbox over them, for the day grid', async () => {
+    const { result } = await all();
+    expect(result.current.logs.some((l) => l.habit_code === 'english' && l.day === '2026-11-08')).toBe(true);
   });
 });
 

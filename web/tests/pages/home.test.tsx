@@ -437,17 +437,94 @@ describe('home: the note stays until the next action or a dismissal', () => {
     await waitFor(() => expect(screen.queryByText('سُجّل: إطفاء الشاشات')).toBeNull());
   });
 
-  it('after a keyboard tap focus goes to «تراجع», and back to the habit after the undo', async () => {
+  it('after a keyboard tap focus stays on the row (it never jumps to «تراجع»), and the notice is a button in the tab order', async () => {
     await renderStory();
     const tick = within(row('إطفاء الشاشات')).getByRole('button', { pressed: false });
     tick.focus();
     fireEvent.keyDown(tick, { key: 'Enter' });
     fireEvent.click(tick);
     const undo = await screen.findByRole('button', { name: 'تراجع' });
-    await waitFor(() => expect(document.activeElement).toBe(undo));
+    await screen.findByText('4 من 6');
+    expect(document.activeElement).not.toBe(undo);
+    expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true);
+    expect(undo.tabIndex).toBeGreaterThanOrEqual(0);
+  });
+
+  it('Escape dismisses the notice and focus stays where it was', async () => {
+    await renderStory();
+    const tick = within(row('إطفاء الشاشات')).getByRole('button', { pressed: false });
+    tick.focus();
+    fireEvent.keyDown(tick, { key: 'Enter' });
+    fireEvent.click(tick);
+    await screen.findByText('سُجّل: إطفاء الشاشات');
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByText('سُجّل: إطفاء الشاشات')).toBeNull());
+    expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true);
+    // The tick itself stays: only the note went.
+    await screen.findByText('4 من 6');
+  });
+
+  it('after «تراجع» used by the keyboard focus returns to the habit, never to the page body', async () => {
+    await renderStory();
+    const tick = within(row('إطفاء الشاشات')).getByRole('button', { pressed: false });
+    tick.focus();
+    fireEvent.keyDown(tick, { key: 'Enter' });
+    fireEvent.click(tick);
+    const undo = await screen.findByRole('button', { name: 'تراجع' });
+    undo.focus(); // Tab to the note
+    fireEvent.keyDown(undo, { key: 'Enter' });
     fireEvent.click(undo);
     await screen.findByText('3 من 6');
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'تراجع' })).toBeNull());
     await waitFor(() => expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('after the close button of the note focus returns to the habit', async () => {
+    await renderStory();
+    const tick = within(row('إطفاء الشاشات')).getByRole('button', { pressed: false });
+    tick.focus();
+    fireEvent.keyDown(tick, { key: 'Enter' });
+    fireEvent.click(tick);
+    await screen.findByText('سُجّل: إطفاء الشاشات');
+    const close = document.querySelector('.toast .icon-btn') as HTMLElement;
+    close.focus();
+    fireEvent.click(close);
+    await waitFor(() => expect(screen.queryByText('سُجّل: إطفاء الشاشات')).toBeNull());
+    await waitFor(() => expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true));
+  });
+
+  it('after «تراجع» that finds the log already sent, the note says so and focus is on the habit', async () => {
+    await renderStory();
+    const tick = within(row('إطفاء الشاشات')).getByRole('button', { pressed: false });
+    tick.focus();
+    fireEvent.keyDown(tick, { key: 'Enter' });
+    fireEvent.click(tick);
+    const undo = await screen.findByRole('button', { name: 'تراجع' });
+    await clearOutbox();
+    undo.focus();
+    fireEvent.click(undo);
+    await screen.findByText('أُرسل التسجيل؛ التصحيح بتخطي اليوم');
+    await waitFor(() => expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true));
+  });
+
+  it('Escape pressed on the note itself returns focus to the habit', async () => {
+    await renderStory();
+    const tick = within(row('إطفاء الشاشات')).getByRole('button', { pressed: false });
+    tick.focus();
+    fireEvent.keyDown(tick, { key: 'Enter' });
+    fireEvent.click(tick);
+    const undo = await screen.findByRole('button', { name: 'تراجع' });
+    undo.focus();
+    fireEvent.keyDown(undo, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'تراجع' })).toBeNull());
+    await waitFor(() => expect(row('إطفاء الشاشات').contains(document.activeElement)).toBe(true));
+  });
+
+  it('Escape with no notice does nothing', async () => {
+    await renderStory();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.getByText('3 من 6')).toBeTruthy();
   });
 
   it('after a mouse tap focus stays where it is', async () => {
@@ -461,22 +538,22 @@ describe('home: the note stays until the next action or a dismissal', () => {
 });
 
 describe('home: the ring, the badge and abstain habits', () => {
-  const abstain = { ...habit('no_sugar', 'ترك السكر'), polarity: 'abstain' } as ReturnType<typeof habit>;
+  const abstain = habit('no_sugar', 'ترك السكر', { polarity: 'abstain' });
 
-  it('an abstain habit counts as done unless a slip is logged today, and stays out of the badge', async () => {
+  it('an abstain habit is outside the ring («3 من 6», not «4 من 7») and outside the badge', async () => {
     routeFetch(fetchMock, { habits: [...STORY_HABITS, abstain] });
     render(<HomePage />);
-    await screen.findByText('4 من 7');
+    await screen.findByText('3 من 6');
     await waitFor(() => expect(mocks.setBadge).toHaveBeenLastCalledWith(3));
   });
 
-  it('a slip today takes it out of the done count and still stays out of the badge', async () => {
+  it('a slip today changes neither the ring nor the badge', async () => {
     routeFetch(fetchMock, {
       habits: [...STORY_HABITS, abstain],
       logs: [...STORY_LOGS, { habit_code: 'no_sugar', day: DAY, status: 'done', value: null }],
     });
     render(<HomePage />);
-    await screen.findByText('3 من 7');
+    await screen.findByText('3 من 6');
     await waitFor(() => expect(mocks.setBadge).toHaveBeenLastCalledWith(3));
   });
 });

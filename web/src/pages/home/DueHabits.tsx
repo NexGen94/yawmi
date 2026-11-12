@@ -1,5 +1,6 @@
+import { HABIT_GROUPS } from '../../habits/groups';
 import { HabitRow } from '../../habits/HabitRow';
-import type { HabitGroup, HabitTodayItem } from '../../habits/useHabitsToday';
+import type { HabitTodayItem } from '../../habits/useHabitsToday';
 import { Card } from '../../ui/Card';
 
 export interface DueHabitsProps {
@@ -10,19 +11,12 @@ export interface DueHabitsProps {
   onSkip(code: string): void;
 }
 
-/** Design section 13, ruling 14: the three groups come from the habit's anchor. */
-const GROUPS: readonly { key: HabitGroup; title: string }[] = [
-  { key: 'after_wake', title: 'بعد الاستيقاظ' },
-  { key: 'free', title: 'خلال اليوم' },
-  { key: 'before_sleep', title: 'قبل النوم' },
-];
-
 /** The habits due today in three groups, each row with its one-tap actions. A group with no
  *  habit is not drawn. */
 export function DueHabits({ items, onTick, onAdd, onUntick, onSkip }: DueHabitsProps) {
   return (
     <Card title="العادات المستحقة" class="due-habits">
-      {GROUPS.map(({ key, title }) => {
+      {HABIT_GROUPS.map(({ key, title }) => {
         const inGroup = items.filter((item) => item.group === key);
         if (inGroup.length === 0) return null;
         return (
