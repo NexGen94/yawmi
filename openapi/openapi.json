@@ -151,6 +151,44 @@
         "title": "BreathEndedPayload",
         "type": "object"
       },
+      "BreathPrefsIO": {
+        "properties": {
+          "minutes": {
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "pattern": {
+            "enum": [
+              "calm",
+              "focus",
+              "sleep",
+              "energize",
+              "unwind",
+              "prepare"
+            ],
+            "title": "Pattern",
+            "type": "string"
+          },
+          "rate": {
+            "title": "Rate",
+            "type": "number"
+          },
+          "sound": {
+            "title": "Sound",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pattern",
+          "minutes",
+          "rate",
+          "sound"
+        ],
+        "title": "BreathPrefsIO",
+        "type": "object"
+      },
       "CardHabit": {
         "properties": {
           "adherence": {
@@ -704,6 +742,63 @@
         "title": "DayCloseRequest",
         "type": "object"
       },
+      "DayReminderItemIO": {
+        "properties": {
+          "days_mask": {
+            "maximum": 127.0,
+            "minimum": 1.0,
+            "title": "Days Mask",
+            "type": "integer"
+          },
+          "time": {
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "time",
+          "days_mask"
+        ],
+        "title": "DayReminderItemIO",
+        "type": "object"
+      },
+      "DayRemindersIO": {
+        "properties": {
+          "evening": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DayReminderItemIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "morning": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DayReminderItemIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weekly": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DayReminderItemIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "DayRemindersIO",
+        "type": "object"
+      },
       "ErrorDetail": {
         "properties": {
           "detail": {
@@ -1144,6 +1239,33 @@
         "title": "FocusStartedPayload",
         "type": "object"
       },
+      "GoalColumnsIO": {
+        "properties": {
+          "cards": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cards",
+            "type": "array"
+          },
+          "milestones": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Milestones",
+            "type": "array"
+          },
+          "outcomes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Outcomes",
+            "type": "array"
+          }
+        },
+        "title": "GoalColumnsIO",
+        "type": "object"
+      },
       "GoalTaskSetPayload": {
         "additionalProperties": false,
         "properties": {
@@ -1226,6 +1348,17 @@
             "title": "Goal Ref",
             "type": "string"
           },
+          "identity_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity Text"
+          },
           "kind": {
             "enum": [
               "boolean",
@@ -1253,6 +1386,15 @@
               "month"
             ],
             "title": "Period",
+            "type": "string"
+          },
+          "polarity": {
+            "default": "build",
+            "enum": [
+              "build",
+              "abstain"
+            ],
+            "title": "Polarity",
             "type": "string"
           },
           "reminders": {
@@ -1394,6 +1536,15 @@
             "$ref": "#/components/schemas/PeriodProgressOut",
             "description": "تقدّم الفترة الحالية (يوم أو أسبوع أو شهر)"
           },
+          "polarity": {
+            "description": "نوع العادة: بناء أو امتناع",
+            "enum": [
+              "build",
+              "abstain"
+            ],
+            "title": "Polarity",
+            "type": "string"
+          },
           "status_today": {
             "anyOf": [
               {
@@ -1456,7 +1607,8 @@
           "done_today",
           "status_today",
           "value_today",
-          "period_progress"
+          "period_progress",
+          "polarity"
         ],
         "title": "HabitDue",
         "type": "object"
@@ -1541,6 +1693,18 @@
             "description": "معرّف محطة أو بطاقة في Notion",
             "title": "Goal Ref"
           },
+          "identity_text": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity Text"
+          },
           "kind": {
             "enum": [
               "boolean",
@@ -1569,6 +1733,15 @@
               "month"
             ],
             "title": "Period",
+            "type": "string"
+          },
+          "polarity": {
+            "default": "build",
+            "enum": [
+              "build",
+              "abstain"
+            ],
+            "title": "Polarity",
             "type": "string"
           },
           "reminders": {
@@ -1866,6 +2039,17 @@
             ],
             "title": "Goal Ref"
           },
+          "identity_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity Text"
+          },
           "kind": {
             "enum": [
               "boolean",
@@ -1893,6 +2077,14 @@
               "month"
             ],
             "title": "Period",
+            "type": "string"
+          },
+          "polarity": {
+            "enum": [
+              "build",
+              "abstain"
+            ],
+            "title": "Polarity",
             "type": "string"
           },
           "reminders": {
@@ -1970,6 +2162,8 @@
           "system",
           "created_by",
           "active",
+          "polarity",
+          "identity_text",
           "reminders"
         ],
         "title": "HabitOut",
@@ -2058,6 +2252,18 @@
             ],
             "title": "Goal Ref"
           },
+          "identity_text": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity Text"
+          },
           "kind": {
             "enum": [
               "boolean",
@@ -2086,6 +2292,14 @@
               "month"
             ],
             "title": "Period",
+            "type": "string"
+          },
+          "polarity": {
+            "enum": [
+              "build",
+              "abstain"
+            ],
+            "title": "Polarity",
             "type": "string"
           },
           "reminders": {
@@ -2149,6 +2363,262 @@
           }
         },
         "title": "HabitPatch",
+        "type": "object"
+      },
+      "IndicatorIO": {
+        "properties": {
+          "display": {
+            "enum": [
+              "ring",
+              "bar",
+              "number",
+              "sparkline"
+            ],
+            "title": "Display",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "measure": {
+            "enum": [
+              "completion",
+              "total",
+              "avg_7d",
+              "avg_30d",
+              "strength"
+            ],
+            "title": "Measure",
+            "type": "string"
+          },
+          "period": {
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "cycle",
+              "all"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "reminder": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IndicatorReminderIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "habit_logs",
+              "linked_habits",
+              "milestones",
+              "tasks"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "subject_kind": {
+            "enum": [
+              "habit",
+              "goal"
+            ],
+            "title": "Subject Kind",
+            "type": "string"
+          },
+          "subject_ref": {
+            "title": "Subject Ref",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "title_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Ar"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "subject_kind",
+          "subject_ref",
+          "source",
+          "measure",
+          "period",
+          "display"
+        ],
+        "title": "IndicatorIO",
+        "type": "object"
+      },
+      "IndicatorIn": {
+        "properties": {
+          "display": {
+            "enum": [
+              "ring",
+              "bar",
+              "number",
+              "sparkline"
+            ],
+            "title": "Display",
+            "type": "string"
+          },
+          "measure": {
+            "enum": [
+              "completion",
+              "total",
+              "avg_7d",
+              "avg_30d",
+              "strength"
+            ],
+            "title": "Measure",
+            "type": "string"
+          },
+          "period": {
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "cycle",
+              "all"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "reminder": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IndicatorReminderIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "habit_logs",
+              "linked_habits",
+              "milestones",
+              "tasks"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "subject_kind": {
+            "enum": [
+              "habit",
+              "goal"
+            ],
+            "title": "Subject Kind",
+            "type": "string"
+          },
+          "subject_ref": {
+            "title": "Subject Ref",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "title_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Ar"
+          }
+        },
+        "required": [
+          "subject_kind",
+          "subject_ref",
+          "source",
+          "measure",
+          "period",
+          "display"
+        ],
+        "title": "IndicatorIn",
+        "type": "object"
+      },
+      "IndicatorList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IndicatorIO"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "IndicatorList",
+        "type": "object"
+      },
+      "IndicatorReminderIO": {
+        "properties": {
+          "days_mask": {
+            "maximum": 127.0,
+            "minimum": 1.0,
+            "title": "Days Mask",
+            "type": "integer"
+          },
+          "time": {
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "time",
+          "days_mask"
+        ],
+        "title": "IndicatorReminderIO",
         "type": "object"
       },
       "InsightOut": {
@@ -2996,6 +3466,283 @@
           "items"
         ],
         "title": "ReviewList",
+        "type": "object"
+      },
+      "SettingsOut": {
+        "properties": {
+          "ai_checkin": {
+            "default": "evening",
+            "enum": [
+              "morning",
+              "evening"
+            ],
+            "title": "Ai Checkin",
+            "type": "string"
+          },
+          "ai_lines": {
+            "default": 2,
+            "enum": [
+              1,
+              2
+            ],
+            "title": "Ai Lines",
+            "type": "integer"
+          },
+          "ai_tone": {
+            "default": "direct",
+            "enum": [
+              "direct",
+              "explained"
+            ],
+            "title": "Ai Tone",
+            "type": "string"
+          },
+          "breath_prefs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BreathPrefsIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "breath_weekly_target_min": {
+            "anyOf": [
+              {
+                "maximum": 600.0,
+                "minimum": 5.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breath Weekly Target Min"
+          },
+          "day_reminders": {
+            "$ref": "#/components/schemas/DayRemindersIO"
+          },
+          "digits": {
+            "default": "latn",
+            "enum": [
+              "latn",
+              "arab"
+            ],
+            "title": "Digits",
+            "type": "string"
+          },
+          "focus_daily_target_min": {
+            "anyOf": [
+              {
+                "maximum": 600.0,
+                "minimum": 5.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus Daily Target Min"
+          },
+          "goal_columns": {
+            "$ref": "#/components/schemas/GoalColumnsIO"
+          },
+          "late_notice_enabled": {
+            "default": true,
+            "title": "Late Notice Enabled",
+            "type": "boolean"
+          },
+          "late_notice_time": {
+            "default": "20:00",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Late Notice Time",
+            "type": "string"
+          },
+          "mission": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Mission",
+            "type": "string"
+          },
+          "vision": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Vision",
+            "type": "string"
+          }
+        },
+        "title": "SettingsOut",
+        "type": "object"
+      },
+      "SettingsPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "ai_checkin": {
+            "anyOf": [
+              {
+                "enum": [
+                  "morning",
+                  "evening"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Checkin"
+          },
+          "ai_lines": {
+            "anyOf": [
+              {
+                "enum": [
+                  1,
+                  2
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Lines"
+          },
+          "ai_tone": {
+            "anyOf": [
+              {
+                "enum": [
+                  "direct",
+                  "explained"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Tone"
+          },
+          "breath_prefs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BreathPrefsIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "breath_weekly_target_min": {
+            "anyOf": [
+              {
+                "maximum": 600.0,
+                "minimum": 5.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breath Weekly Target Min"
+          },
+          "day_reminders": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DayRemindersIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "digits": {
+            "anyOf": [
+              {
+                "enum": [
+                  "latn",
+                  "arab"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Digits"
+          },
+          "focus_daily_target_min": {
+            "anyOf": [
+              {
+                "maximum": 600.0,
+                "minimum": 5.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus Daily Target Min"
+          },
+          "goal_columns": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalColumnsIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "late_notice_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Notice Enabled"
+          },
+          "late_notice_time": {
+            "anyOf": [
+              {
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Notice Time"
+          },
+          "mission": {
+            "anyOf": [
+              {
+                "maxLength": 600,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mission"
+          },
+          "vision": {
+            "anyOf": [
+              {
+                "maxLength": 600,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vision"
+          }
+        },
+        "title": "SettingsPatch",
         "type": "object"
       },
       "StoredEvent": {
@@ -4573,6 +5320,213 @@
         ]
       }
     },
+    "/v1/indicators": {
+      "get": {
+        "operationId": "list_indicators_v1_indicators_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndicatorList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "قائمة المؤشرات",
+        "tags": [
+          "indicators"
+        ]
+      }
+    },
+    "/v1/indicators/{subject_kind}/{subject_ref}": {
+      "delete": {
+        "operationId": "delete_indicator_v1_indicators__subject_kind___subject_ref__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "subject_kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "habit",
+                "goal"
+              ],
+              "title": "Subject Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subject_ref",
+            "required": true,
+            "schema": {
+              "title": "Subject Ref",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "حذف مؤشر",
+        "tags": [
+          "indicators"
+        ]
+      },
+      "put": {
+        "operationId": "put_indicator_v1_indicators__subject_kind___subject_ref__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "subject_kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "habit",
+                "goal"
+              ],
+              "title": "Subject Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subject_ref",
+            "required": true,
+            "schema": {
+              "title": "Subject Ref",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndicatorIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndicatorIO"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "إنشاء أو تحديث مؤشر",
+        "tags": [
+          "indicators"
+        ]
+      }
+    },
     "/v1/journal": {
       "get": {
         "description": "الصفوف المسقطة من أحداث `journal_saved` بين `from` و`to` (400 يوم على الأكثر).",
@@ -5051,6 +6005,116 @@
         "summary": "المراجعات المحفوظة، الأحدث أولاً",
         "tags": [
           "insights"
+        ]
+      }
+    },
+    "/v1/settings": {
+      "get": {
+        "operationId": "get_settings_v1_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "إعدادات المستخدم",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_settings_v1_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "تعديل إعدادات المستخدم",
+        "tags": [
+          "settings"
         ]
       }
     },

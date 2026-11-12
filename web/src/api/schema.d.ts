@@ -277,6 +277,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/indicators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** قائمة المؤشرات */
+        get: operations["list_indicators_v1_indicators_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/indicators/{subject_kind}/{subject_ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** إنشاء أو تحديث مؤشر */
+        put: operations["put_indicator_v1_indicators__subject_kind___subject_ref__put"];
+        post?: never;
+        /** حذف مؤشر */
+        delete: operations["delete_indicator_v1_indicators__subject_kind___subject_ref__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/journal": {
         parameters: {
             query?: never;
@@ -398,6 +433,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** إعدادات المستخدم */
+        get: operations["get_settings_v1_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** تعديل إعدادات المستخدم */
+        patch: operations["patch_settings_v1_settings_patch"];
+        trace?: never;
+    };
     "/v1/today": {
         parameters: {
             query?: never;
@@ -490,6 +543,20 @@ export interface components {
              * @default null
              */
             started_at: string | null;
+        };
+        /** BreathPrefsIO */
+        BreathPrefsIO: {
+            /** Minutes */
+            minutes: number;
+            /**
+             * Pattern
+             * @enum {string}
+             */
+            pattern: "calm" | "focus" | "sleep" | "energize" | "unwind" | "prepare";
+            /** Rate */
+            rate: number;
+            /** Sound */
+            sound: boolean;
         };
         /** CardHabit */
         CardHabit: {
@@ -662,6 +729,19 @@ export interface components {
             day: string;
             /** Sources */
             sources?: components["schemas"]["ClientSource"][];
+        };
+        /** DayReminderItemIO */
+        DayReminderItemIO: {
+            /** Days Mask */
+            days_mask: number;
+            /** Time */
+            time: string;
+        };
+        /** DayRemindersIO */
+        DayRemindersIO: {
+            evening?: components["schemas"]["DayReminderItemIO"] | null;
+            morning?: components["schemas"]["DayReminderItemIO"] | null;
+            weekly?: components["schemas"]["DayReminderItemIO"] | null;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -839,6 +919,15 @@ export interface components {
             /** Planned Minutes */
             planned_minutes: number;
         };
+        /** GoalColumnsIO */
+        GoalColumnsIO: {
+            /** Cards */
+            cards?: string[];
+            /** Milestones */
+            milestones?: string[];
+            /** Outcomes */
+            outcomes?: string[];
+        };
         /** GoalTaskSetPayload */
         GoalTaskSetPayload: {
             /** Done */
@@ -869,6 +958,8 @@ export interface components {
             every_n: number | null;
             /** Goal Ref */
             goal_ref: string;
+            /** Identity Text */
+            identity_text?: string | null;
             /**
              * Kind
              * @enum {string}
@@ -881,6 +972,12 @@ export interface components {
              * @enum {string}
              */
             period: "day" | "week" | "month";
+            /**
+             * Polarity
+             * @default build
+             * @enum {string}
+             */
+            polarity: "build" | "abstain";
             /** Reminders */
             reminders: components["schemas"]["ReminderIO"][];
             /**
@@ -943,6 +1040,12 @@ export interface components {
             /** @description تقدّم الفترة الحالية (يوم أو أسبوع أو شهر) */
             period_progress: components["schemas"]["PeriodProgressOut"];
             /**
+             * Polarity
+             * @description نوع العادة: بناء أو امتناع
+             * @enum {string}
+             */
+            polarity: "build" | "abstain";
+            /**
              * Status Today
              * @description حالة سجل اليوم (`done` أو `skip` أو `vacation` أو `null`)
              */
@@ -993,6 +1096,8 @@ export interface components {
              * @description معرّف محطة أو بطاقة في Notion
              */
             goal_ref?: string | null;
+            /** Identity Text */
+            identity_text?: string | null;
             /**
              * Kind
              * @enum {string}
@@ -1005,6 +1110,12 @@ export interface components {
              * @enum {string}
              */
             period: "day" | "week" | "month";
+            /**
+             * Polarity
+             * @default build
+             * @enum {string}
+             */
+            polarity: "build" | "abstain";
             /**
              * Reminders
              * @description تُرتَّب بالوقت ثم القناع، ويُحذف المكرر
@@ -1109,6 +1220,8 @@ export interface components {
             every_n: number | null;
             /** Goal Ref */
             goal_ref: string | null;
+            /** Identity Text */
+            identity_text: string | null;
             /**
              * Kind
              * @enum {string}
@@ -1121,6 +1234,11 @@ export interface components {
              * @enum {string}
              */
             period: "day" | "week" | "month";
+            /**
+             * Polarity
+             * @enum {string}
+             */
+            polarity: "build" | "abstain";
             /** Reminders */
             reminders: components["schemas"]["ReminderIO"][];
             /**
@@ -1175,6 +1293,8 @@ export interface components {
             every_n?: number | null;
             /** Goal Ref */
             goal_ref?: string | null;
+            /** Identity Text */
+            identity_text?: string | null;
             /**
              * Kind
              * @enum {string}
@@ -1187,6 +1307,11 @@ export interface components {
              * @enum {string}
              */
             period?: "day" | "week" | "month";
+            /**
+             * Polarity
+             * @enum {string}
+             */
+            polarity?: "build" | "abstain";
             /**
              * Reminders
              * @description تستبدل المجموعة؛ ما بقي منها يحتفظ بصفّه
@@ -1214,6 +1339,95 @@ export interface components {
             unit?: "" | "session" | "min" | "hour";
             /** Weekday Mask */
             weekday_mask?: number | null;
+        };
+        /** IndicatorIO */
+        IndicatorIO: {
+            /**
+             * Display
+             * @enum {string}
+             */
+            display: "ring" | "bar" | "number" | "sparkline";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id?: string;
+            /**
+             * Measure
+             * @enum {string}
+             */
+            measure: "completion" | "total" | "avg_7d" | "avg_30d" | "strength";
+            /**
+             * Period
+             * @enum {string}
+             */
+            period: "day" | "week" | "month" | "cycle" | "all";
+            reminder?: components["schemas"]["IndicatorReminderIO"] | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "habit_logs" | "linked_habits" | "milestones" | "tasks";
+            /**
+             * Subject Kind
+             * @enum {string}
+             */
+            subject_kind: "habit" | "goal";
+            /** Subject Ref */
+            subject_ref: string;
+            /** Target */
+            target?: number | null;
+            /** Title Ar */
+            title_ar?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** IndicatorIn */
+        IndicatorIn: {
+            /**
+             * Display
+             * @enum {string}
+             */
+            display: "ring" | "bar" | "number" | "sparkline";
+            /**
+             * Measure
+             * @enum {string}
+             */
+            measure: "completion" | "total" | "avg_7d" | "avg_30d" | "strength";
+            /**
+             * Period
+             * @enum {string}
+             */
+            period: "day" | "week" | "month" | "cycle" | "all";
+            reminder?: components["schemas"]["IndicatorReminderIO"] | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "habit_logs" | "linked_habits" | "milestones" | "tasks";
+            /**
+             * Subject Kind
+             * @enum {string}
+             */
+            subject_kind: "habit" | "goal";
+            /** Subject Ref */
+            subject_ref: string;
+            /** Target */
+            target?: number | null;
+            /** Title Ar */
+            title_ar?: string | null;
+        };
+        /** IndicatorList */
+        IndicatorList: {
+            /** Items */
+            items: components["schemas"]["IndicatorIO"][];
+        };
+        /** IndicatorReminderIO */
+        IndicatorReminderIO: {
+            /** Days Mask */
+            days_mask: number;
+            /** Time */
+            time: string;
         };
         /**
          * InsightOut
@@ -1555,6 +1769,86 @@ export interface components {
         ReviewList: {
             /** Items */
             items: components["schemas"]["InsightOut"][];
+        };
+        /** SettingsOut */
+        SettingsOut: {
+            /**
+             * Ai Checkin
+             * @default evening
+             * @enum {string}
+             */
+            ai_checkin: "morning" | "evening";
+            /**
+             * Ai Lines
+             * @default 2
+             * @enum {integer}
+             */
+            ai_lines: 1 | 2;
+            /**
+             * Ai Tone
+             * @default direct
+             * @enum {string}
+             */
+            ai_tone: "direct" | "explained";
+            breath_prefs?: components["schemas"]["BreathPrefsIO"] | null;
+            /** Breath Weekly Target Min */
+            breath_weekly_target_min?: number | null;
+            day_reminders?: components["schemas"]["DayRemindersIO"];
+            /**
+             * Digits
+             * @default latn
+             * @enum {string}
+             */
+            digits: "latn" | "arab";
+            /** Focus Daily Target Min */
+            focus_daily_target_min?: number | null;
+            goal_columns?: components["schemas"]["GoalColumnsIO"];
+            /**
+             * Late Notice Enabled
+             * @default true
+             */
+            late_notice_enabled: boolean;
+            /**
+             * Late Notice Time
+             * @default 20:00
+             */
+            late_notice_time: string;
+            /**
+             * Mission
+             * @default
+             */
+            mission: string;
+            /**
+             * Vision
+             * @default
+             */
+            vision: string;
+        };
+        /** SettingsPatch */
+        SettingsPatch: {
+            /** Ai Checkin */
+            ai_checkin?: ("morning" | "evening") | null;
+            /** Ai Lines */
+            ai_lines?: (1 | 2) | null;
+            /** Ai Tone */
+            ai_tone?: ("direct" | "explained") | null;
+            breath_prefs?: components["schemas"]["BreathPrefsIO"] | null;
+            /** Breath Weekly Target Min */
+            breath_weekly_target_min?: number | null;
+            day_reminders?: components["schemas"]["DayRemindersIO"] | null;
+            /** Digits */
+            digits?: ("latn" | "arab") | null;
+            /** Focus Daily Target Min */
+            focus_daily_target_min?: number | null;
+            goal_columns?: components["schemas"]["GoalColumnsIO"] | null;
+            /** Late Notice Enabled */
+            late_notice_enabled?: boolean | null;
+            /** Late Notice Time */
+            late_notice_time?: string | null;
+            /** Mission */
+            mission?: string | null;
+            /** Vision */
+            vision?: string | null;
         };
         /**
          * StoredEvent
@@ -2544,6 +2838,146 @@ export interface operations {
             };
         };
     };
+    list_indicators_v1_indicators_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndicatorList"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    put_indicator_v1_indicators__subject_kind___subject_ref__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_kind: "habit" | "goal";
+                subject_ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IndicatorIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndicatorIO"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    delete_indicator_v1_indicators__subject_kind___subject_ref__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_kind: "habit" | "goal";
+                subject_ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
     list_journal_v1_journal_get: {
         parameters: {
             query: {
@@ -2878,6 +3312,95 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_settings_v1_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    patch_settings_v1_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
             };
         };
     };

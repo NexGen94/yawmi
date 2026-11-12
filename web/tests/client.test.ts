@@ -101,7 +101,7 @@ describe('typed API client', () => {
     fetchMock.mockResolvedValueOnce(json({ detail: 'طلب غير صالح', errors: [{ loc: ['body', 'title_ar'], type: 'missing' }] }, 422));
 
     const { data, error, response } = await api.POST('/v1/habits', {
-      body: { title_ar: '', kind: 'boolean', target_per_period: 1, period: 'day', anchor: 'free', unit: '', schedule_kind: 'every_day' },
+      body: { title_ar: '', kind: 'boolean', target_per_period: 1, period: 'day', anchor: 'free', unit: '', schedule_kind: 'every_day', polarity: 'build' },
     });
 
     expect(data).toBeUndefined();

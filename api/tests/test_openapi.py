@@ -65,9 +65,12 @@ def test_required_and_pending_paths_are_the_final_list(exporter: ModuleType) -> 
         "/v1/goals/{ref}/to-habit",
         "/v1/push/subscribe",
         "/v1/push/vapid-public-key",
+        "/v1/settings",
+        "/v1/indicators",
+        "/v1/indicators/{subject_kind}/{subject_ref}",
     }
     required, pending = exporter.REQUIRED_PATHS, exporter.PENDING_PATHS
-    assert len(final) == 22
+    assert len(final) == 25
     assert set(required).isdisjoint(pending)
     assert len(set(required)) == len(required) and len(set(pending)) == len(pending)
     assert set(required) | set(pending) == final

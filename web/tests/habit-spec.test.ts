@@ -26,6 +26,8 @@ const stored: HabitOut = {
   system: false,
   created_by: 'user',
   active: true,
+  polarity: 'build',
+  identity_text: null,
   reminders: [{ time: '21:30', days_mask: 127 }],
 };
 
@@ -65,6 +67,7 @@ describe('habitSpecOf', () => {
       schedule_kind: 'every_day',
       anchor: 'free',
       start_day: '2026-11-10',
+      polarity: 'build',
     };
     expect(habitSpecOf(unsaved)).toMatchObject({
       weekdayMask: null,
@@ -85,6 +88,7 @@ describe('habitSpecOf', () => {
       schedule_kind: 'every_day',
       anchor: 'free',
       start_day: null,
+      polarity: 'build',
     };
     expect(habitSpecOf(unsaved, '2026-11-10').startDay).toBe('2026-11-10');
     expect(habitSpecOf({ ...unsaved, start_day: undefined }, '2026-11-10').startDay).toBe('2026-11-10');
