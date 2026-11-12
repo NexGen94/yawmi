@@ -7,6 +7,8 @@ export interface CheckRowProps {
   label: string;
   /** A second line under the label (the identity sentence, the period progress). */
   note?: string;
+  /** Read aloud with the row, never drawn: what a press will do (the state alone cannot say). */
+  hint?: string;
   /** Shown at the end of the row, usually a Badge with the outcome code. */
   badge?: ComponentChildren;
   /** circle for a habit (default), square for a priority. */
@@ -17,9 +19,9 @@ export interface CheckRowProps {
 
 /** A row that is one toggle button (aria-pressed). Done draws a check mark in the 44px mark, so
  *  the state never rests on colour alone. */
-export function CheckRow({ checked, label, note, badge, shape = 'circle', disabled, onToggle }: CheckRowProps) {
+export function CheckRow({ checked, label, note, hint, badge, shape = 'circle', disabled, onToggle }: CheckRowProps) {
   const id = useId();
-  const described = [note && `${id}-note`, badge && `${id}-badge`].filter(Boolean).join(' ') || undefined;
+  const described = [note && `${id}-note`, hint && `${id}-hint`, badge && `${id}-badge`].filter(Boolean).join(' ') || undefined;
   return (
     <button
       type="button"
@@ -45,6 +47,11 @@ export function CheckRow({ checked, label, note, badge, shape = 'circle', disabl
           </span>
         )}
       </span>
+      {hint && (
+        <span id={`${id}-hint`} class="visually-hidden">
+          {hint}
+        </span>
+      )}
       {badge && (
         <span id={`${id}-badge`} class="check-badge">
           {badge}

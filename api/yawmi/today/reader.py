@@ -38,6 +38,7 @@ class HabitRow:
     goal_ref: str | None = None
     outcome: str | None = None
     anchor: str | None = None
+    polarity: str = "build"
 
 
 @dataclass(frozen=True)
@@ -131,7 +132,7 @@ class TodayReader(Protocol):
 
 ACTIVE_HABITS = """
 SELECT code, title_ar, kind, unit, target_per_period, period, schedule_kind,
-       weekday_mask, every_n, anchor_day, start_day, end_day, goal_ref, outcome, anchor
+       weekday_mask, every_n, anchor_day, start_day, end_day, goal_ref, outcome, anchor, polarity
 FROM yawmi.habits
 WHERE active AND start_day <= $1 AND (end_day IS NULL OR end_day >= $1)
 ORDER BY code
@@ -139,7 +140,7 @@ ORDER BY code
 
 LINKED_HABITS = """
 SELECT code, title_ar, kind, unit, target_per_period, period, schedule_kind,
-       weekday_mask, every_n, anchor_day, start_day, end_day, goal_ref, outcome, anchor
+       weekday_mask, every_n, anchor_day, start_day, end_day, goal_ref, outcome, anchor, polarity
 FROM yawmi.habits
 WHERE active AND (goal_ref IS NOT NULL OR outcome IS NOT NULL)
 ORDER BY code

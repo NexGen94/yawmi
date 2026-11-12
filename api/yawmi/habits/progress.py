@@ -7,12 +7,14 @@ module only picks the reference day and lays out the last periods.
 
 from collections.abc import Sequence
 from datetime import date, timedelta
+from typing import Self
 
 from pydantic import BaseModel, Field
 
 from yawmi.domain.habits import (
     HabitLog,
     HabitSpec,
+    PeriodProgress,
     adherence,
     challenge_progress,
     period_progress,
@@ -34,7 +36,21 @@ class PeriodProgressOut(BaseModel):
     reached: bool
     expected: float
     on_track: bool
-    need_per_day: float
+    need_per_day: float | None = Field(
+        description="المطلوب يومياً لبلوغ الهدف؛ `null` لعادة امتناع فلا معنى له"
+    )
+
+    @classmethod
+    def of(cls, p: PeriodProgress, spec: HabitSpec) -> Self:
+        return cls(
+            done=p.done,
+            target=p.target,
+            completion=p.completion,
+            reached=p.reached,
+            expected=p.expected,
+            on_track=p.on_track,
+            need_per_day=None if spec.polarity == "abstain" else p.need_per_day,
+        )
 
 
 class ChallengeOut(BaseModel):
@@ -73,6 +89,7 @@ def spec_of(habit: StoredHabit) -> HabitSpec:
         anchor_day=habit.anchor_day,
         start_day=habit.start_day,
         end_day=habit.end_day,
+        polarity=habit.polarity,  # type: ignore[arg-type]
     )
 
 
@@ -115,15 +132,7 @@ def progress(
     current = period_progress(spec, logs, today, week_start)
     challenge = challenge_progress(spec, logs, today, week_start)
     return ProgressOut(
-        period_progress=PeriodProgressOut(
-            done=current.done,
-            target=current.target,
-            completion=current.completion,
-            reached=current.reached,
-            expected=current.expected,
-            on_track=current.on_track,
-            need_per_day=current.need_per_day,
-        ),
+        period_progress=PeriodProgressOut.of(current, spec),
         strength=strength(spec, logs, today, week_start),
         streak=streak(spec, logs, today, week_start),
         challenge=None

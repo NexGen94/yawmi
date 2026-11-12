@@ -1,0 +1,270 @@
+/* The home page (task 7). Colors only through the tokens; logical properties only. Two columns on the
+   desktop (the shell's .page-cols), one under 900px in the same order. */
+
+.page .home-head h1 {
+  margin-block-end: var(--sp-1);
+}
+
+.home-head {
+  margin-block-end: var(--sp-6);
+}
+
+.home-date,
+.home-cycle {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-body);
+}
+
+.home-date span + span::before {
+  content: '·';
+  margin-inline: var(--sp-2);
+}
+
+.home-main,
+.home-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  min-inline-size: 0;
+}
+
+/* Links that look like buttons keep the button's look, not the link's underline. */
+.btn[href] {
+  text-decoration: none;
+}
+
+/* ---------- The ink card ---------- */
+
+.hero-body {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+}
+
+.hero-body .ring {
+  flex: none;
+  inline-size: 120px;
+  block-size: 120px;
+}
+
+.hero-figures {
+  min-inline-size: 0;
+}
+
+.hero-count {
+  margin: 0;
+  font-size: var(--fs-num-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.hero-note {
+  margin: var(--sp-1) 0 0;
+  color: var(--c-blue-light);
+  font-size: var(--fs-body);
+}
+
+.today-hero .state-text {
+  color: var(--c-blue-light);
+}
+
+/* ---------- Morning and evening ---------- */
+
+.day-entries > .card-title {
+  margin-block-end: var(--sp-3);
+}
+
+.day-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--sp-4);
+}
+
+.day-card-status {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--fs-body);
+  color: var(--c-ink-2);
+}
+
+/* ---------- Habits ---------- */
+
+.habit-group + .habit-group {
+  margin-block-start: var(--sp-5);
+}
+
+.group-title {
+  margin: 0 0 var(--sp-2);
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+  font-weight: 600;
+}
+
+.habit-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.habit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--sp-2);
+}
+
+.habit-row .check-row {
+  min-inline-size: 0;
+}
+
+.habit-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.habit-act {
+  min-block-size: var(--hit);
+  min-inline-size: var(--hit);
+  padding-inline: var(--sp-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--c-ink-2);
+  font: inherit;
+  font-size: var(--fs-note);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.habit-act:hover {
+  background: var(--c-blue-pale);
+}
+
+.habit-act:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--focus);
+}
+
+/* The quick increment and the slip button are real actions: they carry a border. */
+.habit-plus {
+  border-color: var(--c-blue);
+  color: var(--c-ink);
+}
+
+.habit-abstain-body {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2);
+}
+
+.habit-abstain-body .check-text {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+/* A state, not a control: a small pale rounded square, never the 44px circle of a done button. */
+.habit-abstain-mark {
+  flex: none;
+  inline-size: var(--sp-5);
+  block-size: var(--sp-5);
+  margin-inline: var(--sp-3);
+  border: 1.5px solid var(--c-blue);
+  border-radius: var(--sp-2);
+  background: var(--c-blue-pale);
+}
+
+.habit-abstain-clean {
+  background: var(--c-blue-light);
+}
+
+/* ---------- Quick access and the day summary ---------- */
+
+.quick-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-3);
+  padding: 0;
+  font-size: var(--fs-body);
+  list-style: none;
+}
+
+.summary-open,
+.summary-empty {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.summary-note {
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+p.summary-note {
+  margin: 0;
+}
+
+.summary-insight {
+  margin-block-start: var(--sp-4);
+  padding-block-start: var(--sp-3);
+  border-block-start: 1px solid var(--c-blue-pale);
+}
+
+.summary-kicker {
+  margin: 0 0 var(--sp-2);
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+  font-weight: 600;
+}
+
+.summary-line {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-body);
+}
+
+/* ---------- Narrow windows ---------- */
+
+@media (width < 900px) {
+  .home-main,
+  .home-side {
+    gap: var(--sp-5);
+  }
+}
+
+@media (width < 560px) {
+  .hero-body {
+    gap: var(--sp-4);
+  }
+
+  .hero-body .ring {
+    inline-size: 88px;
+    block-size: 88px;
+  }
+
+  .hero-count {
+    font-size: calc(var(--fs-num-lg) * 0.75);
+  }
+
+  /* A row with the «+» button drops its actions under the title, in line with the text, so the
+     title keeps its width. A row with «تخطي» alone keeps it on the same line. */
+  .habit-row:has(.habit-plus) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .habit-row:has(.habit-plus) .habit-actions {
+    padding-inline-start: calc(var(--sp-2) + var(--hit) + var(--sp-3));
+  }
+}

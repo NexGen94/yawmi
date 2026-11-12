@@ -89,6 +89,10 @@ class PushStore(Protocol):
         """Record the reminder as sent for `day`; `True` only for the first caller."""
         ...
 
+    async def claim_notice(self, kind: str, ref: str, day: date) -> bool:
+        """Record the notice as sent for `(kind, ref, day)`; `True` only for the first caller."""
+        ...
+
 
 # Locks the device row: a revoke (an UPDATE of that row) and a subscribe never interleave.
 _DEVICE_ALIVE = "SELECT revoked_at IS NULL FROM yawmi.devices WHERE id = $1 FOR UPDATE"
@@ -134,6 +138,11 @@ _CLAIM = """
 INSERT INTO yawmi.reminder_sends (reminder_id, day) VALUES ($1, $2)
 ON CONFLICT DO NOTHING
 RETURNING reminder_id
+"""
+_CLAIM_NOTICE = """
+INSERT INTO yawmi.notice_sends (kind, ref, day) VALUES ($1, $2, $3)
+ON CONFLICT DO NOTHING
+RETURNING 1
 """
 
 ALL_SQL = (
@@ -191,3 +200,6 @@ class AsyncpgPushStore:
 
     async def claim_send(self, reminder_id: UUID, day: date) -> bool:
         return await self._pool.fetchval(_CLAIM, reminder_id, day) is not None
+
+    async def claim_notice(self, kind: str, ref: str, day: date) -> bool:
+        return await self._pool.fetchval(_CLAIM_NOTICE, kind, ref, day) is not None

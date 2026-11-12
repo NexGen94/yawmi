@@ -120,7 +120,11 @@ async def _kpi_target(
         case "cumulative":
             if deadline is None:
                 return None
-            current = await mirror.latest_reading(code, today)
+            if code == "books_done":
+                deadline = min(deadline, date(today.year, 12, 31))
+                current = await mirror.latest_reading(code, today, since=date(today.year, 1, 1))
+            else:
+                current = await mirror.latest_reading(code, today)
             reading = 0.0 if current is None else float(current)
             if not math.isfinite(reading):
                 reading = 0.0
@@ -129,7 +133,7 @@ async def _kpi_target(
             value = float(goal_prefill(goal, reading, today, deadline, period, week_start))
         case "per_period":  # the reading and the deadline play no part
             value = per_period_prefill(goal, kpi.frequency, period)
-            kind, unit = kpi_habit_shape(kpi.unit)
+            kind, unit = kpi_habit_shape(kpi.unit, value, period)
     if value is None or not 0 < value <= MAX_TARGET:
         return None
     return kind, unit, value

@@ -13,6 +13,7 @@ import type {
   HabitKind,
   HabitOut,
   HabitPeriod,
+  HabitPolarity,
   HabitUnit,
   ReminderIn,
   ScheduleKind,
@@ -45,6 +46,8 @@ export interface HabitForm {
   duration: DurationChoice;
   system: boolean;
   created_by: HabitCreator;
+  polarity: HabitPolarity;
+  identity_text: string | null;
 }
 
 export type FormErrors = Partial<Record<keyof HabitForm, string>>;
@@ -120,6 +123,8 @@ export function emptyForm(today: string): HabitForm {
     duration: null,
     system: false,
     created_by: 'user',
+    polarity: 'build',
+    identity_text: null,
   };
 }
 
@@ -144,6 +149,8 @@ export function fromHabit(h: HabitOut): HabitForm {
     duration: chipFor(h.start_day, h.end_day),
     system: h.system,
     created_by: h.created_by,
+    polarity: h.polarity,
+    identity_text: h.identity_text,
   };
 }
 
@@ -171,6 +178,8 @@ export function fromDraft(d: HabitDraft): HabitForm {
     anchor: d.anchor,
     reminders: d.reminders.map((r) => ({ ...r })),
     duration: chipFor(d.start_day, d.end_day),
+    polarity: d.polarity,
+    identity_text: d.identity_text ?? null,
   };
 }
 
@@ -293,6 +302,8 @@ export function toHabitIn(f: HabitForm): HabitIn {
     end_day: effectiveEnd(f),
     anchor: f.anchor,
     reminders: f.reminders.map((r) => ({ time: r.time, days_mask: r.days_mask })),
+    polarity: f.polarity,
+    identity_text: f.identity_text,
   };
 }
 

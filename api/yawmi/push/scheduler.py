@@ -27,14 +27,18 @@ import asyncio
 import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from typing import Any
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 from yawmi.domain.days import is_valid_tz
 from yawmi.domain.habits import HabitLog, HabitSpec, period_progress
-from yawmi.domain.periods import WeekStart, is_scheduled, period_bounds, weekday_bit
+from yawmi.domain.periods import WeekStart, is_scheduled, period_bounds
+from yawmi.journal.store import AsyncpgJournalReader
+from yawmi.prefs.store import AsyncpgPrefsStore
+from yawmi.push import notices
+from yawmi.push.notices import NoticeContext, due_days
 from yawmi.push.sender import WebPushSender, default_check
 from yawmi.push.store import AsyncpgPushStore, PushStore, Reminder, Subscription
 from yawmi.today.assemble import habit_spec
@@ -42,38 +46,25 @@ from yawmi.today.reader import LogRow
 
 log = logging.getLogger("yawmi.push")
 
-WINDOW = timedelta(minutes=10)
 INTERVAL_SECONDS = 60.0
 TITLE = "يومي"
 NAVIGATE = "/"
-_ONE_DAY = timedelta(days=1)
 _SET_ASIDE = frozenset({"skip", "vacation"})
 
 
-def build_payload(body: str, badge: int) -> dict[str, Any]:
+def build_payload(body: str, badge: int, navigate: str = NAVIGATE) -> dict[str, Any]:
     """The declarative push message for one reminder (Arabic, right to left)."""
     return {
         "web_push": 8030,
         "notification": {
             "title": TITLE,
             "body": body,
-            "navigate": NAVIGATE,
+            "navigate": navigate,
             "app_badge": badge,
             "lang": "ar",
             "dir": "rtl",
         },
     }
-
-
-def _due_days(reminder: Reminder, local: datetime) -> list[date]:
-    """The local days whose occurrence of `reminder` has its window around `local`."""
-    zone = local.tzinfo
-    days = []
-    for day in (local.date(), local.date() - _ONE_DAY):  # 23:55 is still due at 00:03
-        start = datetime.combine(day, reminder.at_time, zone)
-        if start <= local <= start + WINDOW and reminder.weekday_mask >> weekday_bit(day) & 1:
-            days.append(day)
-    return days
 
 
 def _host(endpoint: str) -> str:
@@ -119,9 +110,16 @@ async def _open_habits(
     done_today = {r.habit_code for r in rows_logs if r.day == day and r.status == "done"}
     logs = _logs_by_code(rows_logs)
     open_: dict[str, str] = {}
+    badge_count = 0
     for code, spec in specs.items():
         if code in set_aside:
             continue
+        if spec.polarity == "abstain":
+            if code in done_today:
+                continue
+            open_[code] = rows[code].title_ar
+            continue
+
         if spec.kind == "boolean" and code in done_today:
             continue  # a yes/no habit is done for the day once it is done
         try:
@@ -131,7 +129,8 @@ async def _open_habits(
             continue
         if not reached:
             open_[code] = rows[code].title_ar
-    return open_, len(open_)
+            badge_count += 1
+    return open_, badge_count
 
 
 async def _deliver(
@@ -171,11 +170,14 @@ async def tick(
     *,
     tz: str,
     week_start: WeekStart,
+    prefs: Any = None,
+    journal: Any = None,
 ) -> int:
     """Send the reminders due at `now`; returns how many messages the push services accepted."""
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
-    due = await _due_by_day(store, now.astimezone(ZoneInfo(tz)))
+    local = now.astimezone(ZoneInfo(tz))
+    due = await _due_by_day(store, local)
     sent = 0
     for day in sorted(due):
         open_, badge = await _open_habits(store, day, week_start)
@@ -185,6 +187,43 @@ async def tick(
                 sent += await _remind(
                     store, sender, reminder, day, build_payload(title, badge), now
                 )
+
+    if prefs is not None:
+        ctx = NoticeContext(local=local, prefs=prefs, journal=journal, week_start=week_start)
+        for provider in notices.PROVIDERS:
+            try:
+                found = await provider(ctx, now)
+            except Exception as exc:  # noqa: BLE001  # one provider must not stop the others
+                log.warning("notice provider failed: %s", type(exc).__name__)
+                continue
+            for notice in found:
+                sent += await _send_notice(store, sender, notice, local.date(), week_start, now)
+
+    return sent
+
+
+async def _send_notice(
+    store: PushStore,
+    sender: WebPushSender,
+    notice: notices.Notice,
+    today: date,
+    week_start: WeekStart,
+    now: datetime,
+) -> int:
+    """Claim `(kind, ref, day)` of the notice and send it to every deliverable subscription.
+
+    Nothing is claimed when no subscription is deliverable, so it can still go out later.
+    """
+    targets = [
+        s for s in await store.subscriptions() if s.retry_after is None or s.retry_after <= now
+    ]
+    if not targets or not await store.claim_notice(notice.kind, notice.ref, notice.day):
+        return 0
+    _, badge = await _open_habits(store, today, week_start)
+    payload = build_payload(notice.body, badge, notice.navigate)
+    sent = 0
+    for sub in targets:
+        sent += await _deliver(store, sender, sub, payload, now)
     return sent
 
 
@@ -192,7 +231,7 @@ async def _due_by_day(store: PushStore, local: datetime) -> dict[date, list[Remi
     """Active reminders whose window holds `local`, by the local day they belong to."""
     due: dict[date, list[Reminder]] = defaultdict(list)
     for reminder in await store.active_reminders():
-        for day in _due_days(reminder, local):
+        for day in due_days(reminder.at_time, reminder.weekday_mask, local):
             due[day].append(reminder)
     return due
 
@@ -284,10 +323,19 @@ def start_reminders(pool: Any, config: Any) -> ReminderLoop:
         raise RuntimeError(f"push_enabled, but {exc}") from None
     sender = WebPushSender(key, config.vapid_subject, check=default_check(config.push_hosts))
 
+    prefs = AsyncpgPrefsStore(pool)
+    journal = AsyncpgJournalReader(pool)
+
     async def tick_once(now: datetime) -> int:
         # the module-level `tick` is looked up on every call, so tests can patch it
         return await tick(
-            AsyncpgPushStore(pool), sender, now, tz=config.tz, week_start=config.week_start
+            AsyncpgPushStore(pool),
+            sender,
+            now,
+            tz=config.tz,
+            week_start=config.week_start,
+            prefs=prefs,
+            journal=journal,
         )
 
     loop = ReminderLoop(tick_once, on_stop=sender.close)

@@ -17,6 +17,7 @@ from yawmi.auth.tokens import AccessClaims, AuthError, verify_access
 from yawmi.settings import Settings
 from yawmi.settings import settings as load_settings
 
+USER_KINDS = ("iphone", "watch", "web")  # every kind but `service`
 UNAUTHORIZED_MESSAGE = "غير مصرّح"
 FORBIDDEN_MESSAGE = "غير مسموح"
 

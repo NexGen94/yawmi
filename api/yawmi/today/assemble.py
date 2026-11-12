@@ -61,6 +61,7 @@ class HabitDue(BaseModel):
     period_progress: PeriodProgressOut = Field(
         description="تقدّم الفترة الحالية (يوم أو أسبوع أو شهر)"
     )
+    polarity: Literal["build", "abstain"] = Field(description="نوع العادة: بناء أو امتناع")
 
 
 class TrendPoint(BaseModel):
@@ -108,6 +109,7 @@ def habit_spec(row: HabitRow) -> HabitSpec:
         anchor_day=row.anchor_day,
         start_day=row.start_day,
         end_day=row.end_day,
+        polarity=row.polarity,  # type: ignore[arg-type]
     )
 
 
@@ -128,16 +130,7 @@ def _logs_by_habit(logs: Iterable[LogRow]) -> dict[str, list[HabitLog]]:
 def _period_progress(
     spec: HabitSpec, logs: list[HabitLog], day: date, week_start: WeekStart
 ) -> PeriodProgressOut:
-    p = period_progress(spec, logs, day, week_start)
-    return PeriodProgressOut(
-        done=p.done,
-        target=p.target,
-        completion=p.completion,
-        reached=p.reached,
-        expected=p.expected,
-        on_track=p.on_track,
-        need_per_day=p.need_per_day,
-    )
+    return PeriodProgressOut.of(period_progress(spec, logs, day, week_start), spec)
 
 
 def build_habits_due(
@@ -183,6 +176,7 @@ def build_habits_due(
                 status_today=status_today,
                 value_today=value_today,
                 period_progress=_period_progress(spec, by_habit.get(row.code, []), day, week_start),
+                polarity=cast(Literal["build", "abstain"], row.polarity),
             )
         )
     return due

@@ -23,6 +23,7 @@ class InMemoryPushStore:
     inactive: set[str] = field(default_factory=set)  # habit codes with `active = false`
     logs: list[LogRow] = field(default_factory=list)
     sends: set[tuple[UUID, date]] = field(default_factory=set)
+    notice_sends: set[tuple[str, str, date]] = field(default_factory=set)
 
     def forget_device(self, device_id: UUID) -> None:
         """The device was revoked: it may no longer subscribe, and its subscriptions go."""
@@ -97,4 +98,10 @@ class InMemoryPushStore:
         if (reminder_id, day) in self.sends:
             return False
         self.sends.add((reminder_id, day))
+        return True
+
+    async def claim_notice(self, kind: str, ref: str, day: date) -> bool:
+        if (kind, ref, day) in self.notice_sends:
+            return False
+        self.notice_sends.add((kind, ref, day))
         return True

@@ -26,3 +26,4 @@ export type HabitPeriod = HabitOut['period'];
 export type ScheduleKind = HabitOut['schedule_kind'];
 export type HabitAnchor = HabitOut['anchor'];
 export type HabitCreator = HabitOut['created_by'];
+export type HabitPolarity = HabitOut['polarity'];

@@ -38,6 +38,8 @@ const systemHabit: HabitOut = {
   system: true,
   created_by: 'seed',
   active: true,
+  polarity: 'build',
+  identity_text: null,
 };
 
 describe('validate', () => {
@@ -158,6 +160,8 @@ describe('conversions', () => {
       anchor: 'free',
       start_day: TODAY,
       end_day: null,
+      polarity: 'build',
+      identity_text: null,
       reminders: [],
     };
     expect(toHabitIn(fromDraft(draft))).toMatchObject({
