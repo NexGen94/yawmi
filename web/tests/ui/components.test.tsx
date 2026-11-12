@@ -350,14 +350,19 @@ describe('CheckRow', () => {
     expect(hint?.classList.contains('visually-hidden')).toBe(true);
   });
 
-  it('describes the note, the hint and the badge together, in that order', () => {
+  it('names the label, the note and the badge together, in that order, and describes with the hint alone', () => {
     render(<CheckRow checked={false} label="المشي" note="بعد الاستيقاظ" hint="تلميح" badge={<Badge>O1</Badge>} onToggle={() => undefined} />);
-    const row = screen.getByRole('button', { name: 'المشي' });
-    const text = (row.getAttribute('aria-describedby') ?? '')
+    const row = screen.getByRole('button', { name: 'المشي بعد الاستيقاظ O1' });
+    const name = (row.getAttribute('aria-labelledby') ?? '')
       .split(' ')
       .map((id) => document.getElementById(id)?.textContent)
       .join('|');
-    expect(text).toBe('بعد الاستيقاظ|تلميح|O1');
+    expect(name).toBe('المشي|بعد الاستيقاظ|O1');
+    const description = (row.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent)
+      .join('|');
+    expect(description).toBe('تلميح');
   });
 
   it('adds no description for a hint that is not given', () => {
