@@ -211,6 +211,7 @@ async def clear(pool: asyncpg.Pool) -> None:
     await pool.execute("DELETE FROM yawmi.habit_reminders WHERE habit_code LIKE $1", like)
     await pool.execute("DELETE FROM yawmi.habit_logs WHERE habit_code LIKE $1", like)
     await pool.execute("DELETE FROM yawmi.habits WHERE code LIKE $1", like)
+    await pool.execute("UPDATE yawmi.habits SET active = false WHERE code NOT LIKE $1", like)
     await pool.execute("DELETE FROM yawmi.push_subscriptions")
     await pool.execute("DELETE FROM yawmi.devices WHERE name LIKE $1", like)
 
@@ -235,6 +236,7 @@ class Backend:
         return self.store
 
     async def habit(self, code: str, title: str, **extra: Any) -> HabitRow:
+        polarity = extra.get("polarity", "build")
         row = HabitRow(
             code=CODE_PREFIX + code,
             title_ar=title,
@@ -248,6 +250,7 @@ class Backend:
             anchor_day=None,
             start_day=extra.get("start_day", date(2026, 11, 1)),
             end_day=None,
+            polarity=polarity,
         )
         active = extra.get("active", True)
         if self.pool is None:
@@ -257,8 +260,8 @@ class Backend:
         else:
             await self.pool.execute(
                 "INSERT INTO yawmi.habits (code, title_ar, kind, unit, target_per_period, period,"
-                " schedule_kind, weekday_mask, start_day, created_by, active)"
-                " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'user', $10)",
+                " schedule_kind, weekday_mask, start_day, created_by, active, polarity)"
+                " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'user', $10, $11)",
                 row.code,
                 row.title_ar,
                 row.kind,
@@ -269,6 +272,7 @@ class Backend:
                 row.weekday_mask,
                 row.start_day,
                 active,
+                polarity,
             )
         return row
 
@@ -378,6 +382,9 @@ async def backend(request: pytest.FixtureRequest) -> AsyncIterator[Backend]:
     finally:
         set_pool(None)
         await clear(pool)
+        await pool.execute(
+            "UPDATE yawmi.habits SET active = true WHERE code NOT LIKE $1", CODE_PREFIX + "%"
+        )
         for extra in b.extra_pools:
             await extra.close()
         await pool.close()
@@ -742,6 +749,31 @@ async def test_badge_counts_the_due_habits_that_are_not_reached(
     await backend.subscribe(service.endpoint("a"), receiver)
     assert await run_tick(backend, sender, at(7, 5)) == 1
     assert receiver.decrypt(service.hits[0].body)["notification"]["app_badge"] == 2
+
+
+async def test_abstain_habit_excluded_from_badge_and_reminded_unless_slip_or_set_aside(
+    backend: Backend, service: PushService, sender: WebPushSender
+) -> None:
+    # 1 build habit (not reached, badge=1) and 1 abstain habit (clean)
+    await backend.habit("read", "القراءة")
+    await backend.habit("smoke", "الامتناع عن التدخين", polarity="abstain")
+    await backend.reminder("smoke", 7, 0)
+    receiver = Receiver()
+    await backend.subscribe(service.endpoint("a"), receiver)
+
+    # Abstain habit is reminded on time, and badge reflects only the build habit (1, not 2)
+    assert await run_tick(backend, sender, at(7, 5)) == 1
+    hit = service.hits[-1]
+    notification = receiver.decrypt(hit.body)["notification"]
+    assert notification["body"] == "الامتناع عن التدخين"
+    assert notification["app_badge"] == 1
+
+    # If slip (done) was logged today, reminder is not sent
+    await backend.log("smoke", DAY, status="done")
+    await backend.habit("junk", "امتناع 2", polarity="abstain")
+    await backend.reminder("junk", 8, 0)
+    await backend.log("junk", DAY, status="skip")
+    assert await run_tick(backend, sender, at(8, 5)) == 0
 
 
 async def test_a_reminder_late_at_night_is_sent_after_midnight_for_its_own_day(

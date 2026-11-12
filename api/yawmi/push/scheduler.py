@@ -119,9 +119,16 @@ async def _open_habits(
     done_today = {r.habit_code for r in rows_logs if r.day == day and r.status == "done"}
     logs = _logs_by_code(rows_logs)
     open_: dict[str, str] = {}
+    badge_count = 0
     for code, spec in specs.items():
         if code in set_aside:
             continue
+        if spec.polarity == "abstain":
+            if code in done_today:
+                continue
+            open_[code] = rows[code].title_ar
+            continue
+
         if spec.kind == "boolean" and code in done_today:
             continue  # a yes/no habit is done for the day once it is done
         try:
@@ -131,7 +138,8 @@ async def _open_habits(
             continue
         if not reached:
             open_[code] = rows[code].title_ar
-    return open_, len(open_)
+            badge_count += 1
+    return open_, badge_count
 
 
 async def _deliver(
@@ -171,11 +179,14 @@ async def tick(
     *,
     tz: str,
     week_start: WeekStart,
+    prefs: Any = None,
+    journal: Any = None,
 ) -> int:
     """Send the reminders due at `now`; returns how many messages the push services accepted."""
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
-    due = await _due_by_day(store, now.astimezone(ZoneInfo(tz)))
+    local = now.astimezone(ZoneInfo(tz))
+    due = await _due_by_day(store, local)
     sent = 0
     for day in sorted(due):
         open_, badge = await _open_habits(store, day, week_start)
@@ -185,6 +196,54 @@ async def tick(
                 sent += await _remind(
                     store, sender, reminder, day, build_payload(title, badge), now
                 )
+
+    pool = getattr(store, "_pool", None)
+    if prefs is None and pool is not None:
+        from yawmi.journal.store import AsyncpgJournalReader
+        from yawmi.prefs.store import AsyncpgPrefsStore
+
+        prefs = AsyncpgPrefsStore(pool)
+        journal = AsyncpgJournalReader(pool)
+
+    if prefs is not None:
+        from yawmi.push.notices import PROVIDERS, NoticeContext
+
+        day = local.date()
+        ctx = NoticeContext(
+            now=now,
+            local=local,
+            day=day,
+            prefs=prefs,
+            journal=journal,
+            week_start=week_start,
+        )
+        for provider in PROVIDERS:
+            notices = await provider(ctx)
+            for notice in notices:
+                targets = [
+                    s
+                    for s in await store.subscriptions()
+                    if s.retry_after is None or s.retry_after <= now
+                ]
+                if not targets:
+                    continue
+                if not await store.claim_notice(notice.kind, notice.ref, day):
+                    continue
+                _, notice_badge = await _open_habits(store, day, week_start)
+                payload = {
+                    "web_push": 8030,
+                    "notification": {
+                        "title": TITLE,
+                        "body": notice.body,
+                        "navigate": notice.navigate,
+                        "app_badge": notice_badge,
+                        "lang": "ar",
+                        "dir": "rtl",
+                    },
+                }
+                for sub in targets:
+                    sent += await _deliver(store, sender, sub, payload, now)
+
     return sent
 
 

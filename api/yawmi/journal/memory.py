@@ -1,6 +1,7 @@
 """In-memory `JournalReader` for tests without Postgres."""
 
-from datetime import date
+from datetime import UTC, date, datetime
+from typing import Any
 
 from yawmi.events.memory_store import InMemoryEventStore
 from yawmi.journal.store import JournalRow, MoodRow
@@ -17,6 +18,16 @@ class InMemoryJournalReader:
         self.events = events
         self.entry_rows: list[JournalRow] = list(entries or [])
         self.mood_rows: list[MoodRow] = list(moods or [])
+
+    async def add_entry(self, day: date, part: str, answers: dict[str, Any] | None = None) -> None:
+        self.entry_rows.append(
+            JournalRow(
+                day=day,
+                part=part,  # type: ignore[arg-type]
+                answers=answers or {},
+                logged_at=datetime.now(UTC),
+            )
+        )
 
     async def entries(self, first: date, last: date) -> list[JournalRow]:
         by_key: dict[tuple[date, str], JournalRow] = {
