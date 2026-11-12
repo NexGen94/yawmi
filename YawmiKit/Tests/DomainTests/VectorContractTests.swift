@@ -23,7 +23,7 @@ struct VectorContractTests {
             }
             total += file.cases.count
         }
-        #expect(total == 312)
+        #expect(total == 332)  // 312 cases of rulesVersion 1 and the twenty abstain cases of 2
     }
 
     @Test

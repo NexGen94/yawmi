@@ -4,12 +4,17 @@
 المرجعي (`yawmi.domain`). قواعد الثبات:
 
 - المعرّف `<fn>-NNN` لا يتغيّر ولا يُحذف بعد التزامه، ومدخلاته لا تتغيّر. حالة جديدة تأخذ رقماً جديداً.
+  والاستثناء الوحيد حالات الامتناع العشرون (`rulesVersion` 2): `<fn>-abstain-<حالة>` بأسماء جدول
+  التصميم §9.6.
 - أي تغيير في `expect` لمعرّف ملتزَم يرفع `RULES_VERSION` هنا، وإلا رفض المولّد الكتابة.
+- `RULES_VERSION` 2 أضاف عادة الامتناع (`habit.polarity = "abstain"`) دون تغيير أي توقع من الـ312
+  الملتزَمة في الإصدار 1 (يثبته `test_rules_v2_keeps_every_v1_expectation`).
 - `pin`: قيمة معلنة في المواصفة أو المهمة 8 (مع هامشها) يتحقق المولّد والاختبار أن الناتج يطابقها،
   ولا تُكتب في الملف. `tol` يُكتب في الملف ويخفف مقارنة المستهلكين لهذه الحالة وحدها.
 
 المدخلات بدائيات JSON وحدها: تواريخ `YYYY-MM-DD`، ولحظات ISO بـ`Z`، وأعداد، ونصوص تعداد،
 ومصفوفات وكائنات منها بمفاتيح `snake_case`. `habit` بحقول `HabitSpec` العشرة كلها (ولو `null`)،
+وحقل حادي عشر `polarity` في حالات الامتناع وحدها (غيابه يعني `build`)،
 و`logs` مصفوفة `{day, value, status}`، و`week_start` في كل حالة تمرّ به للدالة. و`baseline`
 بـ`nights` مصفوفة `{day, value}` (ليالٍ صالحة مؤرخة بيوم الاستيقاظ) و`day` اليوم المقيَّم و`log`.
 """
@@ -20,7 +25,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
-RULES_VERSION = 1
+RULES_VERSION = 2
 
 FUNCTIONS: tuple[str, ...] = (
     "day_key",
@@ -1251,6 +1256,92 @@ STRAIN = _numbered(
         (8, {"trimp_total": 60.5}, "كسور"),
     ],
 )
+
+# ---------------------------------------------------------------- عادة الامتناع (rulesVersion 2)
+
+# التصميم §9.6: امتناع يومي من 2026-11-01، واليوم 2026-11-10. سجل `done` معناه انزلاق، وكل يوم
+# مجدول حتى اليوم شاملاً محفوظ ما لم يُسجَّل فيه انزلاق، و`skip` و`vacation` محايدان.
+_ABSTAIN_TODAY = "2026-11-10"
+_ABSTAIN_EXAMPLES: tuple[tuple[str, list[dict[str, Any]], str], ...] = (
+    ("clean", [], "P1: بلا سجلات، كل الأيام العشرة محفوظة"),
+    ("slip-mid", [done("2026-11-05")], "P2: انزلاق في 11-05"),
+    ("slip-today", [done(_ABSTAIN_TODAY)], "P3: انزلاق اليوم، فاليوم فوات لا معلّق"),
+    ("skip-neutral", [status("2026-11-05", "skip")], "P4: تخطٍّ في 11-05 محايد"),
+)
+
+
+def _abstain_spec(end: str | None = None) -> dict[str, Any]:
+    return habit(start_day="2026-11-01", end_day=end, polarity="abstain")
+
+
+def _today_progress(kept: bool) -> dict[str, Any]:
+    """تقدّم اليوم في §9.6: `done = 1` و`reached` بلا انزلاق، و`done = 0` بانزلاق، و`expected = 1`."""
+    value = 1.0 if kept else 0.0
+    return {
+        "done": value,
+        "target": 1.0,
+        "completion": value,
+        "reached": kept,
+        "expected": 1.0,
+        "on_track": kept,
+        "need_per_day": 1.0 - value,
+    }
+
+
+def _ch(achieved: int) -> dict[str, Any]:
+    return {"achieved": achieved, "total": 30, "completion": achieved / 30, "remaining_days": 20}
+
+
+# القيم المثبّتة من جدول §9.6 (strength بهامش 1e-6)، و`challenge_progress` بنهاية 2026-11-30 حيث
+# أعطى التصميم قيمة (P1 وP2).
+_ABSTAIN_PINS: dict[str, dict[str, tuple[Any, float]]] = {
+    "period_progress": {
+        "clean": (_today_progress(True), 1e-9),
+        "slip-mid": (_today_progress(True), 1e-9),
+        "slip-today": (_today_progress(False), 1e-9),
+        "skip-neutral": (_today_progress(True), 1e-9),
+    },
+    "strength": {
+        "clean": (0.413270, 1e-6),
+        "slip-mid": (0.373498, 1e-6),
+        "slip-today": (0.361347, 1e-6),
+        "skip-neutral": (0.381137, 1e-6),
+    },
+    "streak": {
+        "clean": (10, 0.0),
+        "slip-mid": (5, 0.0),
+        "slip-today": (0, 0.0),
+        "skip-neutral": (9, 0.0),
+    },
+    "challenge_progress": {"clean": (_ch(10), 1e-9), "slip-mid": (_ch(9), 1e-9)},
+    "adherence": {
+        "clean": (1.0, 1e-9),
+        "slip-mid": (0.9, 1e-9),
+        "slip-today": (0.9, 1e-9),
+        "skip-neutral": (1.0, 1e-9),
+    },
+}
+
+
+def _abstain_cases(fn: str) -> list[Case]:
+    """حالات الامتناع الأربع لدالة: `<fn>-abstain-clean` و`-slip-mid` و`-slip-today` و`-skip-neutral`."""
+    end = "2026-11-30" if fn == "challenge_progress" else None
+    return [
+        Case(
+            id=f"{fn}-abstain-{name}",
+            input=rules(_abstain_spec(end), logs, _ABSTAIN_TODAY),
+            source=f"الامتناع (§9.6) {source}",
+            pin=_ABSTAIN_PINS[fn].get(name),
+        )
+        for name, logs, source in _ABSTAIN_EXAMPLES
+    ]
+
+
+PERIOD_PROGRESS += _abstain_cases("period_progress")
+STRENGTH += _abstain_cases("strength")
+STREAK += _abstain_cases("streak")
+CHALLENGE_PROGRESS += _abstain_cases("challenge_progress")
+ADHERENCE += _abstain_cases("adherence")
 
 CASES: dict[str, list[Case]] = {
     "day_key": DAY_KEY,

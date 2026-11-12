@@ -1,7 +1,7 @@
 # دليل نشر «يومي» على الخادم
 
 > **الحالة:** مكتوب ولم يُنفَّذ منه شيء. كل خطوة على الخادم **يحتاج موافقة عبدالله المستقلة** في المحادثة، لكل عملية على حدة، ولا تنتقل موافقة خطوة إلى التي تليها.
-> **الملفات:** `deploy/compose/yawmi-db-1-schema.yml` و`deploy/compose/yawmi-db-2-role.yml` و`deploy/compose/yawmi-api.api.yml`، وصورة الحاوية من `api/Dockerfile`.
+> **الملفات:** `deploy/compose/yawmi-db-1-schema.yml` و`deploy/compose/yawmi-db-2-role.yml` و`deploy/compose/yawmi-db-3-web.yml` (4ب) و`deploy/compose/yawmi-api.api.yml`، وصورة الحاوية من `api/Dockerfile`.
 > **المرجع:** `gate0/README.md` § ب في مستودع الخطة (الشبكات وأسلوب المحمّلات)، و`raqib/server/BACKUP-RUNBOOK.md` (النسخ الاحتياطي).
 
 ## 0. قواعد ثابتة
@@ -41,7 +41,7 @@
 | 1 | نسخة احتياطية والتحقق من `backup_ok` | `raqib/server/backup.sh` | نعم |
 | 2 | شرط مسبق: جدولا مرآة Notion (W9)، **قبل محمّل 2** | `raqib/server/W9-loader-1-tables.proposed.yml` | نعم |
 | 3 | إنشاء الـvolume `yawmi_secrets` (3أ) ثم محمّل 1: المخطط وسر كلمة المرور (3ب) | `yawmi-db-1-schema.yml` | نعم، لكلٍّ منهما |
-| 4 | محمّل 2: الدور والبذرة وفحص `yawmi_api`، **بعد الخطوتين 2 و3** | `yawmi-db-2-role.yml` | نعم |
+| 4 | محمّل 2: الدور والبذرة وفحص `yawmi_api`، **بعد الخطوتين 2 و3**؛ ثم 4ب: محمّل 3 لترحيل `0003` (جولة الويب للحاسوب)، بعد محمّل 2 | `yawmi-db-2-role.yml`، ثم `yawmi-db-3-web.yml` | نعم، لكلٍّ منهما |
 | 5 | وسم الإصدار وبناء الصورة ودفعها إلى GHCR (وصورة الويب 11أ تُبنى قبل الخطوة 7 أيضاً) | `.github/workflows/api-image.yml` | نعم (push) |
 | 6 | تسجيل GHCR من طرفية الخادم بـPAT قراءة فقط، وسحب الصورتين `yawmi-api` و`yawmi-web` (11ب) | — | نعم |
 | 7 | مشروع `yawmi-api` (بخدمتيه `yawmi-api` و`yawmi-web`، فالصورتان مسحوبتان قبله) | `yawmi-api.api.yml` | نعم |
@@ -160,6 +160,32 @@ docker volume inspect yawmi_secrets --format '{{.Name}} {{.Driver}}'
   - `is not embedded in this file` ← ملف المحمّل وُلّد قبل وجود `api/db/seed/habits.sql`: يُعاد توليده بـ`python -I deploy/tools/build_loaders.py` ثم يُفحص بـ`--check` (ملحق ب).
   - `DENIED=NO` ← صلاحية زائدة للدور: يُوقف النشر ويُسجَّل في `FAILURES.md`.
 - **التراجع** (موافقة مستقلة): `DROP OWNED BY yawmi_api; DROP ROLE yawmi_api;` ثم `DELETE FROM yawmi.schema_migrations WHERE filename = '0002_yawmi_role.sql';`. والبذرة: `DELETE FROM yawmi.habits WHERE system;` (لا سجلات عادات قبل نشر الواجهة).
+
+**4ب · محمّل 3: ترحيل `0003` لجولة الويب للحاسوب — يحتاج موافقة عبدالله المستقلة.** المشروع `yawmi-loader` نفسه، من الملف `deploy/compose/yawmi-db-3-web.yml`، ومتغيره `YAWMI_DB_HOST`. نص فقط في هذه الجولة: لا يُشغَّل قبل أن تُدمج مهام الخادم كلها ويُجمَّد `0003` في مهمة الإغلاق.
+
+**شرط الترتيب:** بعد محمّل 2 (الخطوة 4). يتحقق المحمّل بنفسه قبل أي تغيير: يتوقف إن لم يجد `0002` مسجلاً في `schema_migrations` (ويطلب محمّل 2)، أو إن غاب `raqib.notion_cards`. ولا يلمس كلمة مرور الدور ولا الـvolume `yawmi_secrets` (لا يركّبه).
+
+ما يفعله: يطبّق `0003` وسطر دفتره في معاملة واحدة (عشرة جداول وأربعة أعمدة والـview `yawmi_ro.notion_card_fields` في مخطط `yawmi_ro` الخاص به، ومنح `yawmi_api`)، ثم يعيد تثبيت قسم المنح من الملف في **كل** تشغيل حتى لو كان `0003` مسجلاً ← يتحقق بصلاحية `yawmi_api` عبر `SET ROLE` أن القراءة من الـview تنجح وأن عمود `props` و`DELETE` على `goal_edits` والدفتر مرفوضة.
+
+- **المطبوع المتوقع:**
+
+  ```text
+  /tmp/0003.sql: OK
+  <64 خانة سداسية>  /tmp/0003.sql
+  yawmi-loader: applied 0003_yawmi_web.sql
+  yawmi-loader: grants re-asserted
+  yawmi-verify migrations=0001_yawmi_schema.sql,0002_yawmi_role.sql,0003_yawmi_web.sql
+  yawmi-verify schema_tables=23
+  yawmi-verify api_reads_card_fields=<عدد>
+  yawmi-verify api_reads_goal_edits=0
+  NOTICE:  yawmi-verify denied_probes=3/3
+  yawmi-loader: web step done
+  ```
+
+  وعند الإعادة يصير سطر `applied` هو `yawmi-loader: 0003_yawmi_web.sql already applied, skipped`.
+- **إن فشل:** المعاملة تُلغى كلها فلا جدول ناقص، ثم يُقرأ السبب: `is not applied: run loader 2 first` ← الخطوة 4 ناقصة؛ `raqib.notion_cards is missing` ← الخطوة 2 ناقصة؛ `sha256 mismatch` ← الملف تغيّر بعد توليده (ملحق ب). و`DENIED=NO` يوقف النشر ويُسجَّل في `FAILURES.md`.
+- **تنبيه:** إعادة تطبيق `0002` تصفّر منح `yawmi_api` على كل جداول `yawmi` بما فيها جداول `0003` (ومنها `DELETE` على `ai_memory` و`indicators`)، **بعد أي إعادة تطبيق للمحمّل 2 يُشغَّل المحمّل 3** (يعيد المنح دون حذف سطر الدفتر). والـview في `yawmi_ro` لا يمسّه `0002`، فلا يصير قابلاً للكتابة.
+- **التراجع** (موافقة مستقلة، ولا يُجرى بعد نشر الواجهة): `DROP SCHEMA yawmi_ro CASCADE;` ثم حذف الجداول العشرة بأسمائها، و`ALTER TABLE` لإسقاط الأعمدة الأربعة، ثم `DELETE FROM yawmi.schema_migrations WHERE filename = '0003_yawmi_web.sql';`.
 
 ## الخطوة 5 · وسم الإصدار وبناء الصورة
 
@@ -339,7 +365,7 @@ curl -sS  "https://$YAWMI_API_HOST/v1/health/live"
 بعد أي تعديل في `api/db/migrations/*.sql` أو `api/db/seed/habits.sql`:
 
 ```sh
-python -I deploy/tools/build_loaders.py          # يكتب الملفين
+python -I deploy/tools/build_loaders.py          # يكتب الملفات الثلاثة
 python -I deploy/tools/build_loaders.py --check  # يفشل إن اختلفت البصمات
 python -I deploy/tools/check_compose.py deploy/compose
 ```

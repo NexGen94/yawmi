@@ -2681,8 +2681,126 @@
         "week_start": "sun"
       },
       "source": "ترتيب معكوس = الحالة 001"
+    },
+    {
+      "expect": {
+        "value": 0.41326976999768705
+      },
+      "id": "strength-abstain-clean",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "polarity": "abstain",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "الامتناع (§9.6) P1: بلا سجلات، كل الأيام العشرة محفوظة"
+    },
+    {
+      "expect": {
+        "value": 0.37349801938686267
+      },
+      "id": "strength-abstain-slip-mid",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "polarity": "abstain",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-05",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "الامتناع (§9.6) P2: انزلاق في 11-05"
+    },
+    {
+      "expect": {
+        "value": 0.3613472843368585
+      },
+      "id": "strength-abstain-slip-today",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "polarity": "abstain",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "الامتناع (§9.6) P3: انزلاق اليوم، فاليوم فوات لا معلّق"
+    },
+    {
+      "expect": {
+        "value": 0.3811368573472862
+      },
+      "id": "strength-abstain-skip-neutral",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "polarity": "abstain",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-05",
+            "status": "skip",
+            "value": null
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "الامتناع (§9.6) P4: تخطٍّ في 11-05 محايد"
     }
   ],
   "function": "strength",
-  "rulesVersion": 1
+  "rulesVersion": 2
 }

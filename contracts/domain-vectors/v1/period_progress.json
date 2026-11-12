@@ -1770,8 +1770,158 @@
         "week_start": "sun"
       },
       "source": "سجلان للمدة في اليوم يُجمعان"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 1.0,
+          "done": 1.0,
+          "expected": 1.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": true,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-abstain-clean",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "polarity": "abstain",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "الامتناع (§9.6) P1: بلا سجلات، كل الأيام العشرة محفوظة"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 1.0,
+          "done": 1.0,
+          "expected": 1.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": true,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-abstain-slip-mid",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "polarity": "abstain",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-05",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "الامتناع (§9.6) P2: انزلاق في 11-05"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 0.0,
+          "done": 0.0,
+          "expected": 1.0,
+          "need_per_day": 1.0,
+          "on_track": false,
+          "reached": false,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-abstain-slip-today",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "polarity": "abstain",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-10",
+            "status": "done",
+            "value": 1.0
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "الامتناع (§9.6) P3: انزلاق اليوم، فاليوم فوات لا معلّق"
+    },
+    {
+      "expect": {
+        "value": {
+          "completion": 1.0,
+          "done": 1.0,
+          "expected": 1.0,
+          "need_per_day": 0.0,
+          "on_track": true,
+          "reached": true,
+          "target": 1.0
+        }
+      },
+      "id": "period_progress-abstain-skip-neutral",
+      "input": {
+        "habit": {
+          "anchor_day": null,
+          "end_day": null,
+          "every_n": null,
+          "kind": "boolean",
+          "period": "day",
+          "polarity": "abstain",
+          "schedule_kind": "every_day",
+          "start_day": "2026-11-01",
+          "target_per_period": 1.0,
+          "unit": null,
+          "weekday_mask": null
+        },
+        "logs": [
+          {
+            "day": "2026-11-05",
+            "status": "skip",
+            "value": null
+          }
+        ],
+        "today": "2026-11-10",
+        "week_start": "sun"
+      },
+      "source": "الامتناع (§9.6) P4: تخطٍّ في 11-05 محايد"
     }
   ],
   "function": "period_progress",
-  "rulesVersion": 1
+  "rulesVersion": 2
 }

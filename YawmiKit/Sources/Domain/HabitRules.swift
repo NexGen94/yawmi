@@ -22,6 +22,12 @@ import Foundation
 ///   `min(T, max(1, ceil(T · k / L − 1e-9)))`, k its scheduled days and L the full period's days
 ///   (7, or the month's length). A daily period is never proportional.
 /// - `done ≥ target` and `done ≥ expected` allow a 1e-9 margin for floating-point noise.
+/// - An abstain habit (`polarity == .abstain`, rulesVersion 2, design 9.6) is a daily boolean with
+///   target 1 whose `done` log is a slip. Every scheduled day up to and including today is kept
+///   (value 1) unless a slip is logged; a slip day is missed (value 0); `skip` and `vacation` stay
+///   neutral. `strength`, `streak`, `adherence` and `challengeProgress` at T equal a build habit
+///   with `done` on every kept day evaluated at T + 1 (today is settled, never pending);
+///   `periodProgress` stays at T: done 1 without a slip, 0 with one, expected 1 either way.
 ///
 /// How exact the floats are: the sums over days use the compensated (Neumaier) summation of
 /// Python 3.12+ `sum()`, in the same order, so a period's `done` is bit-identical to the reference
@@ -91,8 +97,8 @@ public enum HabitRules {
     ) throws(HabitRuleError) -> Double {
         _ = weekStart
         let schedule = try Schedule(spec)
-        let now = today.epochDay
-        let days = aggregate(spec, schedule, logs, now)
+        let days = aggregate(spec, schedule, logs, today.epochDay)
+        let now = settled(spec, today.epochDay)
         let last = min(days[now] != nil ? now : now - 1, schedule.last)
         let target = spec.targetPerPeriod
         let window = rollingWindowDays(spec.period)
@@ -121,9 +127,9 @@ public enum HabitRules {
         _ spec: HabitSpec, logs: [HabitLog], today: DayKey, weekStart: WeekStart
     ) throws(HabitRuleError) -> Int {
         let schedule = try Schedule(spec)
-        let now = today.epochDay
+        let now = settled(spec, today.epochDay)
         if now < schedule.start { return 0 }
-        let days = aggregate(spec, schedule, logs, now)
+        let days = aggregate(spec, schedule, logs, today.epochDay)
         let inProgress = now <= schedule.last
         let firstStart = periodBounds(schedule.start, spec.period, weekStart).start
         var (start, end) = periodBounds(inProgress ? now : schedule.last, spec.period, weekStart)
@@ -155,8 +161,8 @@ public enum HabitRules {
     ) throws(HabitRuleError) -> ChallengeProgress? {
         let schedule = try Schedule(spec)
         guard let last = schedule.end else { return nil }
-        let now = today.epochDay
-        let days = aggregate(spec, schedule, logs, now)
+        let days = aggregate(spec, schedule, logs, today.epochDay)
+        let now = settled(spec, today.epochDay)
         var achieved = 0
         var total = 0
         if spec.period == .day {
@@ -190,8 +196,8 @@ public enum HabitRules {
         _ spec: HabitSpec, logs: [HabitLog], today: DayKey, weekStart: WeekStart
     ) throws(HabitRuleError) -> Double? {
         let schedule = try Schedule(spec)
-        let now = today.epochDay
-        let days = aggregate(spec, schedule, logs, now)
+        let days = aggregate(spec, schedule, logs, today.epochDay)
+        let now = settled(spec, today.epochDay)
         var (start, end) = periodBounds(schedule.start, spec.period, weekStart)
         var reached = 0
         var counted = 0
@@ -299,7 +305,33 @@ public enum HabitRules {
         if spec.kind == .boolean {
             for (day, total) in days { days[day]?.done = min(1, total.done) }
         }
+        return spec.polarity == .abstain ? abstainDays(schedule, days, today) : days
+    }
+
+    /// An abstain habit's days as its build twin sees them (design 9.6), over
+    /// `[startDay, min(today, endDay)]`: a slip day stays, missed with value 0 and an entry (so it
+    /// enters today's `expected`); a `skip` or `vacation` day without a slip is neutral; every other
+    /// scheduled day is kept with value 1. A `missed` log changes nothing: the day is kept unless a
+    /// slip is logged.
+    static func abstainDays(_ schedule: Schedule, _ logged: [Int: DayTotal], _ today: Int) -> [Int: DayTotal] {
+        var days: [Int: DayTotal] = [:]
+        let last = min(today, schedule.last)
+        guard schedule.start <= last else { return days }
+        for day in schedule.start...last {
+            if let total = logged[day], total.done > 0 {
+                days[day] = DayTotal(done: 0, neutral: total.neutral)
+            } else if let total = logged[day], total.neutral {
+                days[day] = DayTotal(done: 0, neutral: true)
+            } else if schedule.contains(day) {
+                days[day] = DayTotal(done: 1, neutral: false)
+            }
+        }
         return days
+    }
+
+    /// The day the cumulative rules judge at: T + 1 for an abstain habit (today is settled), else T.
+    static func settled(_ spec: HabitSpec, _ today: Int) -> Int {
+        spec.polarity == .abstain ? today + 1 : today
     }
 
     /// The days' totals from `start` to `end`, summed as CPython 3.12+ `sum()` sums floats:

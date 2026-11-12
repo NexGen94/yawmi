@@ -4,7 +4,7 @@ import Testing
 
 /// One case of a shared domain vector file (`contracts/domain-vectors/v1/<function>.json`).
 ///
-/// File shape (Task 11): `{"rulesVersion": 1, "function": "<name>", "cases": [{"id", "input",
+/// File shape (Task 11): `{"rulesVersion": 2, "function": "<name>", "cases": [{"id", "input",
 /// "expect", "tol"?, "source"}]}`. Inputs and expectations stay `JSONValue`s with the file's
 /// `snake_case` keys, so each test decodes only what its function needs.
 struct VectorCase: Decodable, Sendable, CustomTestStringConvertible {
@@ -23,7 +23,7 @@ enum VectorLoader {
     static let directory = "contracts/domain-vectors/v1"
 
     /// The rules version the files must carry (`RULES_VERSION` in `api/tools/vector_cases.py`).
-    static let rulesVersion = 1
+    static let rulesVersion = 2
 
     /// The fourteen functions with a vector file, one file each (see the directory's README).
     static let functions = [
