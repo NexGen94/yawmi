@@ -79,7 +79,7 @@ jobs:
       # (locally the suite uses the installed Edge through PW_CHANNEL=msedge).
       - name: Install Chromium
         working-directory: web
-        run: npx playwright install --with-deps chromium
+        run: ./node_modules/.bin/playwright install --with-deps chromium
 
       # Playwright starts the test API (port 8000) and `vite preview` on the build (port 4173),
       # then runs the journeys at 1280 and 390 pixels with axe and screenshots.
