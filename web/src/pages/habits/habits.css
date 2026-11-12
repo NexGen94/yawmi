@@ -1,0 +1,38 @@
+/* The habits pages (task 11). Colors only through the tokens; logical properties only. */
+
+.habits-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-block-end: var(--sp-6);
+}
+
+.page .habits-head h1 {
+  margin-block-end: 0;
+}
+
+.habits-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-6);
+  margin-block-end: var(--sp-5);
+}
+
+.habits-card {
+  padding: var(--sp-4);
+}
+
+.habits-none {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-body);
+}
+
+.habits-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
