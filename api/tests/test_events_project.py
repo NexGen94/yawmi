@@ -21,7 +21,10 @@ from yawmi.events.project import (
     MAX_BACKDATE_DAYS,
     BreathSession,
     FocusSession,
+    GoalTaskMark,
     HabitLog,
+    JournalEntry,
+    MoodLog,
     Planned,
     ProjectionError,
     habit_codes,
@@ -75,6 +78,8 @@ def test_the_ten_event_types() -> None:
         "mood_logged",
         "confounder_tagged",
         "app_opened",
+        "journal_saved",
+        "goal_task_set",
     }
 
 
@@ -239,7 +244,7 @@ def test_a_non_finite_number_in_a_typed_payload_is_rejected_as_well() -> None:
 
 
 def test_ordinary_numbers_are_still_accepted() -> None:
-    assert ev("mood_logged", {"a": 0, "b": -1.5, "c": 1e300, "d": [2**40]})
+    assert ev("confounder_tagged", {"a": 0, "b": -1.5, "c": 1e300, "d": [2**40]})
 
 
 def test_dump_payload_refuses_what_jsonb_cannot_store_and_keeps_arabic_readable() -> None:
@@ -251,17 +256,17 @@ def test_dump_payload_refuses_what_jsonb_cannot_store_and_keeps_arabic_readable(
 
 def test_a_payload_over_the_size_cap_is_rejected() -> None:
     with pytest.raises(ValidationError) as exc:
-        ev("mood_logged", {"note": "x" * 20_000})
+        ev("confounder_tagged", {"note": "x" * 20_000})
     assert "payload_too_large" in error_types(exc)
 
 
 def test_a_payload_at_the_size_cap_is_accepted() -> None:
     padding = 16 * 1024 - len(json.dumps({"note": ""}))
-    assert ev("mood_logged", {"note": "x" * padding})
+    assert ev("confounder_tagged", {"note": "x" * padding})
 
 
 def test_arabic_payload_text_is_accepted() -> None:
-    assert ev("mood_logged", {"note": "يوم هادئ ومثمر"}).payload["note"] == "يوم هادئ ومثمر"
+    assert ev("confounder_tagged", {"note": "يوم هادئ ومثمر"}).payload["note"] == "يوم هادئ ومثمر"
 
 
 def test_the_batch_limit_is_500() -> None:
@@ -441,7 +446,7 @@ def test_habit_skipped_needs_a_habit_code() -> None:
 
 
 @pytest.mark.parametrize(
-    "type_", ["day_closed", "focus_started", "mood_logged", "confounder_tagged", "app_opened"]
+    "type_", ["day_closed", "focus_started", "confounder_tagged", "app_opened"]
 )
 def test_other_types_have_no_projection_and_any_object_payload(type_: str) -> None:
     for payload in ({}, {"anything": [1, {"x": None}]}):
@@ -645,3 +650,66 @@ def test_project_event_raises_projection_error_with_an_arabic_message() -> None:
 def test_planned_is_a_plain_value_object() -> None:
     event = ev("app_opened")
     assert Planned(index=3, event=event, intent=None) == Planned(3, event, None)
+
+
+# --- journal_saved / mood_logged / goal_task_set -----------------------------------------------
+
+
+def test_journal_saved_projects_morning_and_evening_entries() -> None:
+    morning = ev(
+        "journal_saved",
+        {"part": "morning", "answers": {"planned_minutes": 90}},
+        occurred="2026-11-09T23:30:00Z",
+    )
+    intent = project_event(morning, "web")
+    assert isinstance(intent, JournalEntry)
+    assert intent.day == date(2026, 11, 10)
+    assert intent.part == "morning"
+    assert intent.answers["planned_minutes"] == 90
+
+    evening = ev(
+        "journal_saved",
+        {
+            "part": "evening",
+            "answers": {
+                "one_minute": False,
+                "priorities": [{"title": "قراءة", "state": "done"}],
+                "calm": 8,
+                "win": "إنجاز المهمة",
+                "win_outcome": "O7",
+            },
+        },
+    )
+    ev_intent = project_event(evening, "web")
+    assert isinstance(ev_intent, JournalEntry)
+    assert ev_intent.part == "evening"
+    assert ev_intent.answers["calm"] == 8
+    assert ev_intent.answers["win_outcome"] == "O7"
+
+
+def test_mood_logged_projects_score_feelings_and_activities() -> None:
+    event = ev(
+        "mood_logged",
+        {"score": 4, "feelings": ["calm", "grateful"], "activities": ["walk"]},
+    )
+    intent = project_event(event, "web")
+    assert intent == MoodLog(
+        event_id=event.id,
+        day=date(2026, 11, 10),
+        score=4,
+        feelings=["calm", "grateful"],
+        activities=["walk"],
+        logged_at=OCCURRED_AT,
+    )
+
+
+def test_goal_task_set_projects_task_mark() -> None:
+    task_id = uuid4()
+    event = ev("goal_task_set", {"task_id": str(task_id), "done": True})
+    intent = project_event(event, "web")
+    assert intent == GoalTaskMark(
+        event_id=event.id,
+        task_id=task_id,
+        done=True,
+        logged_at=OCCURRED_AT,
+    )

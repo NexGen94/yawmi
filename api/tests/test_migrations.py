@@ -1347,6 +1347,7 @@ STORE_MODULES = (
     "yawmi.health.store",
     "yawmi.ai.store",
     "yawmi.auth.pg_store",
+    "yawmi.journal.store",
 )
 _SQL_START = re.compile(r"\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b", re.IGNORECASE)
 

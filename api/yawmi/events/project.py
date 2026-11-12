@@ -5,8 +5,8 @@ which table gets which row (or `None` when the event is only stored in `events`)
 executes intents; it makes no decisions of its own, so everything that can be wrong about a
 projection is testable here without a database.
 
-Payload shapes (unknown extra fields are ignored so that newer clients keep working; the
-original payload is stored in `events` untouched):
+Payload shapes (unknown extra fields are ignored on legacy mobile payloads so that newer clients
+keep working; the original payload is stored in `events` untouched):
 
 * `habit_logged`  `{habit_code, status: done|skip|vacation, day?, value?}` (`value` is kept
   only for `done`)
@@ -15,24 +15,31 @@ original payload is stored in `events` untouched):
   actual_minutes?, focus_rating?, next_step?}`
 * `breath_ended`  `{pattern, started_at?, ended_at?, breaths_per_min?, duration_seconds?,
   completed?}`
+* `journal_saved` `{day?, part: morning|evening, answers: MorningAnswers|EveningAnswers}`
+* `mood_logged`   `{day?, score: 1..5, feelings?: str[<=6], activities?: str[<=12]}`
+* `goal_task_set` `{task_id: UUID, done: bool}`
 * every other type is stored in `events` only and may carry any JSON object.
 """
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Annotated, Literal, get_args
+from typing import TYPE_CHECKING, Annotated, Any, Literal, get_args
+from uuid import UUID
 
 from pydantic import (
     AfterValidator,
     AwareDatetime,
     BaseModel,
     BeforeValidator,
+    ConfigDict,
     Field,
     StrictBool,
     StrictInt,
     StringConstraints,
     ValidationError,
+    WithJsonSchema,
+    model_validator,
 )
 from pydantic_core import PydanticCustomError
 
@@ -40,7 +47,6 @@ from yawmi.domain.days import day_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
-    from uuid import UUID
 
     from yawmi.events.models import EventIn
 
@@ -55,6 +61,8 @@ EventType = Literal[
     "mood_logged",
     "confounder_tagged",
     "app_opened",
+    "journal_saved",
+    "goal_task_set",
 ]
 EVENT_TYPES: tuple[str, ...] = get_args(EventType)
 
@@ -100,9 +108,25 @@ def _plausible(value: datetime) -> datetime:
 Instant = Annotated[AwareDatetime, BeforeValidator(_iso_text_only), AfterValidator(_plausible)]
 
 Code = Annotated[str, StringConstraints(min_length=1, max_length=64)]
-Quantity = Annotated[Decimal, Field(ge=0, le=1_000_000, max_digits=12, decimal_places=4)]
-Minutes = Annotated[Decimal, Field(ge=0, le=100_000, max_digits=12, decimal_places=4)]
+Quantity = Annotated[
+    Decimal,
+    Field(ge=0, le=1_000_000, max_digits=12, decimal_places=4),
+    WithJsonSchema({"type": "number", "minimum": 0, "maximum": 1_000_000}),
+]
+Minutes = Annotated[
+    Decimal,
+    Field(ge=0, le=100_000, max_digits=12, decimal_places=4),
+    WithJsonSchema({"type": "number", "minimum": 0, "maximum": 100_000}),
+]
+PositiveRate = Annotated[
+    Decimal,
+    Field(gt=0, le=1000, max_digits=8, decimal_places=3),
+    WithJsonSchema({"type": "number", "exclusiveMinimum": 0, "maximum": 1000}),
+]
 PositiveInt4 = Annotated[StrictInt, Field(gt=0, le=2_147_483_647)]
+Rating = Annotated[StrictInt, Field(ge=1, le=5)]
+Scale10 = Annotated[StrictInt, Field(ge=1, le=10)]
+OutcomeCode = Literal["O1", "O2", "O3", "O4", "O5", "O6", "O7", "O8", "O9", "O10", "O11", "O12"]
 
 
 # --- payload schemas ---------------------------------------------------------------------------
@@ -121,6 +145,15 @@ class HabitMarkPayload(BaseModel):
     day: date | None = None
 
 
+class FocusStartedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    planned_minutes: PositiveInt4
+    goal_ref: Annotated[str, StringConstraints(min_length=1, max_length=64)] | None = None
+    habit_code: Code | None = None
+    plan_id: UUID | None = None
+
+
 class FocusEndedPayload(BaseModel):
     habit_code: Code | None = None
     goal_ref: Annotated[str, StringConstraints(max_length=64)] | None = None
@@ -128,7 +161,7 @@ class FocusEndedPayload(BaseModel):
     ended_at: Instant | None = None
     planned_minutes: PositiveInt4 | None = None
     actual_minutes: Minutes | None = None
-    focus_rating: Annotated[StrictInt, Field(ge=1, le=5)] | None = None
+    focus_rating: Rating | None = None
     next_step: Annotated[str, StringConstraints(max_length=500)] | None = None
 
 
@@ -137,11 +170,98 @@ class BreathEndedPayload(BaseModel):
     pattern: Annotated[str, StringConstraints(min_length=1, max_length=64)]
     started_at: Instant | None = None
     ended_at: Instant | None = None
-    breaths_per_min: (
-        Annotated[Decimal, Field(gt=0, le=1000, max_digits=8, decimal_places=3)] | None
-    ) = None
+    breaths_per_min: PositiveRate | None = None
     duration_seconds: Annotated[StrictInt, Field(ge=0, le=10_000_000)] | None = None
     completed: StrictBool = True  # the column default
+
+
+class MorningPriority(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: Annotated[str, StringConstraints(min_length=1, max_length=120)]
+    source_id: Annotated[str, StringConstraints(min_length=1, max_length=120)] | None = None
+    goal_ref: Annotated[str, StringConstraints(min_length=1, max_length=64)] | None = None
+
+
+class MorningAnswers(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    priorities: Annotated[list[MorningPriority], Field(max_length=3)] = Field(default_factory=list)
+    planned_minutes: Annotated[StrictInt, Field(ge=0, le=1440)] | None = None
+    enthusiasm: Annotated[str, StringConstraints(max_length=200)] | None = None
+    gratitude: Annotated[
+        list[Annotated[str, StringConstraints(min_length=1, max_length=200)]],
+        Field(max_length=3),
+    ] = Field(default_factory=list)
+    note: Annotated[str, StringConstraints(max_length=2000)] | None = None
+
+
+class EveningPriority(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: Annotated[str, StringConstraints(min_length=1, max_length=120)]
+    state: Literal["done", "open", "moved"]
+
+
+class EveningAnswers(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    one_minute: StrictBool = False
+    priorities: Annotated[list[EveningPriority], Field(max_length=3)] = Field(default_factory=list)
+    calm: Scale10 | None = None
+    distraction: Scale10 | None = None
+    presence: Scale10 | None = None
+    win: Annotated[str, StringConstraints(max_length=300)] | None = None
+    win_outcome: OutcomeCode | None = None
+    learned: Annotated[str, StringConstraints(max_length=300)] | None = None
+    gratitude: Annotated[
+        list[Annotated[str, StringConstraints(min_length=1, max_length=200)]],
+        Field(max_length=3),
+    ] = Field(default_factory=list)
+    note: Annotated[str, StringConstraints(max_length=2000)] | None = None
+
+
+class JournalSavedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    day: date | None = None
+    part: Literal["morning", "evening"]
+    answers: MorningAnswers | EveningAnswers
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_answers_for_part(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        part = data.get("part")
+        answers = data.get("answers")
+        if part == "morning" and not isinstance(answers, MorningAnswers):
+            return {**data, "answers": MorningAnswers.model_validate(answers)}
+        if part == "evening" and not isinstance(answers, EveningAnswers):
+            return {**data, "answers": EveningAnswers.model_validate(answers)}
+        return data
+
+
+class MoodLoggedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    day: date | None = None
+    score: Rating
+    feelings: Annotated[
+        list[Annotated[str, StringConstraints(min_length=1, max_length=24)]],
+        Field(max_length=6),
+    ] = Field(default_factory=list)
+    activities: Annotated[
+        list[Annotated[str, StringConstraints(min_length=1, max_length=64)]],
+        Field(max_length=12),
+    ] = Field(default_factory=list)
+
+
+class GoalTaskSetPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: UUID
+    done: StrictBool
 
 
 # --- intents -----------------------------------------------------------------------------------
@@ -152,7 +272,7 @@ class HabitLog:
     """Upsert into `habit_logs` on `(habit_code, day)`: the newest `logged_at` wins, whatever
     the device kind, and `source` becomes the kind of that last writer (I-10)."""
 
-    event_id: "UUID"
+    event_id: UUID
     habit_code: str
     day: date
     status: Literal["done", "skip", "vacation"]
@@ -165,7 +285,7 @@ class HabitLog:
 class FocusSession:
     """Insert into `focus_sessions` (id = the event id)."""
 
-    event_id: "UUID"
+    event_id: UUID
     habit_code: str | None
     goal_ref: str | None
     day: date
@@ -181,7 +301,7 @@ class FocusSession:
 class BreathSession:
     """Insert into `breath_sessions` (id = the event id)."""
 
-    event_id: "UUID"
+    event_id: UUID
     day: date
     started_at: datetime
     ended_at: datetime
@@ -191,7 +311,40 @@ class BreathSession:
     completed: bool
 
 
-Intent = HabitLog | FocusSession | BreathSession
+@dataclass(frozen=True)
+class JournalEntry:
+    """Upsert into `journal_entries` on `(day, part)`: newest `logged_at` wins."""
+
+    event_id: UUID
+    day: date
+    part: Literal["morning", "evening"]
+    answers: dict[str, Any]
+    logged_at: datetime
+
+
+@dataclass(frozen=True)
+class MoodLog:
+    """Upsert into `mood_logs` on `(day)`: newest `logged_at` wins."""
+
+    event_id: UUID
+    day: date
+    score: int
+    feelings: list[str]
+    activities: list[str]
+    logged_at: datetime
+
+
+@dataclass(frozen=True)
+class GoalTaskMark:
+    """Update `goal_tasks` on `id` when `logged_at >= done_logged_at`."""
+
+    event_id: UUID
+    task_id: UUID
+    done: bool
+    logged_at: datetime
+
+
+Intent = HabitLog | FocusSession | BreathSession | JournalEntry | MoodLog | GoalTaskMark
 
 
 @dataclass(frozen=True)
@@ -305,6 +458,33 @@ def project_event(event: "EventIn", source: str) -> Intent | None:
                 breaths_per_min=breath.breaths_per_min,
                 duration_seconds=breath.duration_seconds,
                 completed=breath.completed,
+            )
+        case "journal_saved":
+            journal = _parse(JournalSavedPayload, event.payload)
+            return JournalEntry(
+                event_id=event.id,
+                day=_habit_day(journal.day, event),
+                part=journal.part,
+                answers=journal.answers.model_dump(mode="json", exclude_none=True),
+                logged_at=event.occurred_at,
+            )
+        case "mood_logged":
+            mood = _parse(MoodLoggedPayload, event.payload)
+            return MoodLog(
+                event_id=event.id,
+                day=_habit_day(mood.day, event),
+                score=mood.score,
+                feelings=list(mood.feelings),
+                activities=list(mood.activities),
+                logged_at=event.occurred_at,
+            )
+        case "goal_task_set":
+            task_mark = _parse(GoalTaskSetPayload, event.payload)
+            return GoalTaskMark(
+                event_id=event.id,
+                task_id=task_mark.task_id,
+                done=task_mark.done,
+                logged_at=event.occurred_at,
             )
         case _:
             return None

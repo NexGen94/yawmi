@@ -90,6 +90,10 @@ class Backend(Protocol):
 
     async def new_device(self, kind: str) -> UUID: ...
     async def new_habit(self) -> str: ...
+    async def new_goal_task(self) -> UUID: ...
+    async def goal_task_done(
+        self, task_id: UUID
+    ) -> tuple[datetime | None, datetime | None] | None: ...
     async def habit_log(self, code: str, day: date) -> LogRow | None: ...
     async def habit_log_count(self, code: str) -> int: ...
     async def reader_logs(self, code: str) -> list[ReaderLogRow]: ...
@@ -117,6 +121,16 @@ class MemoryBackend:
         code = f"t07-{uuid4().hex[:8]}"
         self.store.habits.add(code)
         return code
+
+    async def new_goal_task(self) -> UUID:
+        assert self.store is not None
+        task_id = uuid4()
+        self.store.goal_tasks[task_id] = (None, None)
+        return task_id
+
+    async def goal_task_done(self, task_id: UUID) -> tuple[datetime | None, datetime | None] | None:
+        assert self.store is not None
+        return self.store.goal_tasks.get(task_id)
 
     async def habit_log(self, code: str, day: date) -> LogRow | None:
         assert self.store is not None
@@ -172,6 +186,7 @@ class PostgresBackend:
         self.pool = pool
         self.devices: list[UUID] = []
         self.habits: list[str] = []
+        self.goal_tasks: list[UUID] = []
         self.seeded: list[UUID] = []
 
     def make_store(self, clock: Callable[[], datetime] | None = None) -> EventStore:
@@ -202,6 +217,21 @@ class PostgresBackend:
         )
         self.habits.append(code)
         return code
+
+    async def new_goal_task(self) -> UUID:
+        task_id = uuid4()
+        await self.pool.execute(
+            "INSERT INTO yawmi.goal_tasks (id, goal_ref, title) VALUES ($1, 'O7', 'مهمة اختبار')",
+            task_id,
+        )
+        self.goal_tasks.append(task_id)
+        return task_id
+
+    async def goal_task_done(self, task_id: UUID) -> tuple[datetime | None, datetime | None] | None:
+        row = await self.pool.fetchrow(
+            "SELECT done_at, done_logged_at FROM yawmi.goal_tasks WHERE id = $1", task_id
+        )
+        return None if row is None else (row["done_at"], row["done_logged_at"])
 
     async def habit_log(self, code: str, day: date) -> LogRow | None:
         row = await self.pool.fetchrow(
@@ -254,7 +284,13 @@ class PostgresBackend:
             "SELECT id FROM yawmi.events WHERE device_id = ANY($1)", self.devices
         )
         ids = [r["id"] for r in mine] + self.seeded
-        for table in ("habit_logs", "focus_sessions", "breath_sessions"):
+        for table in (
+            "habit_logs",
+            "focus_sessions",
+            "breath_sessions",
+            "journal_entries",
+            "mood_logs",
+        ):
             await self.pool.execute(f"DELETE FROM yawmi.{table} WHERE event_id = ANY($1)", ids)
         await self.pool.execute("DELETE FROM yawmi.events WHERE id = ANY($1)", ids)
         await self.pool.execute(
@@ -264,11 +300,14 @@ class PostgresBackend:
             "DELETE FROM yawmi.focus_sessions WHERE habit_code = ANY($1)", self.habits
         )
         await self.pool.execute("DELETE FROM yawmi.habits WHERE code = ANY($1)", self.habits)
+        await self.pool.execute("DELETE FROM yawmi.goal_tasks WHERE id = ANY($1)", self.goal_tasks)
         await self.pool.execute("DELETE FROM yawmi.devices WHERE id = ANY($1)", self.devices)
 
 
 IN_CI = bool(os.environ.get("CI"))
-SCHEMA_SQL = Path(__file__).resolve().parents[1] / "db" / "migrations" / "0001_yawmi_schema.sql"
+MIGRATIONS = Path(__file__).resolve().parents[1] / "db" / "migrations"
+SCHEMA_SQL = MIGRATIONS / "0001_yawmi_schema.sql"
+STUB_SQL = Path(__file__).parent / "fixtures" / "raqib_stub.sql"
 
 
 async def ensure_schema(pool: asyncpg.Pool) -> None:
@@ -277,12 +316,15 @@ async def ensure_schema(pool: asyncpg.Pool) -> None:
     The migration tests drop and rebuild the schema around themselves, so nothing else loads it
     for these tests. The file is the one the migration runner applies (task 3), used as is.
     """
-    if await pool.fetchval("SELECT to_regclass('yawmi.events') IS NOT NULL"):
-        return
-    if not SCHEMA_SQL.is_file():
-        await pool.close()
-        pytest.fail(f"the yawmi schema is not loaded and {SCHEMA_SQL} does not exist (task 3)")
-    await pool.execute(SCHEMA_SQL.read_text(encoding="utf-8"))
+    await pool.execute(STUB_SQL.read_text(encoding="utf-8"))
+    if not await pool.fetchval("SELECT to_regclass('yawmi.events') IS NOT NULL"):
+        if not SCHEMA_SQL.is_file():
+            await pool.close()
+            pytest.fail(f"the yawmi schema is not loaded and {SCHEMA_SQL} does not exist (task 3)")
+        await pool.execute(SCHEMA_SQL.read_text(encoding="utf-8"))
+    if not await pool.fetchval("SELECT to_regclass('yawmi.journal_entries') IS NOT NULL"):
+        await pool.execute((MIGRATIONS / "0002_yawmi_role.sql").read_text(encoding="utf-8"))
+        await pool.execute((MIGRATIONS / "0003_yawmi_web.sql").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(params=["memory", "postgres"])
@@ -816,7 +858,7 @@ async def test_session_events_are_projected_once_even_when_replayed(
 
 
 @pytest.mark.parametrize(
-    "type_", ["day_closed", "focus_started", "mood_logged", "confounder_tagged", "app_opened"]
+    "type_", ["day_closed", "focus_started", "confounder_tagged", "app_opened"]
 )
 async def test_the_other_types_are_stored_only_in_events(
     client: httpx.AsyncClient, backend: Backend, iphone: Device, habit: str, type_: str
@@ -829,6 +871,56 @@ async def test_the_other_types_are_stored_only_in_events(
     stored = next(e for e in (await pull(client, iphone))["events"] if e["id"] == ev["id"])
     assert stored["type"] == type_
     assert stored["payload"] == ev["payload"]  # the payload comes back exactly as sent
+
+
+async def test_goal_task_set_updates_done_at_and_ignores_older_or_unknown_task(
+    client: httpx.AsyncClient, backend: Backend, iphone: Device
+) -> None:
+    task_id = await backend.new_goal_task()
+    mark_done = event(
+        "goal_task_set",
+        {"task_id": str(task_id), "done": True},
+        at="2026-11-10T10:00:00Z",
+    )
+    older_unmark = event(
+        "goal_task_set",
+        {"task_id": str(task_id), "done": False},
+        at="2026-11-10T09:00:00Z",
+    )
+    newer_unmark = event(
+        "goal_task_set",
+        {"task_id": str(task_id), "done": False},
+        at="2026-11-10T11:00:00Z",
+    )
+    ghost_task = event(
+        "goal_task_set",
+        {"task_id": str(uuid4()), "done": True},
+        at="2026-11-10T10:00:00Z",
+    )
+
+    assert (await post(client, iphone, [mark_done, ghost_task])).json() == {
+        "accepted": 2,
+        "duplicates": 0,
+    }
+    assert await backend.goal_task_done(task_id) == (
+        datetime(2026, 11, 10, 10, 0, tzinfo=UTC),
+        datetime(2026, 11, 10, 10, 0, tzinfo=UTC),
+    )
+    assert await backend.event_count([UUID(ghost_task["id"])]) == 1
+
+    # Older event does not overwrite
+    assert (await post(client, iphone, [older_unmark])).json() == {"accepted": 1, "duplicates": 0}
+    assert await backend.goal_task_done(task_id) == (
+        datetime(2026, 11, 10, 10, 0, tzinfo=UTC),
+        datetime(2026, 11, 10, 10, 0, tzinfo=UTC),
+    )
+
+    # Newer event overwrites
+    assert (await post(client, iphone, [newer_unmark])).json() == {"accepted": 1, "duplicates": 0}
+    assert await backend.goal_task_done(task_id) == (
+        None,
+        datetime(2026, 11, 10, 11, 0, tzinfo=UTC),
+    )
 
 
 # --- unknown habit ------------------------------------------------------------------------------
@@ -984,7 +1076,12 @@ async def test_duplicate_ids_inside_one_batch_count_once(
 
 def raw_event(note_json: str) -> str:
     """A request body written by hand, so a test can put an escape sequence in the JSON text."""
-    one = {"id": str(uuid4()), "type": "mood_logged", "occurred_at": NOON, "payload": {"note": "@"}}
+    one = {
+        "id": str(uuid4()),
+        "type": "confounder_tagged",
+        "occurred_at": NOON,
+        "payload": {"note": "@"},
+    }
     return json.dumps({"events": [one]}).replace("@", note_json)
 
 
@@ -1003,7 +1100,12 @@ async def test_text_postgres_cannot_store_is_a_422_not_a_500(
 
 def raw_number_event(literal: str) -> tuple[str, str]:
     """A body whose payload holds `literal` as a bare JSON number token; also the event id."""
-    one = {"id": str(uuid4()), "type": "mood_logged", "occurred_at": NOON, "payload": {"n": "@"}}
+    one = {
+        "id": str(uuid4()),
+        "type": "confounder_tagged",
+        "occurred_at": NOON,
+        "payload": {"n": "@"},
+    }
     return json.dumps({"events": [one]}).replace('"@"', literal), one["id"]
 
 
@@ -1029,10 +1131,10 @@ async def test_the_store_refuses_a_non_finite_payload_even_if_validation_was_ski
 ) -> None:
     """Defence in depth: the store serialises with allow_nan=False and rejects, never a 500."""
     store = backend.make_store()
-    good = EventIn(id=uuid4(), type="mood_logged", payload={"n": 1}, occurred_at=NOON)
+    good = EventIn(id=uuid4(), type="confounder_tagged", payload={"n": 1}, occurred_at=NOON)
     bad = EventIn.model_construct(
         id=uuid4(),
-        type="mood_logged",
+        type="confounder_tagged",
         payload={"n": float("nan")},
         occurred_at=datetime(2026, 11, 10, 9, 0, tzinfo=UTC),
         tz="Asia/Riyadh",
@@ -1045,7 +1147,7 @@ async def test_the_store_refuses_a_non_finite_payload_even_if_validation_was_ski
 
 
 async def test_arabic_text_survives_storage(client: httpx.AsyncClient, iphone: Device) -> None:
-    ev = event("mood_logged", {"note": "يوم هادئ ومثمر، والحمد لله"})
+    ev = event("confounder_tagged", {"note": "يوم هادئ ومثمر، والحمد لله"})
     await post(client, iphone, [ev])
     stored = next(e for e in (await pull(client, iphone))["events"] if e["id"] == ev["id"])
     assert stored["payload"]["note"] == "يوم هادئ ومثمر، والحمد لله"
@@ -1056,7 +1158,7 @@ async def test_payloads_are_never_logged(
 ) -> None:
     secret = "ملاحظة-سرية-13579"
     with caplog.at_level(logging.DEBUG):
-        await post(client, iphone, [event("mood_logged", {"note": secret})])
+        await post(client, iphone, [event("confounder_tagged", {"note": secret})])
         await pull(client, iphone)
     assert secret not in caplog.text
     lines = [r.getMessage() for r in caplog.records if r.name == "yawmi.access"]
@@ -1287,6 +1389,12 @@ def test_the_sql_parameters_match_the_arguments_built_for_them() -> None:
     assert placeholders(_UPSERT_HABIT_LOG) == len(habit_log_args(log)) == 8
     assert placeholders(_INSERT_FOCUS) == len(focus_args(focus, device_id)) == 11
     assert placeholders(_INSERT_BREATH) == len(breath_args(breath, device_id)) == 9
+
+
+def test_upsert_habit_log_sql_is_one_row_per_day_and_newest_wins() -> None:
+    assert "ON CONFLICT (habit_code, day) DO UPDATE" in _UPSERT_HABIT_LOG
+    assert "source = excluded.source" in _UPSERT_HABIT_LOG
+    assert "excluded.logged_at >= yawmi.habit_logs.logged_at" in _UPSERT_HABIT_LOG
 
 
 def test_received_times_are_strictly_increasing_and_start_at_the_base() -> None:
