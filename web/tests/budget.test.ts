@@ -245,7 +245,7 @@ describe('app.tsx loads every page but home lazily', () => {
     expect(staticPages).toEqual(['./pages/home']);
   });
 
-  it('reaches only src/pages/home/index.tsx across the entire static import graph from src/main.tsx', () => {
+  it('reaches only modules of src/pages/home/ (and its index.tsx) across the entire static import graph from src/main.tsx', () => {
     const staticImport =
       /(?:^|[\r\n;])\s*(?:import|export)\b(?:(?!\btype\b)[^;\r\n])*?\bfrom\s*(['"])(\.{1,2}\/[^'"]+)\1|(?:^|[\r\n;])\s*import\s*(['"])(\.{1,2}\/[^'"]+)\3/g;
     const resolveModule = (fromFile: string, spec: string): string | null => {
@@ -272,7 +272,10 @@ describe('app.tsx loads every page but home lazily', () => {
         if (target && !seen.has(target)) queue.push(target);
       }
     }
-    expect(pages).toEqual(['src/pages/home/index.tsx']);
+    // The home page is eager and may have files of its own (the page task splits it into components);
+    // every other page folder stays out of the first load.
+    expect(pages).toContain('src/pages/home/index.tsx');
+    expect(pages.filter((page) => !page.startsWith('src/pages/home/'))).toEqual([]);
   });
 
   it('loads the other twelve page modules through lazy(() => import(...))', () => {
