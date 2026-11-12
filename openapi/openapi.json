@@ -190,6 +190,19 @@
         "title": "BreathPrefsIO",
         "type": "object"
       },
+      "CardEdit": {
+        "additionalProperties": false,
+        "description": "`status`: one of the statuses the cards of the mirror already have.",
+        "properties": {
+          "status": {
+            "maxLength": 100,
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "CardEdit",
+        "type": "object"
+      },
       "CardFull": {
         "properties": {
           "habits": {
@@ -257,6 +270,7 @@
             "type": "string"
           },
           "pending": {
+            "description": "الحقول التي قيمتها المعروضة تعديل معلّق",
             "items": {
               "type": "string"
             },
@@ -441,6 +455,38 @@
           "remaining_days"
         ],
         "title": "ChallengeOut",
+        "type": "object"
+      },
+      "ChangeResult": {
+        "additionalProperties": false,
+        "description": "`ok: true` applied; `ok: false` with `conflict: true` refused on a live mismatch; `ok:\nfalse` alone a failure, `error` its text (up to 500 characters).",
+        "properties": {
+          "conflict": {
+            "default": false,
+            "title": "Conflict",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "ChangeResult",
         "type": "object"
       },
       "ClientSource": {
@@ -1481,6 +1527,137 @@
         "title": "GoalColumnsIO",
         "type": "object"
       },
+      "GoalEditList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GoalEditOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "GoalEditList",
+        "type": "object"
+      },
+      "GoalEditOut": {
+        "description": "A stored edit (design §7.4). `old_value` is the value expected in Notion.",
+        "properties": {
+          "applied_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "new_value": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Value"
+          },
+          "note": {
+            "description": "الملاحظة المؤرخة بالقيمة السابقة",
+            "title": "Note",
+            "type": "string"
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "القيمة المتوقعة في Notion لحظة التعديل",
+            "title": "Old Value"
+          },
+          "page_id": {
+            "title": "Page Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "applied",
+              "failed",
+              "superseded",
+              "conflict",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "target_kind": {
+            "enum": [
+              "milestone",
+              "card"
+            ],
+            "title": "Target Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target_kind",
+          "page_id",
+          "field",
+          "old_value",
+          "new_value",
+          "note",
+          "status",
+          "created_at",
+          "applied_at",
+          "error"
+        ],
+        "title": "GoalEditOut",
+        "type": "object"
+      },
       "GoalIndicatorValue": {
         "description": "The indicator of an outcome or a card, computed (design §9.3).\n\n`value` and `target` are the numbers the display shows («2 من 5»): done and total for\nmilestones and tasks (a stored target replaces the total), a percentage of 100 for linked\nhabits. `completion` is 0 to 1. Both are `null` when there is nothing to measure yet.",
         "properties": {
@@ -1848,6 +2025,7 @@
             "type": "array"
           },
           "pending_edits": {
+            "description": "عدد التعديلات المعلّقة التي لم تصل Notion",
             "title": "Pending Edits",
             "type": "integer"
           },
@@ -3411,6 +3589,28 @@
         "title": "Live",
         "type": "object"
       },
+      "MilestoneEdit": {
+        "additionalProperties": false,
+        "description": "At least one field. `done` closes or reopens a milestone (no deletion); `due_date` lies in\nthe plan (2026-10-31 to 2031-12-31); `evidence` is text up to 500 characters.",
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "due_date": {
+            "format": "date",
+            "title": "Due Date",
+            "type": "string"
+          },
+          "evidence": {
+            "maxLength": 500,
+            "title": "Evidence",
+            "type": "string"
+          }
+        },
+        "title": "MilestoneEdit",
+        "type": "object"
+      },
       "MilestoneFull": {
         "properties": {
           "card_page_ids": {
@@ -3509,7 +3709,7 @@
             "type": "string"
           },
           "pending": {
-            "description": "التعديلات المعلّقة (فارغة في هذا الإصدار)",
+            "description": "الحقول التي قيمتها المعروضة تعديل معلّق",
             "items": {
               "type": "string"
             },
@@ -3788,6 +3988,92 @@
           "title"
         ],
         "title": "MorningPriority",
+        "type": "object"
+      },
+      "NotionChange": {
+        "description": "One property write for an applier: one field of one page (design §7.4).",
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "new_value": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Value"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "القيمة المتوقعة في Notion: يرفض المطبّق إن خالفتها",
+            "title": "Old Value"
+          },
+          "page_id": {
+            "title": "Page Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "enum": [
+              "milestone",
+              "card"
+            ],
+            "title": "Target Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target_kind",
+          "page_id",
+          "field",
+          "old_value",
+          "new_value",
+          "note"
+        ],
+        "title": "NotionChange",
+        "type": "object"
+      },
+      "NotionChangeList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NotionChange"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "NotionChangeList",
         "type": "object"
       },
       "OutcomeOut": {
@@ -5149,6 +5435,94 @@
         ]
       }
     },
+    "/v1/cards/{page_id}": {
+      "patch": {
+        "description": "`status` إحدى الحالات الموجودة في بطاقات المرآة، وإلا 422 `status_unknown`: لا حالة جديدة ولا تغيير في المخطط. أي حقل آخر 422 `field_not_editable`. يُكتب تعديلاً معلّقاً بملاحظة مؤرخة. الإغلاق بالحالة، لا حذف.",
+        "operationId": "edit_card_v1_cards__page_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_id",
+            "required": true,
+            "schema": {
+              "title": "Page Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardFull"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "لا صفحة بهذا المعرّف في المرآة"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "تعديل حالة بطاقة",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
     "/v1/day/close": {
       "post": {
         "description": "يستلم ملخصات اليوم ومصادره، ويعيد ملخصاً من سطرين كحد أقصى لا يستشهد إلا بمصادر الطلب. يُقبل اليوم الحالي والأيام السبعة قبله فقط (`day_out_of_window` لما قبلها). أول إغلاق لليوم يُحفظ، وكل تكرار لليوم نفسه يعيده دون استدعاء المزوّد. الملخصات والمصادر يرسلها العميل حالياً إلى أن يبنيها الخادم (المهمتان 8b و10b).",
@@ -5482,6 +5856,180 @@
         ]
       }
     },
+    "/v1/goal-edits": {
+      "get": {
+        "description": "الأحدث أولاً. `status` يقصره على حالة واحدة.",
+        "operationId": "list_edits_v1_goal_edits_get",
+        "parameters": [
+          {
+            "description": "حالة التعديل",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pending",
+                    "applied",
+                    "failed",
+                    "superseded",
+                    "conflict",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "حالة التعديل",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalEditList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "سجل تعديلات الأهداف",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/v1/goal-edits/{edit_id}/cancel": {
+      "post": {
+        "description": "يصير `cancelled` وتُضاف إلى ملاحظته سطر مؤرخ، ولا يُحذف شيء. تعود القيمة المعروضة إلى القيمة الأساس. المطبَّق والفاشل والمُزاح والملغى 409.",
+        "operationId": "cancel_edit_v1_goal_edits__edit_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "edit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Edit Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalEditOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "التعديل غير موجود"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "لا يُلغى إلا تعديل معلّق أو متعارض"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "إلغاء تعديل معلّق أو متعارض",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
     "/v1/goal-tasks/{task_id}": {
       "patch": {
         "description": "حقل واحد على الأقل. `done` يكتب `done_at` ويحسم أمام أحداث `goal_task_set` الأقدم منه. `due_day: null` يمسح الموعد. لا حذف: الإغلاق بـ`archived`، ويخرج بها من المجاميع.",
@@ -5573,7 +6121,7 @@
     },
     "/v1/goals": {
       "get": {
-        "description": "قراءة كاملة من مرآة Notion مع العادات والمهام والمؤشرات. مرآة فارغة (قبل نشر المزامنة) تعطي قوائم فارغة و`synced_at: null`. `completion` المخرج المحطات المنجزة ÷ كلها كما في Notion، ولا تغيّرها العادات. `target_date` و`next_step` للبطاقة من خاصيتين مسمّاتين فقط، ولا يُقرأ غيرهما من خصائصها.",
+        "description": "قراءة كاملة من مرآة Notion مع العادات والمهام والمؤشرات. مرآة فارغة (قبل نشر المزامنة) تعطي قوائم فارغة و`synced_at: null`. `completion` المخرج المحطات المنجزة ÷ كلها كما في Notion، ولا تغيّرها العادات. `target_date` و`next_step` للبطاقة من خاصيتين مسمّاتين فقط، ولا يُقرأ غيرهما من خصائصها. وفوق المرآة تعديلات يومي: المعلّق أولاً (واسم حقله في `pending`)، ثم المطبَّق ما دامت المرآة لم تلحق به، ثم المرآة.",
         "operationId": "get_goals_v1_goals_get",
         "responses": {
           "200": {
@@ -6789,6 +7337,94 @@
         ]
       }
     },
+    "/v1/milestones/{page_id}": {
+      "patch": {
+        "description": "حقل واحد على الأقل من ثلاثة: `done` و`due_date` (من 2026-10-31 إلى 2031-12-31، وإلا `due_date_out_of_range`) و`evidence` (حتى 500 حرف). أي حقل آخر 422 `field_not_editable`، وأولها العلاقات. يُكتب تعديلاً معلّقاً في سجل يومي بملاحظة مؤرخة بالقيمة السابقة، ولا تُكتب المرآة ولا Notion. قيمة تساوي المعروض لا تكتب شيئاً. لا حذف.",
+        "operationId": "edit_milestone_v1_milestones__page_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_id",
+            "required": true,
+            "schema": {
+              "title": "Page Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MilestoneEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MilestoneFull"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "لا صفحة بهذا المعرّف في المرآة"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "تعديل محطة: إنجازها أو موعدها أو دليلها",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
     "/v1/mood": {
       "get": {
         "description": "الصفوف المسقطة من أحداث `mood_logged` بين `from` و`to` (400 يوم على الأكثر).",
@@ -6869,6 +7505,171 @@
         "summary": "سجلات المزاج في مدى زمني",
         "tags": [
           "journal"
+        ]
+      }
+    },
+    "/v1/notion/changes": {
+      "get": {
+        "description": "المعلّق بترتيب إنشائه، و`limit` من 1 إلى 100. `old_value` القيمة المتوقعة في Notion: يقرأ المطبّق القيمة الحية، وإن خالفتها لا يكتب ويرسل `conflict`.",
+        "operationId": "list_changes_v1_notion_changes_get",
+        "parameters": [
+          {
+            "description": "أقصى عدد",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "أقصى عدد",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotionChangeList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "التغييرات المعلّقة لمطبّق Notion (رمز الخدمة فقط)",
+        "tags": [
+          "notion"
+        ]
+      }
+    },
+    "/v1/notion/changes/{change_id}/result": {
+      "post": {
+        "description": "`ok: true` يجعله `applied` ويملأ `applied_at`، و`ok: false` مع `conflict: true` يجعله `conflict`، و`ok: false` وحده `failed` بنص `error`. غير موجود 404، وغير معلّق 409.",
+        "operationId": "post_result_v1_notion_changes__change_id__result_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeResult"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "التغيير غير موجود"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "التغيير ليس معلّقاً"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "نتيجة تطبيق تغيير (رمز الخدمة فقط)",
+        "tags": [
+          "notion"
         ]
       }
     },
