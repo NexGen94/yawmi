@@ -23,7 +23,35 @@
   box-shadow: var(--focus);
 }
 
+.timeline-scroll {
+  display: flex;
+}
+
+/* The outcome codes of the lanes: a layer at the start of the view that stays there while the chart
+   scrolls under it. It lies over the empty gutter the chart keeps for it. */
+.timeline-lanes {
+  position: sticky;
+  inset-inline-start: var(--sp-3);
+  z-index: 1;
+  flex: none;
+  inline-size: 44px;
+  margin-inline-end: -44px;
+  background: var(--c-surface);
+}
+
+.timeline-lane-code {
+  position: absolute;
+  inset-inline: 0;
+  color: var(--c-ink-2);
+  font-family: var(--font-code);
+  font-size: var(--fs-note);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
 .timeline-scroll .timeline {
+  flex: none;
   inline-size: 960px;
   max-inline-size: none;
   block-size: auto;
@@ -31,7 +59,6 @@
 
 .timeline-year,
 .timeline-hijri,
-.timeline-lane-label,
 .timeline-cycle-no {
   fill: var(--c-ink-2);
   font-size: var(--fs-note);
@@ -81,7 +108,7 @@
   stroke-width: 2;
 }
 
-.timeline-today {
+.timeline-today-line {
   stroke: var(--c-ink);
   stroke-width: 2;
   stroke-dasharray: 4 3;

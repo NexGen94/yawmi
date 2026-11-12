@@ -14,10 +14,19 @@
 
 .goals-body,
 .goals-skeleton {
+  /* The face of the outcome codes (O1 to O12): its letter O is round, so it is never read as a zero. */
+  --font-code: "Segoe UI", system-ui, Arial, sans-serif;
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
   min-inline-size: 0;
+}
+
+/* An outcome code: O1 is a letter and a digit; the face keeps the letter round and the zero narrow. */
+.code-latin {
+  font-family: var(--font-code);
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .nowrap {

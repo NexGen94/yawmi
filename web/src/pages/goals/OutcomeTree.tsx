@@ -1,6 +1,7 @@
 import type { Day } from '../../domain/types';
 import { toOrdinal } from '../../domain/days';
 import { relativeDays } from '../../goals/due';
+import { Code } from '../../goals/Code';
 import { DASH, pctOrDash } from '../../goals/format';
 import { Iso } from '../../goals/Iso';
 import type { GoalOutcome, GoalsOut, MilestoneFull } from '../../goals/types';
@@ -35,7 +36,9 @@ function Outcome({ outcome, goals, today }: { outcome: GoalOutcome; goals: Goals
   const head = (
     <>
       <span class="tree-head">
-        <Badge>{outcome.code}</Badge>
+        <Badge>
+          <Code code={outcome.code} />
+        </Badge>
         <span class="tree-title">
           <Iso text={outcome.title} />
         </span>

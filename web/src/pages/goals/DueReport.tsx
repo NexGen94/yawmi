@@ -1,5 +1,6 @@
 import type { Day } from '../../domain/types';
 import { type DueItem, dueReport, relativeDays } from '../../goals/due';
+import { Code } from '../../goals/Code';
 import { NOTHING_DUE } from '../../goals/horizons';
 import type { MilestoneFull } from '../../goals/types';
 import { fmt } from '../../lib/format';
@@ -14,7 +15,11 @@ function Row({ item }: { item: DueItem }) {
     <li class="due-row" data-due={milestone.page_id}>
       <span class="due-main">
         <a href={`/goals/${encodeURIComponent(milestone.page_id)}`}>{milestone.title}</a>
-        {milestone.outcome_code !== null && <Badge>{milestone.outcome_code}</Badge>}
+        {milestone.outcome_code !== null && (
+          <Badge>
+            <Code code={milestone.outcome_code} />
+          </Badge>
+        )}
       </span>
       <span class="due-meta">
         <span>{milestone.due_date === null ? '' : fmt.day(milestone.due_date)}</span>

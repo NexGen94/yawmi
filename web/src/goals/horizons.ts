@@ -4,8 +4,8 @@
 import { toOrdinal } from '../domain/days';
 import { periodBounds } from '../domain/periods';
 import type { Day } from '../domain/types';
+import { counted, openCountText } from '../lib/counts';
 import { fmt } from '../lib/format';
-import { openCountText } from '../pages/home/DaySummary';
 import { dueReport } from './due';
 import { type GoalsOut, PLAN_END } from './types';
 
@@ -29,20 +29,8 @@ export interface HorizonInput {
   habitsLeft: number | null;
 }
 
-/** «عادة واحدة باقية»، «عادتان باقيتان»، «3 عادات باقية»، «11 عادة باقية». */
-function habitsLeftText(n: number): string {
-  if (n === 0) return 'لا عادات باقية';
-  if (n === 1) return 'عادة واحدة باقية';
-  if (n === 2) return 'عادتان باقيتان';
-  return n <= 10 ? `${fmt.num(n)} عادات باقية` : `${fmt.num(n)} عادة باقية`;
-}
-
-/** «محطة واحدة مستحقة»، «محطتان مستحقتان»، «4 محطات مستحقة»، «11 محطة مستحقة». */
-function dueMilestonesText(n: number): string {
-  if (n === 1) return 'محطة واحدة مستحقة';
-  if (n === 2) return 'محطتان مستحقتان';
-  return n <= 10 ? `${fmt.num(n)} محطات مستحقة` : `${fmt.num(n)} محطة مستحقة`;
-}
+const habitsLeftText = (n: number): string => (n === 0 ? 'لا عادات باقية' : counted(n, 'habit', 'باقية', 'باقيتان'));
+const dueMilestonesText = (n: number): string => counted(n, 'milestone', 'مستحقة', 'مستحقتان');
 
 function dayLine(openPriorities: number | null, habitsLeft: number | null): string | null {
   if (openPriorities === null || habitsLeft === null) return null;
@@ -88,7 +76,7 @@ function planLine(goals: GoalsOut, today: Day): string {
   const done = goals.milestones.filter((m) => m.done).length;
   const left = toOrdinal(PLAN_END) - toOrdinal(today);
   const progress = `${fmt.num(done)} من ${fmt.num(total)} محطة`;
-  return left > 0 ? `${progress} · ${daysText(left)} حتى ${PLAN_END}` : progress;
+  return left > 0 ? `${progress} · ${daysText(left)} حتى ${fmt.day(PLAN_END)}` : progress;
 }
 
 export function horizonLines({ goals, today, openPriorities, habitsLeft }: HorizonInput): HorizonLine[] {

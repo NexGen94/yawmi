@@ -6,7 +6,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { LocationProvider } from 'preact-iso';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { writeCache } from '../../src/data/cache';
+import { readCache, writeCache } from '../../src/data/cache';
 import { DomainCards } from '../../src/pages/goals/DomainCards';
 import GoalsPage from '../../src/pages/goals/index';
 import { setDigits } from '../../src/lib/format';
@@ -55,9 +55,11 @@ interface Serve {
   fail?: 'network' | 500;
   /** What PATCH /v1/settings answers with (default: the columns it was sent). */
   patchStatus?: number;
+  /** What GET /v1/settings answers with (default 200). */
+  settingsStatus?: number;
 }
 
-function serve({ goals: data = goals(), fail, patchStatus = 200 }: Serve = {}): void {
+function serve({ goals: data = goals(), fail, patchStatus = 200, settingsStatus = 200 }: Serve = {}): void {
   const rest = vi.fn();
   routeFetch(
     rest,
@@ -83,7 +85,7 @@ function serve({ goals: data = goals(), fail, patchStatus = 200 }: Serve = {}): 
         patches.push(body);
         return patchStatus === 200 ? json(settings(body.goal_columns)) : json({ detail: 'خطأ' }, patchStatus);
       }
-      return json(settings());
+      return settingsStatus === 200 ? json(settings()) : json({ detail: 'خطأ' }, settingsStatus);
     }
     return rest(input, init);
   });
@@ -271,6 +273,23 @@ describe('the table', () => {
     expect(screen.getByRole('button', { name: 'الدليل' }).getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('writes the saved choice to the offline copy of the settings', async () => {
+    await open('/goals?view=table');
+    fireEvent.click(screen.getByRole('button', { name: 'الدليل' }));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    await waitFor(async () => {
+      const cached = await readCache<{ goal_columns: Record<string, string[]> }>('settings');
+      expect(cached?.value.goal_columns.milestones).toContain('evidence');
+    });
+  });
+
+  it('says the columns could not be loaded, not that a connection is needed, when online and the settings failed', async () => {
+    await open('/goals?view=table', { settingsStatus: 500 });
+    await screen.findByText('تعذّر تحميل الأعمدة');
+    expect(screen.queryByText('يحتاج اتصالاً')).toBeNull();
+    expect((screen.getByRole('button', { name: 'الدليل' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('hiding a column takes it away', async () => {
     await open('/goals?view=table');
     fireEvent.click(screen.getByRole('button', { name: 'الدورة' }));
@@ -346,7 +365,7 @@ describe('the horizons', () => {
       'الأسبوع: محطتان مستحقتان، أقربها فحص الدم السنوي',
       'الشهر: 4 محطات مستحقة',
       'الدورة 1: اليوم 11 من 57 · التأسيس',
-      'الخطة: 3 من 122 محطة · 1877 يوماً حتى 2031-12-31',
+      'الخطة: 3 من 122 محطة · 1877 يوماً حتى الأربعاء، 31 ديسمبر 2031',
     ]);
   });
 
@@ -369,6 +388,16 @@ describe('the timeline view', () => {
 });
 
 describe('the view switch', () => {
+  it('brings the chosen view into sight (it scrolls by itself on a phone)', async () => {
+    const spy = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: spy });
+    await open('/goals?view=timeline');
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    const target = spy.mock.contexts.at(-1) as HTMLElement;
+    expect(target.getAttribute('aria-checked')).toBe('true');
+    expect(target.textContent).toBe('الخط الزمني');
+  });
+
   it('writes the view in ?view= and opens the tree by default', async () => {
     await open();
     expect(screen.getByRole('radio', { name: 'الشجرة' }).getAttribute('aria-checked')).toBe('true');
@@ -433,6 +462,24 @@ describe('the four states', () => {
     await screen.findByText('لم تُنسخ الخطة من Notion بعد');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText('تعذّر التحميل')).toBeNull();
+  });
+
+  it('the mirror Notion has not filled yet (seeded outcomes and cycles, no milestones or cards, never synced) is the empty state', async () => {
+    serve({ goals: goals({ milestones: [], cards: [], synced_at: null }) });
+    const { container } = render(
+      <LocationProvider>
+        <GoalsPage />
+      </LocationProvider>,
+    );
+    await screen.findByText('لم تُنسخ الخطة من Notion بعد');
+    expect(screen.queryByRole('radiogroup', { name: 'العرض' })).toBeNull();
+    expect(container.textContent).not.toContain('لا شيء مستحق');
+    expect(container.querySelectorAll('[data-outcome]')).toHaveLength(0);
+  });
+
+  it('a synced mirror with no milestones is not the empty state', async () => {
+    await open('/goals?view=horizons', { goals: goals({ milestones: [], cards: [] }) });
+    expect(screen.queryByText('لم تُنسخ الخطة من Notion بعد')).toBeNull();
   });
 
   it('a null indicator is a dash everywhere, never 0% or NaN', async () => {

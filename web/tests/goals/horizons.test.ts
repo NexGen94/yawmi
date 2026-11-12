@@ -25,8 +25,8 @@ describe('horizonLines (design 4.1)', () => {
     expect(story.cycle).toBe('الدورة 1: اليوم 11 من 57 · التأسيس');
   });
 
-  it('says the plan line: 3 of 122 milestones and the days to 2031-12-31, without a grouping comma', () => {
-    expect(story.plan).toBe('3 من 122 محطة · 1877 يوماً حتى 2031-12-31');
+  it('says the plan line: 3 of 122 milestones and the days to the last day, written through fmt, the day count without a grouping comma', () => {
+    expect(story.plan).toBe('3 من 122 محطة · 1877 يوماً حتى الأربعاء، 31 ديسمبر 2031');
   });
 
   it('keeps the order: day, week, month, cycle, plan', () => {
@@ -57,6 +57,19 @@ describe('horizonLines (design 4.1)', () => {
   it('counts one, two and many in the week line', () => {
     const one = goals({ milestones: [milestone('a', 'محطة وحيدة', { due_date: '2026-11-11' })] });
     expect(lines({ goals: one, today: TODAY, openPriorities: 0, habitsLeft: 0 }).week).toBe('محطة واحدة مستحقة، أقربها محطة وحيدة');
+  });
+
+  it('agrees the count with its noun: 11 and 103 as the language does', () => {
+    const many = (n: number) =>
+      goals({ milestones: Array.from({ length: n }, (_, i) => milestone(`m${i}`, 'م', { due_date: '2026-11-20' })) });
+    expect(lines({ goals: many(11), today: TODAY, openPriorities: 0, habitsLeft: 0 }).month).toBe('11 محطة مستحقة');
+    expect(lines({ goals: many(103), today: TODAY, openPriorities: 0, habitsLeft: 0 }).month).toBe('103 محطات مستحقة');
+    expect(lines({ goals: many(1), today: TODAY, openPriorities: 0, habitsLeft: 0 }).month).toBe('محطة واحدة مستحقة');
+    const day = (p: number, h: number) => lines({ goals: goals(), today: TODAY, openPriorities: p, habitsLeft: h }).day;
+    expect(day(11, 11)).toBe('11 أولوية مفتوحة، و11 عادة باقية');
+    expect(day(1, 1)).toBe('أولوية واحدة مفتوحة، وعادة واحدة باقية');
+    expect(day(2, 2)).toBe('أولويتان مفتوحتان، وعادتان باقيتان');
+    expect(day(0, 103)).toBe('لا أولويات مفتوحة، و103 عادات باقية');
   });
 
   it('does not count a milestone that is done or already late', () => {

@@ -1,6 +1,7 @@
 import './timeline.css';
 import { toOrdinal } from '../domain/days';
 import type { Day } from '../domain/types';
+import { counted } from '../lib/counts';
 import { fmt } from '../lib/format';
 import type { CycleOut, MilestoneFull } from '../goals/types';
 import { PLAN_END, PLAN_START } from '../goals/types';
@@ -85,9 +86,7 @@ function gregorianYearStarts(): { day: Day; year: string }[] {
 
 /** «دورة واحدة»، «دورتان»، «5 دورات»، «21 دورة». */
 function cyclesText(n: number): string {
-  if (n === 1) return 'دورة واحدة';
-  if (n === 2) return 'دورتان';
-  return n <= 10 ? `${fmt.num(n)} دورات` : `${fmt.num(n)} دورة`;
+  return n === 1 ? 'دورة واحدة' : fmt.count(n, 'cycle');
 }
 
 const codeNo = (code: string): number => Number(code.replace(/\D/g, '')) || 0;
@@ -119,6 +118,14 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
   return (
     <div class="timeline-wrap">
       <section class="timeline-scroll" aria-label={`${label}، قابل للتمرير`} tabIndex={0}>
+        {/* The outcome codes of the lanes stay at the start of the view while the chart scrolls. */}
+        <div class="timeline-lanes" aria-hidden="true" style={{ blockSize: height }}>
+          {codes.map((code, i) => (
+            <span key={code} class="timeline-lane-code" data-lane={code} style={{ insetBlockStart: TOP + i * LANE_H + LANE_H / 2 - 9 }}>
+              {code === '' ? '—' : code}
+            </span>
+          ))}
+        </div>
         <svg
           class="chart timeline"
           role="img"
@@ -178,9 +185,6 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
           {codes.map((code, i) => (
             <g key={code}>
               <line class="timeline-lane" x1={PAD_END} x2={W - GUTTER + 8} y1={TOP + i * LANE_H + LANE_H / 2} y2={TOP + i * LANE_H + LANE_H / 2} />
-              <text class="timeline-lane-label" x={W - GUTTER / 2 + 4} y={TOP + i * LANE_H + LANE_H / 2 + 4} text-anchor="middle" direction="rtl">
-                {code === '' ? '—' : code}
-              </text>
             </g>
           ))}
 
@@ -190,24 +194,19 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
             const cy = TOP + (lanes.get(m.outcome_code ?? '') ?? 0) * LANE_H + LANE_H / 2;
             return (
               <g key={m.page_id} data-milestone={m.page_id} data-state={state} data-x={cx}>
-                <title>{`${m.title} · ${STATE_WORDS[state]} · ${fmt.day(m.due_date as Day)}`}</title>
+                <title>{`${m.title} · ${m.outcome_code ?? '—'} · ${STATE_WORDS[state]} · ${fmt.day(m.due_date as Day)}`}</title>
                 <Mark state={state} cx={cx} cy={cy} />
               </g>
             );
           })}
 
-          <line
-            class="timeline-today"
-            data-x={todayX}
-            aria-label={`اليوم: ${fmt.day(today)}`}
-            x1={todayX}
-            x2={todayX}
-            y1={AXIS_H - 6}
-            y2={height}
-          />
-          <text class="timeline-today-label" x={todayX} y={AXIS_H - 10} text-anchor="middle" direction="rtl">
-            اليوم
-          </text>
+          <g class="timeline-today" data-x={todayX}>
+            <title>{`اليوم: ${fmt.day(today)}`}</title>
+            <line class="timeline-today-line" x1={todayX} x2={todayX} y1={AXIS_H - 6} y2={height} />
+            <text class="timeline-today-label" x={todayX} y={AXIS_H - 10} text-anchor="middle" direction="rtl">
+              اليوم
+            </text>
+          </g>
         </svg>
       </section>
       <ul class="timeline-key">
@@ -220,7 +219,7 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
           </li>
         ))}
       </ul>
-      {undated > 0 && <p class="timeline-note">{`${fmt.num(undated)} محطة بلا موعد لا تظهر على الخط.`}</p>}
+      {undated > 0 && <p class="timeline-note">{`${counted(undated, 'milestone', 'بلا موعد', 'بلا موعد')} لا تظهر على الخط.`}</p>}
     </div>
   );
 }

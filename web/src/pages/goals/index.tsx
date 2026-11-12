@@ -1,4 +1,5 @@
 import { useLocation } from 'preact-iso';
+import { useEffect, useRef } from 'preact/hooks';
 
 import { Timeline } from '../../charts/Timeline';
 import { type GoalTable, TABLES } from '../../goals/columns';
@@ -45,6 +46,7 @@ function GoalsSkeleton() {
 }
 
 export default function GoalsPage() {
+  const switchBox = useRef<HTMLDivElement>(null);
   const goals = useGoals();
   const location = useLocation();
   const today = useToday();
@@ -53,6 +55,11 @@ export default function GoalsPage() {
   const view = parseView(location.query?.view);
   const table = parseTable(location.query?.table);
   const data = goals.data;
+
+  // Five views do not fit one row on a phone: the chosen one is brought into sight.
+  useEffect(() => {
+    switchBox.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
+  }, [view, data !== undefined]);
 
   const choose = (next: { view?: View; table?: GoalTable }): void => {
     const query = new URLSearchParams({ view: next.view ?? view });
@@ -78,7 +85,7 @@ export default function GoalsPage() {
           <div class="goals-body">
             <CycleCard goals={data} today={today} />
             <DomainCards outcomes={data.outcomes} />
-            <div class="goals-switch">
+            <div class="goals-switch" ref={switchBox}>
               <Segmented label="العرض" options={VIEWS} value={view} onChange={(value) => choose({ view: value })} />
             </div>
             <div class="goals-view">
@@ -88,7 +95,9 @@ export default function GoalsPage() {
                   goals={data}
                   table={table}
                   columns={columns.columns[table]}
-                  canChoose={online && columns.known}
+                  online={online}
+                  columnsKnown={columns.known}
+                  columnsLoading={columns.loading}
                   onTable={(next) => choose({ view: 'table', table: next })}
                   onSaveColumns={(keys) => columns.save(table, keys)}
                 />

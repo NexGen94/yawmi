@@ -67,7 +67,9 @@ describe('Timeline', () => {
   it('marks today with a line whose label says «اليوم», between the start and the end', () => {
     const { container } = draw();
     const mark = container.querySelector('.timeline-today') as Element;
-    expect(mark.getAttribute('aria-label')).toContain('اليوم');
+    // axe refuses aria-label on a role-less <line>: the name is the <title> of the mark's group
+    expect(mark.querySelector('title')?.textContent).toContain('اليوم');
+    expect(container.querySelector('line[aria-label], text[aria-label]')).toBeNull();
     const x = Number(mark.getAttribute('data-x'));
     expect(x).toBeLessThan(xOfPoint(container, 'm-first'));
     expect(x).toBeGreaterThan(xOfPoint(container, 'm-last'));
@@ -121,7 +123,23 @@ describe('Timeline', () => {
   it('says how many milestones have no date, and does not draw them', () => {
     const { container } = draw({ milestones: [...withEnds(), milestone('m-undated', 'بلا موعد', { due_date: null })] });
     expect(container.querySelector('[data-milestone="m-undated"]')).toBeNull();
-    expect(container.querySelector('.timeline-note')?.textContent).toContain('محطة بلا موعد');
+    expect(container.querySelector('.timeline-note')?.textContent).toBe('محطة واحدة بلا موعد لا تظهر على الخط.');
+  });
+
+  it('agrees the count of undated milestones with its noun', () => {
+    const undated = (n: number) => Array.from({ length: n }, (_, i) => milestone(`u${i}`, 'م', { due_date: null }));
+    const note = (n: number): string | null | undefined =>
+      draw({ milestones: [...withEnds(), ...undated(n)] }).container.querySelector('.timeline-note')?.textContent;
+    expect(note(2)).toBe('محطتان بلا موعد لا تظهر على الخط.');
+    expect(note(3)).toBe('3 محطات بلا موعد لا تظهر على الخط.');
+    expect(note(12)).toBe('12 محطة بلا موعد لا تظهر على الخط.');
+  });
+
+  it('keeps the outcome codes of the lanes in a layer that stays in sight while the chart scrolls', () => {
+    const { container } = draw();
+    const lanes = Array.from(container.querySelectorAll('.timeline-lanes [data-lane]')).map((l) => l.textContent);
+    expect(lanes).toEqual(['O1', 'O2', 'O3', 'O4', 'O5', 'O6', 'O7', 'O8', 'O9', 'O10', 'O11', 'O12']);
+    expect(container.querySelector('.timeline-lanes')?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('holds a date outside the plan at the nearest end', () => {

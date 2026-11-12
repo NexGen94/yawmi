@@ -4,6 +4,7 @@ import { GOAL_COLUMNS, type GoalTable, labelOf, TABLE_LABELS } from '../../goals
 import { relativeDays } from '../../goals/due';
 import { DASH, editedDay, fieldLabel, pctOrDash } from '../../goals/format';
 import type { CardFull, GoalOutcome, GoalsOut, MilestoneFull } from '../../goals/types';
+import { Code } from '../../goals/Code';
 import { fmt } from '../../lib/format';
 import { Badge } from '../../ui/Badge';
 import { Segmented } from '../../ui/Segmented';
@@ -30,7 +31,12 @@ const countOf = (value: unknown): ComponentChildren => (Array.isArray(value) && 
 /** How each field that is not plain text or a plain number is written. */
 const FORMATTERS: Record<string, (value: unknown, ctx: Ctx) => ComponentChildren> = {
   title: (value, { table, row }) => <a href={hrefOf(table, row)}>{plain(value)}</a>,
-  code: (value) => <Badge>{plain(value)}</Badge>,
+  code: (value) => (
+    <Badge>
+      <Code code={plain(value)} />
+    </Badge>
+  ),
+  outcome_code: (value) => (value === null || value === undefined ? DASH : <Code code={plain(value)} />),
   page_id: (value) => <bdi dir="ltr">{plain(value)}</bdi>,
   done: (value) => (value === true ? 'منجزة' : 'مفتوحة'),
   completion: (value) => pctOrDash(value as number | null),
@@ -77,15 +83,17 @@ export interface GoalsTableProps {
   goals: GoalsOut;
   table: GoalTable;
   columns: readonly string[];
-  /** A choice of columns can be saved: online, and the stored choice is known. */
-  canChoose: boolean;
+  online: boolean;
+  /** The stored choice of columns is known / still being read. */
+  columnsKnown: boolean;
+  columnsLoading: boolean;
   onTable(table: GoalTable): void;
   onSaveColumns(keys: string[]): Promise<boolean>;
 }
 
 /** The three tables of the plan with the columns the owner chose (design A7), read only. The table sits
  *  in a region that scrolls sideways by itself, so the page never does. */
-export function GoalsTable({ goals, table, columns, canChoose, onTable, onSaveColumns }: GoalsTableProps) {
+export function GoalsTable({ goals, table, columns, online, columnsKnown, columnsLoading, onTable, onSaveColumns }: GoalsTableProps) {
   const rows: Row[] = table === 'outcomes' ? goals.outcomes : table === 'milestones' ? goals.milestones : goals.cards;
   const known = new Set(GOAL_COLUMNS[table].map((c) => c.key));
   const shown = columns.filter((key) => known.has(key));
@@ -95,7 +103,7 @@ export function GoalsTable({ goals, table, columns, canChoose, onTable, onSaveCo
     <div class="goals-table">
       <div class="goals-table-controls">
         <Segmented label="الجدول" options={TABLE_OPTIONS} value={table} onChange={onTable} />
-        <ColumnChooser table={table} shown={shown} enabled={canChoose} onSave={onSaveColumns} />
+        <ColumnChooser table={table} shown={shown} online={online} known={columnsKnown} loading={columnsLoading} onSave={onSaveColumns} />
       </div>
       {rows.length === 0 ? (
         <p class="goals-table-none">{`لا صفوف في جدول ${TABLE_LABELS[table]}.`}</p>

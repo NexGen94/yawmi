@@ -1,4 +1,5 @@
 import { ProgressBar } from '../../charts/ProgressBar';
+import { Code } from '../../goals/Code';
 import { DOMAINS } from '../../goals/domains';
 import { pctOrDash } from '../../goals/format';
 import { Iso } from '../../goals/Iso';
@@ -47,7 +48,9 @@ export function DomainCards({ outcomes }: DomainCardsProps) {
                 {mine.map((o) => (
                   <li key={o.code}>
                     <span class="domain-outcome-head">
-                      <span class="domain-code">{o.code}</span>
+                      <span class="domain-code">
+                        <Code code={o.code} />
+                      </span>
                       <span class="domain-title">
                         <Iso text={o.title} />
                       </span>
