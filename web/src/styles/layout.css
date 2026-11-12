@@ -263,6 +263,10 @@
   font-weight: 400;
 }
 
+.ask-kbd::before {
+  content: attr(data-keys);
+}
+
 .not-found-text {
   margin: 0;
   font-size: var(--fs-body);
