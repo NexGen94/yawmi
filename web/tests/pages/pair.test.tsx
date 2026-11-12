@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import 'fake-indexeddb/auto';
 
-import { fireEvent, render, screen } from '@testing-library/preact';
+import { act, fireEvent, render, screen } from '@testing-library/preact';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -84,7 +84,7 @@ describe('PairPage', () => {
     });
   });
 
-  it('shows "تعذّر الاتصال" with "إعادة المحاولة" on network error', async () => {
+  it('shows "تعذّر الاتصال" with role="alert" and "إعادة المحاولة" on network error, and disables retry when offline', async () => {
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
     render(<PairPage />);
@@ -94,9 +94,20 @@ describe('PairPage', () => {
     fireEvent.input(input, { target: { value: 'NETFAIL' } });
     fireEvent.click(button);
 
-    await screen.findByText(/تعذّر الاتصال/);
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('تعذّر الاتصال');
     const retryBtn = screen.getByRole('button', { name: 'إعادة المحاولة' });
     expect(retryBtn).toBeTruthy();
+    expect(retryBtn.getAttribute('disabled')).toBeNull();
+
+    // While offline, retry button is disabled
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
+    expect(retryBtn.getAttribute('disabled')).not.toBeNull();
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
 
     fetchMock.mockResolvedValueOnce(json({ access_token: 'tok', device_id: 'd1', refresh_token: null }));
     fireEvent.click(retryBtn);

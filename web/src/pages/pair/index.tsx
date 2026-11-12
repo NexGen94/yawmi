@@ -88,9 +88,9 @@ export default function PairPage() {
           />
 
           {isNetworkError && (
-            <div style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
+            <div role="alert" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
               <p style={{ color: 'var(--c-signal)' }}>تعذّر الاتصال</p>
-              <Button variant="quiet" onClick={() => void submit()}>
+              <Button variant="quiet" onClick={() => void submit()} disabled={isOffline}>
                 إعادة المحاولة
               </Button>
             </div>

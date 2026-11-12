@@ -43,14 +43,20 @@ export function NotificationsSection({ disabled }: NotificationsSectionProps) {
           تنبيهات يومية لتسجيل العادات والمتأخرات في أوقاتها المحددة.
         </p>
 
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           <Button
             variant="quiet"
             onClick={() => void handleEnablePush()}
             disabled={disabled || subscribing}
+            title={disabled ? 'يحتاج اتصالاً' : undefined}
           >
             تفعيل الإشعارات
           </Button>
+          {disabled && (
+            <span style={{ fontSize: 'var(--fs-note)', color: 'var(--c-muted)' }}>
+              يحتاج اتصالاً
+            </span>
+          )}
         </div>
 
         {statusMessage && (

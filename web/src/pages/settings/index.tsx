@@ -15,25 +15,75 @@ export interface SettingsPageProps {
 }
 
 export default function SettingsPage(props: SettingsPageProps) {
-  const [storedName, setStoredName] = useState<string>('متصفح الحاسوب');
-  const [internalState, setInternalState] = useState<QueryState>('ready');
+  const [loading, setLoading] = useState<boolean>(props.state === undefined);
+  const [error, setError] = useState<boolean>(false);
+  const [deviceInfo, setDeviceInfo] = useState<{ id?: string; name?: string } | null>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true,
+  );
+  const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
-    void kvGet<string>('device_name').then((name) => {
-      if (name) setStoredName(name);
-    });
+    if (typeof window === 'undefined') return;
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
-  const state = props.state ?? internalState;
-  const stale = props.stale ?? false;
-  const deviceName = props.deviceName ?? storedName;
-  const isOffline = state === 'offline';
+  useEffect(() => {
+    if (props.state !== undefined) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+
+    Promise.all([kvGet<string>('device_id'), kvGet<string>('device_name')])
+      .then(([id, name]) => {
+        if (cancelled) return;
+        if (id) {
+          setDeviceInfo({ id, name: name ?? 'متصفح الحاسوب' });
+        } else {
+          setDeviceInfo(null);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError(true);
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.state, nonce]);
+
+  let computedState: QueryState;
+  if (props.state !== undefined) {
+    computedState = props.state;
+  } else if (error) {
+    computedState = 'error';
+  } else if (!isOnline) {
+    computedState = 'offline';
+  } else if (loading) {
+    computedState = 'loading';
+  } else {
+    computedState = 'ready';
+  }
+
+  const isOffline = computedState === 'offline';
+  const stale = props.stale ?? (isOffline && !loading && !error);
+  const deviceName = props.deviceName ?? deviceInfo?.name;
 
   const handleRetry = () => {
     if (props.onRetry) {
       props.onRetry();
     } else {
-      setInternalState('ready');
+      setNonce((n) => n + 1);
     }
   };
 
@@ -49,14 +99,14 @@ export default function SettingsPage(props: SettingsPageProps) {
       <h1>الإعدادات</h1>
 
       <StateFrame
-        state={state}
+        state={computedState}
         stale={stale}
         emptyText=""
         empty={false}
         onRetry={handleRetry}
         skeleton={skeleton}
       >
-        <SessionSection deviceName={deviceName} />
+        <SessionSection deviceName={deviceName} disabled={isOffline} />
         <NotificationsSection disabled={isOffline} />
       </StateFrame>
     </div>
