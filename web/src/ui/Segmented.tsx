@@ -13,18 +13,21 @@ export interface SegmentedProps<T extends string> {
   options: readonly Option<T>[];
   value: T;
   onChange(value: T): void;
+  /** The choice is shown but cannot be changed (a locked field). */
+  disabled?: boolean;
 }
 
 /** One choice among a few, as a radio group: one Tab stop, arrow keys move and select (in the
  *  visual direction: ArrowLeft goes forward in RTL), Home and End jump to the ends. The selected
  *  segment is the ink capsule. */
-export function Segmented<T extends string>({ label, options, value, onChange }: SegmentedProps<T>) {
+export function Segmented<T extends string>({ label, options, value, onChange, disabled = false }: SegmentedProps<T>) {
   const selected = Math.max(
     0,
     options.findIndex((o) => o.value === value),
   );
 
   const onKeyDown = (event: TargetedKeyboardEvent<HTMLButtonElement>, index: number): void => {
+    if (disabled) return;
     const n = options.length;
     let next: number;
     if (event.key === 'Home') next = 0;
@@ -50,6 +53,7 @@ export function Segmented<T extends string>({ label, options, value, onChange }:
           type="button"
           role="radio"
           class="segment"
+          disabled={disabled}
           aria-checked={i === selected && option.value === value ? 'true' : 'false'}
           tabIndex={i === selected ? 0 : -1}
           onClick={() => onChange(option.value)}

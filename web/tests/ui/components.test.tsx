@@ -931,3 +931,37 @@ describe('components.css', () => {
 afterEach(() => {
   document.head.querySelectorAll('style').forEach((style) => style.remove());
 });
+
+describe('Segmented and Chips: disabled (the habit editor locks fields)', () => {
+  it('a disabled Segmented has every radio disabled and reports no change', () => {
+    const onChange = vi.fn();
+    render(
+      <Segmented
+        label="النوع"
+        disabled
+        options={[
+          { value: 'a', label: 'أ' },
+          { value: 'b', label: 'ب' },
+        ]}
+        value="a"
+        onChange={onChange}
+      />,
+    );
+    const radios = screen.getAllByRole('radio') as HTMLButtonElement[];
+    expect(radios.every((r) => r.disabled)).toBe(true);
+    fireEvent.click(radios[1] as HTMLButtonElement);
+    fireEvent.keyDown(radios[0] as HTMLButtonElement, { key: 'ArrowLeft' });
+    expect(onChange).not.toHaveBeenCalled();
+    // The selected option is still said to be selected.
+    expect(radios[0]?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('a disabled Chips has every chip disabled and reports no change', () => {
+    const onChange = vi.fn();
+    render(<Chips label="الأيام" disabled options={[{ value: 'a', label: 'أ' }]} selected={[]} onChange={onChange} />);
+    const chip = screen.getByRole('button', { name: 'أ' }) as HTMLButtonElement;
+    expect(chip.disabled).toBe(true);
+    fireEvent.click(chip);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});

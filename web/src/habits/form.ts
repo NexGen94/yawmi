@@ -167,11 +167,26 @@ export function fromHabit(h: HabitOut): HabitForm {
   };
 }
 
+/** The end of a yearly habit: 31 December of its start year, or the end it already has if that comes first. */
+function withinYear(start: string, end: string | null): string {
+  const yearEnd = `${start.slice(0, 4)}-12-31`;
+  return end !== null && end < yearEnd ? end : yearEnd;
+}
+
+/** The indicator whose habit is one of the year, not of the whole plan span (design 13, M-5). */
+const YEARLY_KPI = 'books_done';
+
 /**
  * A goal-to-habit suggestion opens the editor as a new, unsaved user habit. The server fills every
  * field of a draft, its start day included (today in Riyadh unless the goal says otherwise).
+ *
+ * `kpiCode` is the indicator the draft was asked for. The books-read indicator is a total of the
+ * year (the server spreads what is left up to 31 December), so its habit ends there too; a nights
+ * or days indicator needs nothing here, for the server already makes it a yes/no weekly habit
+ * (M-4).
  */
-export function fromDraft(d: HabitDraft): HabitForm {
+export function fromDraft(d: HabitDraft, kpiCode?: string | null): HabitForm {
+  const end = kpiCode === YEARLY_KPI ? withinYear(d.start_day, d.end_day) : d.end_day;
   return {
     ...emptyForm(d.start_day),
     title_ar: d.title_ar,
@@ -187,10 +202,10 @@ export function fromDraft(d: HabitDraft): HabitForm {
     every_n: d.every_n,
     anchor_day: d.anchor_day,
     start_day: d.start_day,
-    end_day: d.end_day,
+    end_day: end,
     anchor: d.anchor,
     reminders: d.reminders.map((r) => ({ ...r })),
-    duration: chipFor(d.start_day, d.end_day),
+    duration: end === null ? null : (chipFor(d.start_day, end) ?? 'custom'),
     polarity: d.polarity,
     identity_text: d.identity_text ?? '',
   };

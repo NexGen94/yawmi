@@ -7,11 +7,13 @@ export interface ChipsProps<T extends string> {
   selected: readonly T[];
   /** The new selection, in the order of `options`. */
   onChange(next: T[]): void;
+  /** The choices are shown but cannot be changed (a locked field). */
+  disabled?: boolean;
 }
 
 /** Several independent choices: each chip is a toggle button (aria-pressed) and shows a check mark
  *  when on, so the state is not told by colour alone. For one choice among a few, use Segmented. */
-export function Chips<T extends string>({ label, options, selected, onChange }: ChipsProps<T>) {
+export function Chips<T extends string>({ label, options, selected, onChange, disabled = false }: ChipsProps<T>) {
   const toggle = (value: T): void => {
     const on = selected.includes(value);
     onChange(options.map((o) => o.value).filter((v) => (v === value ? !on : selected.includes(v))));
@@ -25,6 +27,7 @@ export function Chips<T extends string>({ label, options, selected, onChange }: 
             key={option.value}
             type="button"
             class="chip"
+            disabled={disabled}
             aria-pressed={on ? 'true' : 'false'}
             onClick={() => toggle(option.value)}
           >

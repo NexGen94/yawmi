@@ -489,3 +489,50 @@ describe('task 12: validate needs today (N-3)', () => {
     expect(validate(form())).toEqual({});
   });
 });
+
+describe('task 12: a draft by its indicator (D-067 item 5)', () => {
+  const draft: HabitDraft = {
+    title_ar: 'قراءة الكتب',
+    goal_ref: 'g-1',
+    outcome: 'O7',
+    ac_ref: null,
+    kind: 'count',
+    unit: '',
+    period: 'week',
+    target_per_period: 2,
+    schedule_kind: 'every_day',
+    weekday_mask: null,
+    every_n: null,
+    anchor_day: null,
+    anchor: 'free',
+    start_day: '2026-11-10',
+    end_day: null,
+    polarity: 'build',
+    identity_text: null,
+    reminders: [],
+  };
+
+  it('books read are a habit of the year: it ends on 31 December of its start year (M-5)', () => {
+    const f = fromDraft(draft, 'books_done');
+    expect(f).toMatchObject({ end_day: '2026-12-31', duration: 'custom' });
+    expect(toHabitIn(f).end_day).toBe('2026-12-31');
+  });
+
+  it('keeps an end the goal already set inside the year, and cuts one beyond it', () => {
+    expect(fromDraft({ ...draft, end_day: '2026-12-01' }, 'books_done').end_day).toBe('2026-12-01');
+    expect(fromDraft({ ...draft, end_day: '2027-06-30' }, 'books_done').end_day).toBe('2026-12-31');
+  });
+
+  it('every other indicator, and none, leave the draft as the server made it', () => {
+    expect(fromDraft(draft).end_day).toBeNull();
+    expect(fromDraft(draft, 'workshops_count').end_day).toBeNull();
+    expect(fromDraft(draft, null).end_day).toBeNull();
+  });
+
+  it('a nights indicator comes as a yes/no habit with a weekly target, as the seed habits are (M-4)', () => {
+    const f = fromDraft({ ...draft, title_ar: 'نوم', kind: 'boolean', target_per_period: 5 }, 'sleep_7h_nights');
+    expect(habitType(f)).toBe('yesno');
+    expect(f).toMatchObject({ period: 'week', target_per_period: 5, unit: '' });
+    expect(check(f)).toEqual({});
+  });
+});
