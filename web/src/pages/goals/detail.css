@@ -226,6 +226,13 @@
   font-weight: 600;
 }
 
+/* The title is a row heading and a link: a target of 44px, not a line of text. */
+.ms-head a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--hit);
+}
+
 .ms-criterion {
   margin: var(--sp-1) 0 0;
   color: var(--c-ink-2);

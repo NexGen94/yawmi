@@ -58,6 +58,11 @@ test('the due date of the late milestone is edited, and stays pending after a re
 
   await expect(row.getByText('معلّق')).toBeVisible();
   await expect(row.getByText(written(day))).toBeVisible();
+  // the keyboard stays where it was: on «تعديل» of the field that was saved
+  await expect(row.getByRole('button', { name: /^تعديل الموعد/ })).toBeFocused();
+  // the title of a milestone is a link with a target of 44px at least
+  const box = await row.getByRole('link', { name: 'قياس خط الأساس' }).boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   await expect(page.getByRole('region', { name: 'سجل التعديلات' }).getByText('معلّق').first()).toBeVisible();
 
   await expectNoSeriousA11y(page);
@@ -81,6 +86,35 @@ test('the due date of the late milestone is edited, and stays pending after a re
 
   await expectNoSeriousA11y(page);
   await shot(page, 'goal-detail-reloaded');
+});
+
+// The milestones of O3 in the seed: each project closes one of its own.
+const CLOSE = { desktop: 'e2e-ms-5', mobile: 'e2e-ms-6' } as const;
+
+test('closing a milestone moves the summary and the pace with its row', async ({ paired: page, projectName }) => {
+  await page.goto('/goals/O3');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  const summary = page.getByRole('region', { name: 'الهدف' });
+  const counted = async (): Promise<number> => {
+    const text = (await summary.getByText(/من \d+ محطة/).innerText()).replace(/\D+/g, ' ').trim().split(' ');
+    return Number(text[0]);
+  };
+  const paced = async (): Promise<number> => {
+    const label = (await page.getByRole('img', { name: /القيمة/ }).getAttribute('aria-label')) ?? '';
+    return Number(/القيمة (\d+)/.exec(label)?.[1]);
+  };
+  await expect(page.getByRole('img', { name: /القيمة/ })).toBeVisible();
+  const before = { summary: await counted(), pace: await paced() };
+
+  const row = page.locator(`[data-milestone="${CLOSE[projectName]}"]`);
+  await row.getByRole('checkbox', { name: /^منجزة/ }).check();
+  await expect(row.getByText('معلّق')).toBeVisible();
+
+  // the row, the summary and the pace agree, without a reload
+  await expect.poll(counted).toBe(before.summary + 1);
+  await expect.poll(paced).toBe(before.pace + 1);
+  await expectNoSeriousA11y(page);
+  await shot(page, 'goal-detail-closed');
 });
 
 test('a task is added and ticked, and the tick reaches the server', async ({ paired: page, api, projectName }) => {

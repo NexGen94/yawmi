@@ -254,7 +254,7 @@ describe('PaceLine', () => {
       readings: [],
     });
     expect(container.querySelector('.pace-expected')).toBeNull();
-    expect(svg.getAttribute('aria-label')).toBe(`${PACE_LABEL}: لا ما يُقاس بعد`);
+    expect(svg.getAttribute('aria-label')).toBe(`${PACE_LABEL}: لا شيء يُقاس بعد`);
   });
 
   it('gives every <text> an explicit text-anchor and direction="rtl"', () => {
@@ -263,5 +263,32 @@ describe('PaceLine', () => {
       expect(text.getAttribute('text-anchor'), text.outerHTML).toMatch(/^(start|middle|end)$/);
       expect(text.getAttribute('direction'), text.outerHTML).toBe('rtl');
     }
+  });
+
+  it('keeps «الفعلي» above the dot when the value sits on the baseline, clear of the start date', () => {
+    // the first weeks of every outcome: a value of 0 and an expected value a little above it
+    const { container } = drawPace({ current_value: 0, expected_today: 0.014, on_pace: false, projected_end: 0, readings: [] });
+    const dot = container.querySelector('.pace-dot') as Element;
+    const word = container.querySelector('.pace-word-actual') as Element;
+    expect(Number(word.getAttribute('y'))).toBeLessThan(Number(dot.getAttribute('cy')));
+  });
+
+  it('never writes a value that is not zero as «0»: a small expected value keeps two decimals', () => {
+    const { svg } = drawPace({ current_value: 0, expected_today: 0.014, on_pace: false, projected_end: null, readings: [] });
+    const label = svg.getAttribute('aria-label') ?? '';
+    expect(label).toContain('المتوقع اليوم 0.01');
+    expect(label).not.toMatch(/المتوقع اليوم 0(،|$)/);
+  });
+
+  it('says «أقل من 0.01» for a value smaller than that, never «0»', () => {
+    const { svg } = drawPace({ current_value: 0, expected_today: 0.001, on_pace: false, projected_end: null, readings: [] });
+    expect(svg.getAttribute('aria-label')).toContain('المتوقع اليوم أقل من 0.01');
+  });
+
+  it('keeps one decimal for values of 1 and over, and writes a whole number without decimals', () => {
+    const { svg } = drawPace({ current_value: 2, expected_today: 3.04, projected_end: 8 });
+    const label = svg.getAttribute('aria-label') ?? '';
+    expect(label).toContain('القيمة 2،');
+    expect(label).toContain('المتوقع اليوم 3،');
   });
 });

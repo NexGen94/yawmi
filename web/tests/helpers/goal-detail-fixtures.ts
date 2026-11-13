@@ -151,6 +151,8 @@ const json = (body: unknown, status = 200): Response =>
 
 export interface Server {
   calls: Call[];
+  /** What `GET /v1/goals/{ref}/pace` answers now (a test may change it between two requests). */
+  pace: PaceOut | 404;
   goals: GoalsOut;
   edits: GoalEditOut[];
   tasks: GoalTaskOut[];
@@ -161,6 +163,7 @@ export interface Server {
 export function serve(fetchMock: ReturnType<typeof vi.fn>, options: ServeOptions = {}): Server {
   const state: Server = {
     calls: [],
+    pace: options.pace ?? 404,
     goals: options.goals ?? detailGoals(),
     edits: [...(options.edits ?? [])],
     tasks: [...(options.tasks ?? TASKS)],
@@ -183,7 +186,7 @@ export function serve(fetchMock: ReturnType<typeof vi.fn>, options: ServeOptions
 
     if (path === '/v1/goals' && method === 'GET') return json(state.goals);
     if (/^\/v1\/goals\/[^/]+\/pace$/.test(path)) {
-      return options.pace === 404 || options.pace === undefined ? json({ detail: 'لا مخرج' }, 404) : json(options.pace);
+      return state.pace === 404 ? json({ detail: 'لا مخرج' }, 404) : json(state.pace);
     }
     if (/^\/v1\/goals\/[^/]+\/tasks$/.test(path)) {
       if (method === 'GET') return json({ items: state.tasks });
@@ -206,6 +209,17 @@ export function serve(fetchMock: ReturnType<typeof vi.fn>, options: ServeOptions
       const changes = body as Partial<MilestoneFull>;
       const next: MilestoneFull = { ...row, ...changes, pending: [...new Set([...row.pending, ...Object.keys(changes)])] };
       state.goals = { ...state.goals, milestones: state.goals.milestones.map((m) => (m.page_id === row.page_id ? next : m)) };
+      if ('done' in changes) {
+        // the summary of the outcome counts the shown milestones: one source for every number
+        state.goals = {
+          ...state.goals,
+          outcomes: state.goals.outcomes.map((o) => {
+            if (o.code !== row.outcome_code) return o;
+            const done = o.milestones_done + (changes.done ? 1 : -1);
+            return { ...o, milestones_done: done, completion: o.milestones_total === 0 ? null : done / o.milestones_total };
+          }),
+        };
+      }
       for (const field of Object.keys(changes)) {
         state.edits.push(
           edit(state.edits.length + 1, { page_id: row.page_id, field, new_value: (changes as Record<string, string | boolean | null>)[field] ?? null }),

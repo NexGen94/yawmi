@@ -10,9 +10,11 @@ import { fmt, setDigits } from '../../src/lib/format';
 import GoalDetailPage from '../../src/pages/goals/detail';
 import { clearOutbox, closeDb, listPending } from '../../src/sync/outbox';
 import { NOON_RIYADH } from '../helpers/goals-fixtures';
+import { habit } from '../helpers/today-fixtures';
 import {
   detailGoals,
   edit,
+  HABITS,
   PACE,
   type Server,
   type ServeOptions,
@@ -242,6 +244,7 @@ describe('goal detail: the edit log', () => {
       const row = entry(`11111111-1111-4111-8111-11111111111${n}`);
       expect(within(row).getByText(word), `state ${n}`).toBeTruthy();
     }
+    expect(within(entry('11111111-1111-4111-8111-111111111114')).getByText('لم يُطبَّق؛ يمكن تعديل الحقل من جديد')).toBeTruthy();
     const first = entry('11111111-1111-4111-8111-111111111111');
     expect(first.textContent).toContain('من');
     expect(first.textContent).toContain('2026-11-08');
@@ -395,9 +398,18 @@ describe('goal detail: linked habits', () => {
   it('an outcome with no open milestone cannot start a habit and says why', async () => {
     const goals = detailGoals();
     goals.outcomes = goals.outcomes.map((o) => (o.code === 'O1' ? { ...o, next_milestone: null } : o));
+    goals.cards = [];
     await open('O1', { goals });
     expect(screen.queryByRole('link', { name: 'عادة من هذا الهدف' })).toBeNull();
-    expect(screen.getByText('لا محطة مفتوحة لبدء عادة منها')).toBeTruthy();
+    expect(screen.getByText('لا محطة مفتوحة ولا بطاقة لبدء عادة منها')).toBeTruthy();
+  });
+
+  it('an outcome with no open milestone but a card starts the habit from the card (M-8)', async () => {
+    const goals = detailGoals();
+    goals.outcomes = goals.outcomes.map((o) => (o.code === 'O1' ? { ...o, next_milestone: null } : o));
+    await open('O1', { goals });
+    expect(screen.getByRole('link', { name: 'عادة من هذا الهدف' }).getAttribute('href')).toBe('/habits/new?goal=c-health');
+    expect(screen.queryByText(/لا محطة مفتوحة/)).toBeNull();
   });
 
   it('«بدء تركيز» goes to /focus?goal=<ref>', async () => {
@@ -409,6 +421,55 @@ describe('goal detail: linked habits', () => {
     await open('O1', { pace: 404 });
     const link = within(linked()).getByRole('link', { name: 'إضافة عادة' });
     expect(link.getAttribute('href')).toBe('/habits/new?goal=m-late');
+  });
+});
+
+describe('goal detail: one source for every number (I-2)', () => {
+  const doneBox = (container: Element) => within(rowOf(container, 'm-blood')).getByRole('checkbox', { name: /^منجزة/ });
+
+  it('ticking a milestone done reads the plan and the pace again, and the summary and the pace show the new count', async () => {
+    const { container } = await open('O1', { pace: PACE });
+    await screen.findByRole('img', { name: /القيمة 2/ });
+    expect(screen.getByText(/1 من 3 محطة/)).toBeTruthy();
+    server.pace = { ...PACE, current_value: 3, on_pace: true };
+    fireEvent.click(doneBox(container));
+    await screen.findByRole('img', { name: /القيمة 3/ });
+    expect(await screen.findByText(/2 من 3 محطة/)).toBeTruthy();
+    expect(screen.getByText('على الوتيرة')).toBeTruthy();
+    expect(server.called('GET', '/v1/goals')).toHaveLength(2);
+    expect(server.called('GET', '/v1/goals/O1/pace')).toHaveLength(2);
+  });
+
+  it('a new due date reads them again too', async () => {
+    const { container } = await open('O1', { pace: PACE });
+    await screen.findByRole('img', { name: /القيمة 2/ });
+    await changeDate(rowOf(container, 'm-late'), '2026-11-14');
+    await waitFor(() => expect(server.called('GET', '/v1/goals/O1/pace')).toHaveLength(2));
+    expect(server.called('GET', '/v1/goals')).toHaveLength(2);
+  });
+
+  it('«إعادة التعديل» reads the plan and the pace again', async () => {
+    await open('O1', {
+      pace: PACE,
+      edits: [edit(3, { status: 'conflict', field: 'done', old_value: false, new_value: true, page_id: 'm-blood' })],
+    });
+    await screen.findByRole('img', { name: /القيمة 2/ });
+    const log = screen.getByRole('region', { name: 'سجل التعديلات' });
+    await within(log).findAllByRole('listitem');
+    fireEvent.click(within(log).getByRole('button', { name: /^إعادة التعديل/ }));
+    await waitFor(() => expect(server.called('GET', '/v1/goals/O1/pace')).toHaveLength(2));
+    expect(server.called('GET', '/v1/goals')).toHaveLength(2);
+  });
+
+  it('«إلغاء» reads the pace again with the plan, so the pace goes back with the summary', async () => {
+    await open('O1', { pace: PACE, edits: [edit(1, { status: 'pending' })] });
+    await screen.findByRole('img', { name: /القيمة 2/ });
+    const log = screen.getByRole('region', { name: 'سجل التعديلات' });
+    await within(log).findAllByRole('listitem');
+    server.pace = { ...PACE, current_value: 1 };
+    fireEvent.click(within(log).getByRole('button', { name: /^إلغاء/ }));
+    await screen.findByRole('img', { name: /القيمة 1/ });
+    expect(server.called('GET', '/v1/goals')).toHaveLength(2);
   });
 });
 
@@ -504,6 +565,15 @@ describe('goal detail: a card and a milestone', () => {
     expect(server.called('GET', /pace/)).toHaveLength(0);
     expect(screen.getByRole('link', { name: 'عادة من هذا الهدف' }).getAttribute('href')).toBe('/habits/new?goal=c-health');
     expect(screen.getByRole('link', { name: 'بدء تركيز' }).getAttribute('href')).toBe('/focus?goal=c-health');
+  });
+
+  it('a milestone page lists the habits made from that milestone (M-7)', async () => {
+    const made = habit('blood_follow', 'متابعة الفحص', { goal_ref: 'm-blood' });
+    await open('m-blood', { habits: [...HABITS, made] }, 'فحص الدم السنوي');
+    const section = screen.getByRole('region', { name: 'العادات المرتبطة' });
+    expect(await within(section).findByRole('link', { name: 'متابعة الفحص' })).toBeTruthy();
+    expect(within(section).queryByRole('link', { name: 'تمارين الضغط' })).toBeNull();
+    expect(within(section).queryByText('لا عادات مرتبطة بهذا الهدف.')).toBeNull();
   });
 
   it('a milestone page edits that milestone and links back to its outcome', async () => {

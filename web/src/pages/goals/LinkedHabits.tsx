@@ -2,11 +2,18 @@ import { amount } from '../../habits/amount';
 import { STEP } from '../../habits/HabitRow';
 import { polarityOf, type HabitTodayItem } from '../../habits/useHabitsToday';
 import { pctOrDash } from '../../goals/format';
-import type { CardHabit } from '../../goals/types';
 import { fmt } from '../../lib/format';
 
+/** A habit that serves the goal. A habit made from a milestone has no total or adherence on the plan. */
+export interface LinkedHabit {
+  code: string;
+  title_ar: string;
+  adherence: number | null;
+  total_done: number | null;
+}
+
 export interface LinkedHabitsProps {
-  habits: CardHabit[];
+  habits: LinkedHabit[];
   /** Today's habits with the outbox over them: the value of the day, and what can be logged. */
   items: HabitTodayItem[];
   /** The editor of habits on a draft for this goal; none: the goal cannot start one. */
@@ -54,7 +61,7 @@ export function LinkedHabits({ habits, items, newHabitHref, onTick, onAdd }: Lin
               <li key={h.code} class="lh-row" data-habit={h.code}>
                 <div class="lh-main">
                   <a href={`/habits/${encodeURIComponent(h.code)}`}>{h.title_ar}</a>
-                  <span class="lh-meta">{`الالتزام ${pctOrDash(h.adherence)} · ${amount(h.total_done, '')}`}</span>
+                  {h.total_done !== null && <span class="lh-meta">{`الالتزام ${pctOrDash(h.adherence)} · ${amount(h.total_done, '')}`}</span>}
                   {item?.valueToday != null && <span class="lh-meta">{`اليوم ${amount(item.valueToday, unit)}`}</span>}
                 </div>
                 {item && <Action item={item} title={h.title_ar} onTick={() => onTick(h.code)} onAdd={(step) => onAdd(h.code, step)} />}

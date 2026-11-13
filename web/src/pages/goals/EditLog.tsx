@@ -20,7 +20,7 @@ export const STATUS_WORDS: Record<GoalEditOut['status'], string> = {
 const STATUS_HINTS: Partial<Record<GoalEditOut['status'], string>> = {
   conflict: 'تغيّرت القيمة في Notion بعد التعديل، فلم يُطبَّق.',
   superseded: 'حلّ محلّه تعديل أحدث للحقل نفسه.',
-  failed: 'يمكن إلغاؤه من Notion أو إعادته بتعديل جديد.',
+  failed: 'لم يُطبَّق؛ يمكن تعديل الحقل من جديد',
 };
 
 function valueText(value: GoalEditOut['new_value']): string {

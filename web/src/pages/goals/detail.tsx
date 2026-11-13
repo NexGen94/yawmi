@@ -1,20 +1,18 @@
 import type { ComponentChildren } from 'preact';
 import { useMemo } from 'preact/hooks';
 
-import { api } from '../../api/client';
-import { HttpError, unwrap } from '../../api/unwrap';
-import { PaceLine } from '../../charts/PaceLine';
-import { useQuery } from '../../data/query';
+import { PaceLine, paceNum } from '../../charts/PaceLine';
 import { Code } from '../../goals/Code';
 import { useOnline, useToday } from '../../goals/data';
 import { cancelEdit, editCard, editMilestone, redoEdit, useGoalEdits } from '../../goals/edits';
 import { useEditableGoals } from '../../goals/editable';
 import { DASH, pctOrDash } from '../../goals/format';
 import { Iso } from '../../goals/Iso';
+import { usePace } from '../../goals/pace';
 import { useGoalTasks } from '../../goals/tasks';
-import { habitHref, isOutcomeRef, milestonesOf, resolveGoal, titleOf, titlesOf, type GoalTarget } from '../../goals/target';
+import { habitHref, milestonesOf, resolveGoal, titleOf, titlesOf, type GoalTarget } from '../../goals/target';
 import type { CardFull, GoalEditOut, MilestoneFull, PaceOut } from '../../goals/types';
-import { useHabitsToday } from '../../habits/useHabitsToday';
+import { type HabitTodayItem, useHabitsToday } from '../../habits/useHabitsToday';
 import { fmt } from '../../lib/format';
 import { Badge } from '../../ui/Badge';
 import { Card } from '../../ui/Card';
@@ -24,25 +22,10 @@ import { Toast } from '../../ui/Toast';
 import { useLogNote } from '../home/useLogNote';
 import { EditField } from './EditField';
 import { EditLog } from './EditLog';
-import { LinkedHabits } from './LinkedHabits';
+import { type LinkedHabit, LinkedHabits } from './LinkedHabits';
 import { MilestoneList, type MilestoneEditInput } from './MilestoneList';
 import { TaskList } from './TaskList';
 import './detail.css';
-
-/** `GET /v1/goals/{ref}/pace` for an outcome. A reference with no pace (a card, a milestone, an
- *  outcome the server does not know) is `null`. */
-function usePace(ref: string): PaceOut | null | undefined {
-  const query = useQuery<PaceOut | null>(`goal-pace:${ref}`, async () => {
-    if (!isOutcomeRef(ref)) return null;
-    try {
-      return unwrap(await api.GET('/v1/goals/{ref}/pace', { params: { path: { ref } } }));
-    } catch (error) {
-      if (error instanceof HttpError && error.status === 404) return null;
-      throw error;
-    }
-  });
-  return query.data;
-}
 
 function DetailSkeleton() {
   return (
@@ -65,7 +48,7 @@ const Fact = ({ name, children }: { name: string; children: ComponentChildren })
 /** What the pace says in words: the numbers beside the chart, and whether the pace is met only when
  *  the server says so (nothing is said for a goal with nothing to measure). */
 function PaceCard({ pace }: { pace: PaceOut }) {
-  const num = (n: number): string => fmt.num(n, { maximumFractionDigits: 1 });
+  const num = paceNum;
   const unit = pace.unit ? ` ${pace.unit}` : '';
   return (
     <Card title="الوتيرة">
@@ -159,17 +142,32 @@ function Summary({
   );
 }
 
+/** The habits that serve the goal: those of an outcome or a card as the plan lists them, and for a
+ *  milestone those whose own link names it. */
+function linkedOf(target: GoalTarget, items: HabitTodayItem[]): LinkedHabit[] {
+  if (target.kind === 'outcome') return target.outcome.habits;
+  if (target.kind === 'card') return target.card.habits;
+  return items
+    .filter((i) => i.habit.goal_ref === target.ref)
+    .map((i) => ({ code: i.habit.code, title_ar: i.habit.title_ar, adherence: null, total_done: null }));
+}
+
 export interface GoalDetailProps {
   /** Filled in by the router from `/goals/:ref`: an outcome code, a card or a milestone page. */
   params?: { ref?: string };
 }
 
-export default function GoalDetailPage({ params }: GoalDetailProps) {
+/** One page per reference: moving to another goal from a link on this page starts it anew. */
+export default function GoalDetailPage(props: GoalDetailProps) {
+  return <GoalDetail key={props.params?.ref ?? ''} {...props} />;
+}
+
+function GoalDetail({ params }: GoalDetailProps) {
   const ref = params?.ref ?? '';
   const goals = useEditableGoals();
   const online = useOnline();
   const today = useToday();
-  const pace = usePace(ref);
+  const { pace, refresh: refreshPace } = usePace(ref);
   const edits = useGoalEdits();
   const tasks = useGoalTasks(ref);
   const habits = useHabitsToday('all');
@@ -182,24 +180,27 @@ export default function GoalDetailPage({ params }: GoalDetailProps) {
   const mine = useMemo(() => (edits.items ?? []).filter((e) => titles.has(e.page_id)), [edits.items, titles]);
   const statuses = useMemo(() => [...new Set((data?.cards ?? []).map((c) => c.status).filter((s): s is string => !!s))], [data]);
 
+  // One source for every number: after an edit the plan (the summary), the pace and the log are read
+  // again, so the row, the summary and the pace line always say the same.
+  const reread = (): Promise<unknown> => Promise.all([goals.refetch(), refreshPace(), edits.refresh()]);
   const editMilestoneOf = async (m: MilestoneFull, change: MilestoneEditInput): Promise<void> => {
     goals.replaceMilestone(await editMilestone(m.page_id, change));
-    void edits.refresh();
+    void reread();
   };
   const editStatus = async (card: CardFull, status: string): Promise<void> => {
     goals.replaceCard(await editCard(card.page_id, status));
-    void edits.refresh();
+    void reread();
   };
   const cancel = async (edit: GoalEditOut): Promise<void> => {
     await cancelEdit(edit.id);
     // the shown value goes back to the base value: the plan says which that is
-    await Promise.all([goals.refetch(), edits.refresh()]);
+    await reread();
   };
   const redo = async (edit: GoalEditOut): Promise<void> => {
     const row = await redoEdit(edit);
     if ('due_date' in row) goals.replaceMilestone(row);
     else goals.replaceCard(row);
-    await edits.refresh();
+    await reread();
   };
 
   const title = target === undefined ? 'تفاصيل الهدف' : titleOf(target);
@@ -241,7 +242,7 @@ export default function GoalDetailPage({ params }: GoalDetailProps) {
                   عادة من هذا الهدف
                 </a>
               ) : (
-                <p class="gd-none">لا محطة مفتوحة لبدء عادة منها</p>
+                <p class="gd-none">لا محطة مفتوحة ولا بطاقة لبدء عادة منها</p>
               )}
               <a class="btn btn-quiet" href={`/focus?goal=${encodeURIComponent(ref)}`}>
                 بدء تركيز
@@ -265,7 +266,7 @@ export default function GoalDetailPage({ params }: GoalDetailProps) {
               <div class="gd-col">
                 <Card title="العادات المرتبطة">
                   <LinkedHabits
-                    habits={target.kind === 'outcome' ? target.outcome.habits : target.kind === 'card' ? target.card.habits : []}
+                    habits={linkedOf(target, habits.items)}
                     items={habits.items}
                     newHabitHref={href}
                     onTick={(code) => void habits.tick(code)}

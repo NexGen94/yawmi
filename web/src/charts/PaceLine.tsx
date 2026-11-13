@@ -22,7 +22,13 @@ const PAD_BOTTOM = 28;
 const PLOT_W = W - PAD_START - PAD_END;
 const PLOT_H = H - PAD_TOP - PAD_BOTTOM;
 
-const num = (n: number): string => fmt.num(n, { maximumFractionDigits: 1 });
+/** A value of the pace as text. A value that is not zero is never written «0»: below 1 it keeps two
+ *  decimals, and below 0.005 it says so in words; from 1 up, one decimal. */
+export function paceNum(n: number): string {
+  if (n !== 0 && Math.abs(n) < 0.005) return 'أقل من 0.01';
+  return fmt.num(n, { maximumFractionDigits: Math.abs(n) < 1 ? 2 : 1 });
+}
+const num = paceNum;
 
 /** «45 يوماً حتى الموعد», «الموعد اليوم» or «تجاوز الموعد بـ5 أيام». */
 export function daysLeftText(daysLeft: number): string {
@@ -47,7 +53,7 @@ export function paceSentence(pace: PaceOut, label: string): string {
  *  and the chart says so; with nothing to measure there is no line at all. */
 export function PaceLine({ pace, label }: PaceLineProps) {
   if (!(pace.target_value > 0)) {
-    return <svg class="chart pace" role="img" aria-label={`${label}: لا ما يُقاس بعد`} viewBox={`0 0 ${W} 40`} focusable="false" />;
+    return <svg class="chart pace" role="img" aria-label={`${label}: لا شيء يُقاس بعد`} viewBox={`0 0 ${W} 40`} focusable="false" />;
   }
   const start = toOrdinal(pace.start_day);
   const span = Math.max(1, toOrdinal(pace.due_day) - start);
@@ -67,8 +73,10 @@ export function PaceLine({ pace, label }: PaceLineProps) {
   const dotX = xOf(pace.today);
   const dotY = hasValue ? yOf(pace.current_value as number) : 0;
   const expectedY = yOf(pace.expected_today);
-  // the word «الفعلي» sits on the side of the dot away from the expected line
-  const wordY = hasValue ? (dotY <= expectedY ? dotY - 10 : dotY + 18) : 0;
+  // the word «الفعلي» sits on the side of the dot away from the expected line, and never below the
+  // baseline, where the start date is
+  const below = dotY > expectedY && dotY + 18 < yOf(0);
+  const wordY = hasValue ? (below ? dotY + 18 : dotY - 10) : 0;
 
   return (
     <svg class="chart pace" role="img" aria-label={paceSentence(pace, label)} viewBox={`0 0 ${W} ${H}`} focusable="false">

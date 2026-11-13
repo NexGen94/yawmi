@@ -63,11 +63,12 @@ const KPI_PERIOD: Record<string, 'day' | 'week' | 'month'> = { daily: 'day', wee
 
 /** The editor of habits opened on a draft for this goal (task 12's link: `goal` is a milestone or a
  *  card page, `kpi` and `period` ask for a numeric target). An outcome starts from its next open
- *  milestone; none: `undefined`. The pace names the indicator the draft follows, when it has one. */
+ *  milestone, else its first card; none: `undefined`. The pace names the indicator the draft follows, when it has one. */
 export function habitHref(target: GoalTarget, pace: PaceOut | null | undefined): string | undefined {
+  // An outcome starts from its next open milestone, else from one of its cards (the server takes both).
   const goal =
     target.kind === 'outcome'
-      ? target.outcome.next_milestone?.page_id
+      ? (target.outcome.next_milestone?.page_id ?? target.cards[0]?.page_id)
       : target.kind === 'card'
         ? target.card.page_id
         : target.milestone.page_id;

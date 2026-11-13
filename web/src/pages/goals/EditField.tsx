@@ -45,6 +45,8 @@ export function EditField(props: EditFieldProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  // The value a toggle was given, kept on screen until its save settles (the plan is read again meanwhile).
+  const [held, setHeld] = useState<boolean | null>(null);
   const [error, setError] = useState('');
   const alive = useRef(true);
   const openButton = useRef<HTMLButtonElement>(null);
@@ -99,11 +101,14 @@ export function EditField(props: EditFieldProps) {
         <label class="edit-toggle-label">
           <input
             type="checkbox"
-            checked={value}
+            checked={held ?? value}
             disabled={off}
             onChange={(event) => {
               const next = event.currentTarget.checked;
-              void run(() => onSave(next));
+              setHeld(next);
+              void run(() => onSave(next)).finally(() => {
+                if (alive.current) setHeld(null);
+              });
             }}
           />
           <span>{label}</span>
@@ -208,7 +213,7 @@ export function EditField(props: EditFieldProps) {
       <span class="edit-label">{label}</span>
       <span class="edit-value">{props.kind === 'date' ? <bdi>{shown}</bdi> : shown}</span>
       {badge}
-      <button type="button" class="edit-open" aria-label={`تعديل ${named}`} disabled={off} onClick={open}>
+      <button type="button" class="edit-open" ref={openButton} aria-label={`تعديل ${named}`} disabled={off} onClick={open}>
         تعديل
       </button>
       {note}
