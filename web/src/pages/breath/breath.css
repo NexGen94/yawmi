@@ -59,6 +59,10 @@
 
 .checkin-choices {
   display: flex;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
   flex-wrap: wrap;
   gap: var(--sp-3);
 }

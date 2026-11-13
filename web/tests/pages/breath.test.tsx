@@ -482,7 +482,7 @@ describe('the weekly ring and the dots', () => {
       sessions: [sess({ duration_seconds: 1080 }), sess({ pattern: 'hold_test', duration_seconds: 30 }), sess({ pattern: 'exhale_test', duration_seconds: 40 })],
     });
     await openPage();
-    await screen.findByText('18 من 30 دقيقة');
+    expect(await screen.findByText('18 من 30 دقيقة')).toBeTruthy();
   });
 
   it('with no target the number stands alone', async () => {
@@ -511,7 +511,7 @@ describe('the weekly ring and the dots', () => {
     await screen.findByText('10 من 30 دقيقة');
     await playMinute();
     fireEvent.click(screen.getByRole('button', { name: 'أهدأ' }));
-    await screen.findByText('11 من 30 دقيقة');
+    expect(await screen.findByText('11 من 30 دقيقة')).toBeTruthy();
   });
 });
 
@@ -561,7 +561,7 @@ describe('the exhale test', () => {
     fireEvent.click(screen.getByRole('button', { name: 'بدء الزفير' }));
     at(18_000);
     fireEvent.click(screen.getByRole('button', { name: 'انتهاء الزفير' }));
-    await screen.findByText('18 ث · لا متوسط شخصي بعد');
+    expect(await screen.findByText('18 ث · لا متوسط شخصي بعد')).toBeTruthy();
   });
 
   it('a second test is compared with the first one of this visit too', async () => {

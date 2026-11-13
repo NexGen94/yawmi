@@ -56,11 +56,9 @@ export function BreathBubble({ phase, phaseSeconds, secondsLeft, breaths, reduce
 
   const target = phase === 'inhale' ? FULL : SMALL;
   const origin = phase === 'inhale' ? SMALL : FULL;
-  const style = reduced
-    ? { transform: `scale(${STILL})` }
-    : armed
-      ? { transform: `scale(${target})`, transitionDuration: `${Number(duration.current.toFixed(2))}s` }
-      : { transform: `scale(${origin})` };
+  let style: { transform: string; transitionDuration?: string } = { transform: `scale(${origin})` };
+  if (reduced) style = { transform: `scale(${STILL})` };
+  else if (armed) style = { transform: `scale(${target})`, transitionDuration: `${Number(duration.current.toFixed(2))}s` };
 
   return (
     <div class="breath-bubble-wrap">

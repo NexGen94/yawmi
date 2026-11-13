@@ -21,7 +21,7 @@ export function weekMinutes(sessions: readonly BreathSessionOut[], today: Day, w
 
 /** The days of that week with at least one counted session, in order. */
 export function sessionDays(sessions: readonly BreathSessionOut[], today: Day, weekStart: WeekStart): Day[] {
-  return [...new Set(counted(sessions, today, weekStart).map((s) => s.day))].sort();
+  return [...new Set(counted(sessions, today, weekStart).map((s) => s.day))].sort((a, b) => a.localeCompare(b));
 }
 
 /** How many counted sessions the week holds. */

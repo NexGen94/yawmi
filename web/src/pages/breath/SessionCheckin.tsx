@@ -17,13 +17,13 @@ export interface SessionCheckinProps {
 export function SessionCheckin({ onChoose }: SessionCheckinProps) {
   return (
     <div class="checkin">
-      <div class="checkin-choices" role="group" aria-label="الشعور بعد الجلسة">
+      <fieldset class="checkin-choices" aria-label="الشعور بعد الجلسة">
         {CHOICES.map((choice) => (
           <Button key={choice.value} onClick={() => onChoose(choice.value)}>
             {choice.label}
           </Button>
         ))}
-      </div>
+      </fieldset>
       <Button class="checkin-skip" onClick={() => onChoose(null)}>
         تجاوز
       </Button>
