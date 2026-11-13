@@ -1,0 +1,182 @@
+/* The AI screens (task 20): the consent dialog, the reply card, the cards of the sources, the
+   chips of «أسئلة أخرى», the ask panel. Colors only through the tokens; logical properties only. */
+
+.ai-consent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.ai-consent-lead,
+.ai-note,
+.ai-error {
+  margin: 0;
+}
+
+.ai-note {
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.ai-error {
+  color: var(--c-signal-ink);
+  font-size: var(--fs-note);
+}
+
+.ai-consent-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding-inline-start: var(--sp-5);
+}
+
+.ai-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-block-size: var(--hit);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-switch input {
+  flex: none;
+  inline-size: 24px;
+  block-size: 24px;
+  accent-color: var(--c-ink);
+}
+
+.ai-paused {
+  align-items: flex-start;
+}
+
+.ai-insight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.ai-kicker {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.ai-line,
+.ai-question {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh);
+  overflow-wrap: anywhere;
+}
+
+.ai-question {
+  font-weight: 600;
+}
+
+.ai-deeper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.ai-sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-block-start: var(--sp-2);
+}
+
+.ai-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-inline-size: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--c-blue-pale);
+  border-radius: var(--radius-card);
+  background: var(--c-surface);
+}
+
+.ai-card-label {
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+  overflow-wrap: anywhere;
+}
+
+.ai-card-value {
+  font-size: var(--fs-num);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-card-text {
+  font-size: var(--fs-note);
+  overflow-wrap: anywhere;
+}
+
+.ai-days {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+/* The ask panel */
+.ask-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.ask-ready {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ask-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.ask-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.ask-status {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.ask-status-error {
+  color: var(--c-signal-ink);
+}
+
+.ask-page {
+  max-inline-size: 720px;
+}
+
+.ask-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}

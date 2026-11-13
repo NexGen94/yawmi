@@ -1,5 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'preact/hooks';
 
+import { flushFirst } from '../../ai/flushFirst';
+import { acceptInsight } from '../../ai/guard';
+import { type AiResult, unwrapAi, useAi } from '../../ai/useAi';
+import { api } from '../../api/client';
 import type { components } from '../../api/schema';
 import { logMood, saveJournal } from '../../data/events';
 import type { JournalEntryOut, MoodLogOut } from '../../data/pending';
@@ -11,6 +15,7 @@ import { CheckRow } from '../../ui/CheckRow';
 import { Field } from '../../ui/Field';
 import { Slider } from '../../ui/Slider';
 import { ActivityChips } from './ActivityChips';
+import { ClosureAi, type Summary } from './ClosureAi';
 import { ClosureCard } from './ClosureCard';
 import { clearSaved, markSaved, readDraft, writeDraft } from './draft';
 import { FeelingChips } from './FeelingChips';
@@ -133,6 +138,10 @@ export interface EveningFormProps {
   habitsKnown: boolean;
   doneCodes: readonly string[];
   closure: Closure;
+  /** `ai_lines` (2 until the settings are read). */
+  aiLines?: 1 | 2;
+  /** `ai_checkin`: with `morning` the AI summary belongs to the morning, and closing asks for none. */
+  aiCheckin?: 'morning' | 'evening';
   onSaved(record: SaveRecord): Promise<void>;
   /** The page can close this form too (the notice about yesterday's text does). */
   saveRef?: { current: (() => Promise<void>) | null };
@@ -160,6 +169,8 @@ function Score(props: { label: string; value: number | null; onChange(v: number)
  *  queues one `journal_saved` (and the mood too if it was chosen and not logged yet). */
 export function EveningForm(props: EveningFormProps) {
   const { day, morning, evening, entries, mood, habits, habitsKnown, doneCodes, closure, onSaved, saveRef } = props;
+  const aiLines = props.aiLines ?? 2;
+  const aiCheckin = props.aiCheckin ?? 'evening';
   const draft = readDraft<EveningState>(day, 'evening');
   const [state, setState] = useState<EveningState>(() => {
     const restored = isState(draft) ? draft : undefined;
@@ -174,6 +185,31 @@ export function EveningForm(props: EveningFormProps) {
   latest.current = state;
   const outcomeId = useId();
   const switchId = useId();
+  const ai = useAi();
+  const [summary, setSummary] = useState<Summary>({ kind: 'none' });
+  const linesNow = useRef(aiLines);
+  linesNow.current = aiLines;
+  const turn = useRef(0);
+
+  /** The AI summary of the day just closed. The journal was queued first; the queue is sent before
+   *  the request, so the server builds its sources from what was written. A failure of any kind
+   *  leaves the day closed and says «تعذّر التحليل اليوم» (the guard refusing a reply counts). */
+  const askSummary = async (prompt: boolean): Promise<void> => {
+    const mine = ++turn.current;
+    setSummary({ kind: 'loading' });
+    await flushFirst();
+    const result: AiResult<components['schemas']['InsightOut']> = await ai.run(
+      () => api.POST('/v1/day/close', { body: { day, regenerate: false } }).then(unwrapAi),
+      { prompt },
+    );
+    if (mine !== turn.current) return;
+    if (result.kind === 'ok') {
+      const accepted = acceptInsight(result.value, linesNow.current);
+      setSummary(accepted === null ? { kind: 'error' } : { kind: 'ok', insight: accepted });
+    } else if (result.kind === 'consent_required') setSummary({ kind: 'consent' });
+    else if (result.kind === 'offline') setSummary({ kind: 'offline' });
+    else setSummary({ kind: 'error' });
+  };
 
   useEffect(() => {
     if (touched.current) writeDraft(day, 'evening', state);
@@ -266,6 +302,8 @@ export function EveningForm(props: EveningFormProps) {
           if (moodId !== null && refused.has(moodId)) setLogged(before);
         },
       });
+      // The day is closed and saved whatever the AI does: its summary comes after, on its own.
+      if (aiCheckin === 'evening') void askSummary(false);
     });
 
   const closeNow = useRef(close);
@@ -286,6 +324,16 @@ export function EveningForm(props: EveningFormProps) {
         </p>
       ) : (
         <ClosureCard day={day} closed={closure.closed} />
+      )}
+
+      {aiCheckin === 'evening' && closure.closed && (
+        <ClosureAi
+          day={day}
+          summary={summary}
+          maxLines={aiLines}
+          stored={summary.kind === 'none'}
+          onAsk={() => void askSummary(true)}
+        />
       )}
 
       <section class="day-section">
@@ -446,6 +494,7 @@ export function EveningForm(props: EveningFormProps) {
           إغلاق اليوم
         </Button>
       </div>
+      {ai.dialog}
     </Card>
   );
 }

@@ -247,6 +247,8 @@ describe('home: the day summary', () => {
 
   it('draws the morning insight lines with the number of sources, and says it is an estimate', async () => {
     routeFetch(fetchMock, {
+      // ai_checkin = 'morning' (design 4.1): the summary shows before the closing
+      settings: { ai_checkin: 'morning' },
       today: todayOut(STORY_HABITS, {
         insight: morningInsight({
           lines: ['إنجاز العادات أعلى في أيام المشي.', 'المحطة O1 متأخرة يومين.'],
@@ -577,6 +579,7 @@ describe('home: details', () => {
   it('writes the open-priorities count and the sources in the digits setting', async () => {
     setDigits('arab');
     routeFetch(fetchMock, {
+      settings: { ai_checkin: 'morning', digits: 'arab' },
       today: todayOut(STORY_HABITS, {
         insight: morningInsight({ lines: ['سطر'], priorities: [], question: null, source_ids: ['a', 'b', 'c'] }),
       }),

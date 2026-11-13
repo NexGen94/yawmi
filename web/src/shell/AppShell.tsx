@@ -5,6 +5,7 @@ import { useEffect } from 'preact/hooks';
 import { onUnauthorized } from '../api/auth';
 import { installShortcuts } from '../lib/keys';
 import { navigate } from '../lib/navigate';
+import { AskDrawer } from './AskDrawer';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 
@@ -53,6 +54,7 @@ export function AppShell(props: { children?: ComponentChildren }) {
           {props.children}
         </main>
       </div>
+      <AskDrawer />
     </div>
   );
 }
