@@ -154,6 +154,12 @@
 
 /* ---------- The journal ---------- */
 
+.review-section-title {
+  margin: 0;
+  font-size: var(--fs-section);
+  font-weight: 600;
+}
+
 .review-month-text {
   margin: 0;
   line-height: var(--lh);

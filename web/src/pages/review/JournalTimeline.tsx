@@ -143,6 +143,7 @@ export function JournalTimeline({ today }: { today: Day }) {
             </li>
           ))}
         </ul>
+        <h2 class="review-section-title">الإدخالات</h2>
         <ol class="review-entries" aria-label="إدخالات اليوميات">
           {visible.map((entry, i) => {
             // the mood of a day sits with the last part of that day that was written

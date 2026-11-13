@@ -487,6 +487,13 @@ describe('the journal tab', () => {
     expect(headings[headings.length - 1]).toContain('31 أكتوبر');
   });
 
+  it('the entries come under a heading of their own, so the headings go from 1 to 2 to 3', async () => {
+    serveJournal();
+    await openReview('/review?tab=journal');
+    await screen.findByRole('list', { name: 'إدخالات اليوميات' });
+    expect(screen.getByRole('heading', { level: 2, name: 'الإدخالات' })).toBeTruthy();
+  });
+
   it('shows the words of an entry', async () => {
     serveJournal();
     await openReview('/review?tab=journal');
