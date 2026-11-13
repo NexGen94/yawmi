@@ -10,7 +10,7 @@ export function QuickAccess() {
     <Card title="وصول سريع" class="quick-access">
       <div class="quick-list">
         <LinkButton href="/habits">تسجيل عادة</LinkButton>
-        <LinkButton href="/goals">عادة من هدف</LinkButton>
+        <LinkButton href="/habits/new?source=goal">عادة من هدف</LinkButton>
         <Button onClick={openAsk}>سؤال</Button>
       </div>
     </Card>

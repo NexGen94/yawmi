@@ -748,6 +748,24 @@ describe('a habit from a goal', () => {
   });
 });
 
+describe('a link without a goal (the home page): ?source=goal', () => {
+  it('opens on the «من هدف» source with the list of goals, and asks for no draft yet', async () => {
+    serve({});
+    mount('/habits/new?source=goal');
+    await screen.findByRole('heading', { level: 1, name: 'عادة جديدة' });
+    expect(screen.getByRole('radio', { name: 'من هدف' }).getAttribute('aria-checked')).toBe('true');
+    expect(await screen.findByRole('list', { name: 'الأهداف' })).toBeTruthy();
+    expect(calls.some((c) => c.path.endsWith('/to-habit'))).toBe(false);
+  });
+
+  it('a link without that word opens on the free source, as before', async () => {
+    serve({});
+    mount('/habits/new');
+    await screen.findByRole('heading', { level: 1, name: 'عادة جديدة' });
+    expect(screen.getByRole('radio', { name: 'حرة' }).getAttribute('aria-checked')).toBe('true');
+  });
+});
+
 describe('a draft from a link (the goal page): the owner rulings of D-067 item 5', () => {
   it('a nights indicator opens as a yes/no habit with a weekly target of 5 (M-4)', async () => {
     serve({

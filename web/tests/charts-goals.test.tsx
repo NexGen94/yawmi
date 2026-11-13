@@ -2,7 +2,9 @@
 import { render } from '@testing-library/preact';
 import { describe, expect, it } from 'vitest';
 
+import { PaceLine } from '../src/charts/PaceLine';
 import { Timeline } from '../src/charts/Timeline';
+import type { PaceOut } from '../src/goals/types';
 import { cycles, milestone, milestones, TODAY } from './helpers/goals-fixtures';
 
 const LABEL = 'الخط الزمني للخطة';
@@ -150,5 +152,143 @@ describe('Timeline', () => {
   it('with nothing to draw it says there is no data yet', () => {
     const { svg } = draw({ cycles: [], milestones: [] });
     expect(svg.getAttribute('aria-label')).toBe(`${LABEL}: لا بيانات بعد`);
+  });
+});
+
+// The example of design 9.4: start 2026-11-01 at 0, due 2026-12-31 at 12, today 2026-11-16, value 2.
+const PACE: PaceOut = {
+  basis: 'kpi',
+  kpi_code: 'books_done',
+  unit: 'كتاب',
+  start_day: '2026-11-01',
+  start_value: 0,
+  due_day: '2026-12-31',
+  target_value: 12,
+  today: '2026-11-16',
+  current_value: 2,
+  expected_today: 3,
+  projected_end: 8,
+  on_pace: false,
+  days_left: 45,
+  readings: [
+    { day: '2026-11-03', value: 1 },
+    { day: '2026-11-16', value: 2 },
+  ],
+};
+const PACE_LABEL = 'وتيرة الهدف';
+
+function drawPace(over: Partial<PaceOut> = {}) {
+  const view = render(<PaceLine pace={{ ...PACE, ...over }} label={PACE_LABEL} />);
+  const svg = view.container.querySelector('svg[role="img"]') as SVGSVGElement;
+  return { ...view, svg };
+}
+
+describe('PaceLine', () => {
+  it('says the value, the expected value today and the days left in its label (design 9.4)', () => {
+    const { svg } = drawPace();
+    const label = svg.getAttribute('aria-label') ?? '';
+    expect(label).toContain(PACE_LABEL);
+    expect(label).toContain('القيمة 2');
+    expect(label).toContain('المتوقع اليوم 3');
+    expect(label).toContain('45 يوماً');
+  });
+
+  it('draws the expected line dashed and the actual line solid, each with a text label', () => {
+    const { container } = drawPace();
+    const expected = container.querySelector('.pace-expected') as Element;
+    const actual = container.querySelector('.pace-actual') as Element;
+    expect(expected).toBeTruthy();
+    expect(actual).toBeTruthy();
+    // a different stroke pattern: the lines never differ by colour alone
+    expect(expected.getAttribute('stroke-dasharray') ?? '').not.toBe('');
+    expect(actual.getAttribute('stroke-dasharray')).toBeNull();
+    const words = Array.from(container.querySelectorAll('text')).map((t) => t.textContent);
+    expect(words).toContain('المتوقع');
+    expect(words).toContain('الفعلي');
+  });
+
+  it('draws the actual line from the readings, the first reading at the start side (the right)', () => {
+    const { container } = drawPace();
+    const points = (container.querySelector('.pace-actual') as Element)
+      .getAttribute('points')!
+      .trim()
+      .split(/\s+/)
+      .map((p) => p.split(',').map(Number) as [number, number]);
+    expect(points).toHaveLength(2);
+    expect(points[0]![0]).toBeGreaterThan(points[1]![0]);
+    // the later reading is the higher value, so it sits higher (a smaller y)
+    expect(points[1]![1]).toBeLessThan(points[0]![1]);
+  });
+
+  it('with no current value draws the expected line alone and says there is no reading yet', () => {
+    const { container, svg } = drawPace({ current_value: null, projected_end: null, on_pace: null, readings: [] });
+    expect(container.querySelector('.pace-expected')).toBeTruthy();
+    expect(container.querySelector('.pace-actual')).toBeNull();
+    expect(container.querySelector('.pace-dot')).toBeNull();
+    expect(Array.from(container.querySelectorAll('text')).map((t) => t.textContent)).toContain('لا قراءة بعد');
+    const label = svg.getAttribute('aria-label') ?? '';
+    expect(label).toContain('لا قراءة بعد');
+    expect(label).toContain('المتوقع اليوم 3');
+  });
+
+  it('draws a lone value (a pace over milestones has no readings) as a dot at today', () => {
+    const { container } = drawPace({ basis: 'milestones', kpi_code: null, unit: null, readings: [] });
+    expect(container.querySelector('.pace-actual')).toBeNull();
+    expect(container.querySelector('.pace-dot')).toBeTruthy();
+  });
+
+  it('after the due day says how many days past it, not a negative count', () => {
+    const { svg } = drawPace({ today: '2027-01-05', days_left: -5, expected_today: 12 });
+    const label = svg.getAttribute('aria-label') ?? '';
+    expect(label).toContain('تجاوز الموعد بـ5 أيام');
+    expect(label).not.toContain('-5');
+  });
+
+  it('with nothing to measure (a target of zero) draws no line and invents no pace', () => {
+    const { container, svg } = drawPace({
+      target_value: 0,
+      expected_today: 0,
+      current_value: null,
+      projected_end: null,
+      on_pace: null,
+      readings: [],
+    });
+    expect(container.querySelector('.pace-expected')).toBeNull();
+    expect(svg.getAttribute('aria-label')).toBe(`${PACE_LABEL}: لا شيء يُقاس بعد`);
+  });
+
+  it('gives every <text> an explicit text-anchor and direction="rtl"', () => {
+    const { container } = drawPace();
+    for (const text of Array.from(container.querySelectorAll('text'))) {
+      expect(text.getAttribute('text-anchor'), text.outerHTML).toMatch(/^(start|middle|end)$/);
+      expect(text.getAttribute('direction'), text.outerHTML).toBe('rtl');
+    }
+  });
+
+  it('keeps «الفعلي» above the dot when the value sits on the baseline, clear of the start date', () => {
+    // the first weeks of every outcome: a value of 0 and an expected value a little above it
+    const { container } = drawPace({ current_value: 0, expected_today: 0.014, on_pace: false, projected_end: 0, readings: [] });
+    const dot = container.querySelector('.pace-dot') as Element;
+    const word = container.querySelector('.pace-word-actual') as Element;
+    expect(Number(word.getAttribute('y'))).toBeLessThan(Number(dot.getAttribute('cy')));
+  });
+
+  it('never writes a value that is not zero as «0»: a small expected value keeps two decimals', () => {
+    const { svg } = drawPace({ current_value: 0, expected_today: 0.014, on_pace: false, projected_end: null, readings: [] });
+    const label = svg.getAttribute('aria-label') ?? '';
+    expect(label).toContain('المتوقع اليوم 0.01');
+    expect(label).not.toMatch(/المتوقع اليوم 0(،|$)/);
+  });
+
+  it('says «أقل من 0.01» for a value smaller than that, never «0»', () => {
+    const { svg } = drawPace({ current_value: 0, expected_today: 0.001, on_pace: false, projected_end: null, readings: [] });
+    expect(svg.getAttribute('aria-label')).toContain('المتوقع اليوم أقل من 0.01');
+  });
+
+  it('keeps one decimal for values of 1 and over, and writes a whole number without decimals', () => {
+    const { svg } = drawPace({ current_value: 2, expected_today: 3.04, projected_end: 8 });
+    const label = svg.getAttribute('aria-label') ?? '';
+    expect(label).toContain('القيمة 2،');
+    expect(label).toContain('المتوقع اليوم 3،');
   });
 });

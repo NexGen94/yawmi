@@ -1,0 +1,363 @@
+/* The goal page (task 16). Colors only through the tokens; logical properties only. */
+
+.gd-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-4);
+  margin-block-end: var(--sp-4);
+}
+
+.page .gd-head h1 {
+  margin-block-end: 0;
+}
+
+.gd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-block-end: var(--sp-6);
+}
+
+.gd-actions .gd-none {
+  margin: 0;
+}
+
+.gd-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-inline-size: 0;
+}
+
+.gd-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.gd-none {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-body);
+}
+
+.gd-acceptance {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--fs-body);
+  line-height: var(--lh);
+}
+
+.gd-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+}
+
+.gd-facts dt {
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.gd-facts dd {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+.card .pace {
+  margin-block-end: var(--sp-4);
+}
+
+.card .pace + .gd-facts {
+  margin-block-end: var(--sp-3);
+}
+
+/* The links of the page are in the ink, underlined: the browser's own blue is no colour of the plan. */
+.page-cols a:not(.btn) {
+  color: var(--c-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--c-blue);
+  text-underline-offset: 3px;
+}
+
+.page-cols a:not(.btn):hover {
+  text-decoration-color: var(--c-ink);
+}
+
+/* ---------- One editable value ---------- */
+
+.edit-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  min-inline-size: 0;
+}
+
+.edit-label {
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.edit-value {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-body);
+}
+
+.edit-open {
+  min-block-size: var(--hit);
+  padding-inline: var(--sp-3);
+  border: 0;
+  background: transparent;
+  color: var(--c-ink);
+  font: inherit;
+  font-size: var(--fs-note);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.edit-open:disabled {
+  color: var(--c-ink-2);
+  text-decoration: none;
+  cursor: not-allowed;
+}
+
+.edit-open:focus-visible,
+.edit-toggle-label:has(input:focus-visible),
+.lh-plus:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--focus);
+}
+
+.edit-offline {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.edit-error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--c-signal-ink);
+  font-size: var(--fs-note);
+}
+
+.edit-form {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-3);
+}
+
+.edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.edit-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-block-size: var(--hit);
+  border-radius: 12px;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.edit-toggle-label input {
+  inline-size: 24px;
+  block-size: 24px;
+  margin: 0;
+  accent-color: var(--c-ink);
+}
+
+.edit-select {
+  flex-direction: column;
+  align-items: stretch;
+  margin-block-end: var(--sp-4);
+}
+
+/* ---------- Milestones ---------- */
+
+.ms-list,
+.lh-list,
+.task-list,
+.log-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ms-row,
+.log-row {
+  padding-block: var(--sp-4);
+  border-block-end: 1px solid var(--c-blue-pale);
+}
+
+.ms-row:first-child,
+.log-row:first-child {
+  padding-block-start: 0;
+}
+
+.ms-row:last-child,
+.log-row:last-child {
+  padding-block-end: 0;
+  border-block-end: 0;
+}
+
+.ms-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.ms-title,
+.ms-head a {
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+/* The title is a row heading and a link: a target of 44px, not a line of text. */
+.ms-head a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--hit);
+}
+
+.ms-criterion {
+  margin: var(--sp-1) 0 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.ms-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin-block-start: var(--sp-2);
+}
+
+.ms-fields .edit-label {
+  flex: none;
+  inline-size: 4.5em;
+}
+
+.ms-row > .edit-offline {
+  margin-block-start: var(--sp-1);
+}
+
+/* ---------- Linked habits ---------- */
+
+.lh-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-block: var(--sp-3);
+  border-block-end: 1px solid var(--c-blue-pale);
+}
+
+.lh-row:last-child {
+  border-block-end: 0;
+}
+
+.lh-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-inline-size: 0;
+}
+
+.lh-main a {
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.lh-meta,
+.lh-done {
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.lh-plus {
+  flex: none;
+  min-inline-size: var(--hit);
+  min-block-size: var(--hit);
+  padding-inline: var(--sp-3);
+  border: 1px solid var(--c-blue);
+  border-radius: var(--radius-pill);
+  background: var(--c-surface);
+  color: var(--c-ink);
+  font: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lh-plus:hover {
+  background: var(--c-blue-pale);
+}
+
+.lh-new {
+  margin-block-start: var(--sp-3);
+}
+
+/* ---------- Tasks ---------- */
+
+.task-count {
+  margin: 0 0 var(--sp-2);
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+  font-weight: 600;
+}
+
+.task-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-block-start: var(--sp-4);
+}
+
+/* ---------- The log of edits ---------- */
+
+.log-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.log-what {
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.log-change {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-body);
+  overflow-wrap: anywhere;
+}
+
+.log-meta {
+  margin: var(--sp-1) 0 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.log-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-block-start: var(--sp-2);
+}
