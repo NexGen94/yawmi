@@ -113,6 +113,8 @@ for (const c of CASES) {
     await expectNoHorizontalScroll(page);
     await shot(page, `${c.slug}-loading`);
     release();
+    // The held answers come: the page finishes drawing before the route is taken away.
+    await settle(page, c.heading);
     await page.unroute('**/v1/**');
 
     // As loaded.
