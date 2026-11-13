@@ -5,7 +5,7 @@
 export type Digits = 'latn' | 'arab';
 
 /** Nouns that `fmt.count` knows. The whole table lives here so no later task edits this file. */
-export type Noun = 'day' | 'minute' | 'hour' | 'second' | 'session' | 'time' | 'milestone' | 'item';
+export type Noun = 'day' | 'minute' | 'hour' | 'second' | 'session' | 'time' | 'milestone' | 'item' | 'habit' | 'cycle' | 'priority';
 
 interface Forms {
   /** Exactly one: the noun alone, without a numeral. */
@@ -27,6 +27,9 @@ const NOUNS: Record<Exclude<Noun, 'second'>, Forms> = {
   session: { one: 'جلسة', two: 'جلستان', few: 'جلسات', many: 'جلسة', gen: 'جلسة' },
   time: { one: 'مرة', two: 'مرتان', few: 'مرات', many: 'مرة', gen: 'مرة' },
   milestone: { one: 'محطة', two: 'محطتان', few: 'محطات', many: 'محطة', gen: 'محطة' },
+  habit: { one: 'عادة', two: 'عادتان', few: 'عادات', many: 'عادة', gen: 'عادة' },
+  cycle: { one: 'دورة', two: 'دورتان', few: 'دورات', many: 'دورة', gen: 'دورة' },
+  priority: { one: 'أولوية', two: 'أولويتان', few: 'أولويات', many: 'أولوية', gen: 'أولوية' },
   item: { one: 'بند واحد', two: 'بندان', few: 'بنود', many: 'بنداً', gen: 'بند' },
 };
 

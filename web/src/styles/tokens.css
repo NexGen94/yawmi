@@ -20,6 +20,8 @@
 
   /* Type: IBM Plex Sans Arabic 400 and 600, self-hosted by index.css, with system fallbacks */
   --font: "IBM Plex Sans Arabic", system-ui, sans-serif;
+  /* The face of the outcome codes (O1 to O12): its letter O is round, so it is never read as a zero */
+  --font-code: "Segoe UI", system-ui, Arial, sans-serif;
   --fs-title: 28px;
   --fs-section: 17px;
   --fs-body: 15px;
