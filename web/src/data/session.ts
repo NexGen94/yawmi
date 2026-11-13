@@ -7,13 +7,17 @@ import { clearAllDrafts } from './drafts';
 const DEVICE_ID_KEY = 'device_id';
 const DEVICE_NAME_KEY = 'device_name';
 
+/** «في الطابور تسجيل واحد لم يُرسَل. الخروج يحذفه.»: the verb and the pronoun agree with the counted
+ *  noun. One and two are masculine singular and dual. From three up the referent is a plural of
+ *  things, so the feminine singular («لم تُرسَل ... يحذفها»); the noun is «تسجيلات» to 10, «تسجيلاً»
+ *  from 11 to 99, and «تسجيل» from 100. */
 function formatUnsentCountMessage(count: number): string {
-  let countStr = `${count} تسجيلات`;
-  if (count === 1) countStr = 'تسجيل واحد';
-  else if (count === 2) countStr = 'تسجيلان';
-  else if (count >= 3 && count <= 10) countStr = `${count} تسجيلات`;
-  else if (count >= 11) countStr = `${count} تسجيلاً`;
-  return `في الطابور ${countStr} لم تُرسل. الخروج يحذفها.`;
+  if (count === 1) return 'في الطابور تسجيل واحد لم يُرسَل. الخروج يحذفه.';
+  if (count === 2) return 'في الطابور تسجيلان لم يُرسَلا. الخروج يحذفهما.';
+  let noun = 'تسجيلات';
+  if (count >= 100) noun = 'تسجيل';
+  else if (count >= 11) noun = 'تسجيلاً';
+  return `في الطابور ${count} ${noun} لم تُرسَل. الخروج يحذفها.`;
 }
 
 /**

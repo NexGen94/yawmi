@@ -199,7 +199,9 @@ describe('SettingsPage real route driving four states', () => {
 
     render(<SettingsPage />);
 
-    await screen.findByText(/نسخة محفوظة · بلا اتصال/);
+    // N-2: the device record is local data, not a saved reply of the server: the badge says only «بلا اتصال»
+    await screen.findByText('بلا اتصال');
+    expect(screen.queryByText(/نسخة محفوظة/)).toBeNull();
     expect(screen.getByText('متصفح العمل')).toBeTruthy();
 
     const logoutBtn = screen.getByRole('button', { name: 'خروج' });

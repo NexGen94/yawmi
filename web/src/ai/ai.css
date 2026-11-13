@@ -1,0 +1,102 @@
+/* The consent dialog and the ask panel (task 20), loaded with the lazy chunks that draw them. The reply
+   card, the cards of the sources and the chips of «أسئلة أخرى» are in insight.css, which home also
+   loads. Colors only through the tokens; logical properties only. */
+
+.ai-consent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.ai-consent-lead,
+.ai-error {
+  margin: 0;
+}
+
+.ai-error {
+  color: var(--c-signal-ink);
+  font-size: var(--fs-note);
+}
+
+.ai-consent-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding-inline-start: var(--sp-5);
+}
+
+.ai-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-block-size: var(--hit);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-switch input {
+  flex: none;
+  inline-size: 24px;
+  block-size: 24px;
+  accent-color: var(--c-ink);
+}
+
+/* The key shows the ring of the app when the keyboard reaches it, not the thin default one. */
+.ai-switch input:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--focus);
+}
+
+.ai-paused {
+  align-items: flex-start;
+}
+
+/* The ask panel */
+.ask-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.ask-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.ask-ready {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ask-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.ask-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.ask-status {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.ask-status-error {
+  color: var(--c-signal-ink);
+}
+
+.ask-page {
+  max-inline-size: 720px;
+}

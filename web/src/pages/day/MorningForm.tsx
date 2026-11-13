@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 
+import { ConsentNotice } from '../../ai/ConsentDialog';
+import { DeeperBlock } from '../../ai/DeeperBlock';
+import { acceptInsight, type GroundedInsight, UNAVAILABLE_TEXT } from '../../ai/guard';
+import { InsightCard } from '../../ai/InsightCard';
+import { unwrapAi, useAi } from '../../ai/useAi';
+import { api } from '../../api/client';
 import type { components } from '../../api/schema';
 import { saveJournal } from '../../data/events';
 import type { JournalEntryOut } from '../../data/pending';
 import type { Day } from '../../domain/types';
 import { fmt } from '../../lib/format';
+import { OFFLINE_NOTE } from '../../lib/notes';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
@@ -14,7 +21,7 @@ import { clearSaved, readDraft, markSaved, writeDraft } from './draft';
 import { GratitudeFields } from './GratitudeFields';
 import { LIMITS } from './limits';
 import type { SaveRecord } from './SaveStatus';
-import { sourceLabel } from './sourceLabel';
+import { cardLabel, sourceLabel } from './sourceLabel';
 import type { DayHabit, TodayOut } from './useDayData';
 
 type MorningAnswers = components['schemas']['MorningAnswers'];
@@ -71,7 +78,7 @@ function fromEntry(answers: JournalEntryOut['answers']): MorningState {
   };
 }
 
-function fromInsight(insight: TodayOut['insight']): MorningState {
+function fromInsight(insight: GroundedInsight | null | undefined): MorningState {
   const proposed = insight?.priorities ?? [];
   return {
     slots: Array.from({ length: SLOTS }, (_, i): Slot => {
@@ -95,6 +102,12 @@ export interface MorningFormProps {
   /** The saved (or queued) morning of this day, if any. */
   entry: JournalEntryOut | undefined;
   insight: TodayOut['insight'];
+  /** `ai_lines` (2 until the settings are read). */
+  aiLines?: 1 | 2;
+  /** `ai_checkin`: with `morning` the card of the day summary is on this page. */
+  aiCheckin?: 'morning' | 'evening';
+  /** The visit asks for the morning insight once by itself (today is read, it has no insight yet). */
+  autoSuggest?: boolean;
   /** Today's habits, to name a suggestion that comes from one. */
   habits: readonly DayHabit[];
   onSaved(record: SaveRecord): Promise<void>;
@@ -104,13 +117,22 @@ export interface MorningFormProps {
 
 /** The morning card: priorities (proposed ones to accept or replace), planned minutes, one line of
  *  enthusiasm, up to three gratitude lines and the free text. Saving queues one `journal_saved`. */
-export function MorningForm({ day, entry, insight, habits, onSaved, saveRef }: MorningFormProps) {
+export function MorningForm({ day, entry, insight, habits, onSaved, saveRef, ...rest }: MorningFormProps) {
+  const aiLines = rest.aiLines ?? 2;
+  const aiCheckin = rest.aiCheckin ?? 'evening';
+  // A stored insight may be older than task 18 (no cards): its words still show, so it is looked at
+  // without asking for its cards. One that breaks a limit is not shown.
+  const stored = insight ? acceptInsight(insight, aiLines, { cardsOptional: true }) : null;
   const draft = readDraft<MorningState>(day, 'morning');
   const [state, setState] = useState<MorningState>(() => {
     if (isState(draft)) return draft;
-    return entry ? fromEntry(entry.answers) : fromInsight(insight);
+    return entry ? fromEntry(entry.answers) : fromInsight(stored);
   });
   const [busy, setBusy] = useState(false);
+  const ai = useAi();
+  const [ask, setAsk] = useState<'idle' | 'loading' | 'consent' | 'offline' | 'error'>('idle');
+  const [proposal, setProposal] = useState<GroundedInsight | null>(null);
+  const autoAsked = useRef(false);
   // The draft mirrors the form only while it holds words that were not saved.
   const touched = useRef(isState(draft));
   const saving = useRef(false);
@@ -128,6 +150,46 @@ export function MorningForm({ day, entry, insight, habits, onSaved, saveRef }: M
     setState((s) => ({ ...s, ...patch }));
   };
   const setSlot = (i: number, slot: Slot): void => update({ slots: state.slots.map((s, j) => (j === i ? slot : s)) });
+
+  /** «اقتراح أولويات»: one request for the day, made when it is pressed (never by itself, and not
+   *  again after a log). The proposals fill the slots that hold no words of the person. */
+  const suggest = async (auto = false): Promise<void> => {
+    if (!auto) setAsk('loading');
+    // The visit's own call never opens the consent dialog nobody asked for: without a consent the
+    // notice shows, with its button.
+    const result = await ai.run(() => api.POST('/v1/insights/morning', { body: { day, regenerate: false } }).then(unwrapAi), {
+      prompt: !auto,
+    });
+    if (result.kind === 'ok') {
+      const accepted = acceptInsight(result.value, aiLines);
+      if (accepted === null) return setAsk(auto ? 'idle' : 'error');
+      setProposal(accepted);
+      setAsk('idle');
+      // Not words of the person: no draft is made of them.
+      setState((s) => ({
+        ...s,
+        slots: s.slots.map((slot, i): Slot => {
+          const p = accepted.priorities[i];
+          const free = slot.mode === 'suggested' || (slot.mode === 'own' && slot.title.trim() === '');
+          return p && free ? { title: p.title, source_id: p.source_id, goal_ref: null, mode: 'suggested' } : slot;
+        }),
+      }));
+    } else if (result.kind === 'consent_required') setAsk('consent');
+    else if (auto) setAsk('idle'); // a failed visit call is silent: the button asks again
+    else if (result.kind === 'offline') setAsk('offline');
+    else setAsk('error');
+  };
+
+  // One automatic call per visit: the guard is a ref, so a log, a re-render or a new reading of the
+  // queue cannot make a second one.
+  useEffect(() => {
+    if (!rest.autoSuggest || entry !== undefined || autoAsked.current) return;
+    autoAsked.current = true;
+    void suggest(true);
+  }, [rest.autoSuggest]);
+
+  const shown: GroundedInsight | null = proposal ?? stored;
+  const cards = shown?.cards ?? [];
 
   const save = async (): Promise<void> => {
     if (saving.current) return; // a second click while the first is on its way
@@ -178,13 +240,46 @@ export function MorningForm({ day, entry, insight, habits, onSaved, saveRef }: M
 
   return (
     <Card title="يومية الصباح" class="day-form">
+      {aiCheckin === 'morning' && insight && stored === null && proposal === null && (
+        <section class="day-ai" aria-label="ملخص اليوم من الذكاء">
+          <p class="ai-note">{UNAVAILABLE_TEXT}</p>
+        </section>
+      )}
+      {aiCheckin === 'morning' && shown !== null && (
+        <Card title="ملخص اليوم من الذكاء" headingLevel={3} class="day-ai">
+          <InsightCard insight={shown} maxLines={aiLines} hideQuestion={Boolean(shown.question)}>
+            {shown.question && <DeeperBlock day={day} question={shown.question} />}
+          </InsightCard>
+        </Card>
+      )}
       <section class="day-section" aria-labelledby="m-priorities">
         <h3 id="m-priorities" class="day-h">
           الأولويات
         </h3>
+        <div class="day-suggest">
+          <Button disabled={ask === 'loading'} onClick={() => void suggest()}>
+            اقتراح أولويات
+          </Button>
+          {ask === 'loading' && (
+            <p class="day-note" role="status">
+              جارٍ التحليل
+            </p>
+          )}
+          {ask === 'offline' && (
+            <p class="day-note" role="status">
+              {OFFLINE_NOTE}
+            </p>
+          )}
+          {ask === 'error' && (
+            <p class="day-note" role="alert">
+              {UNAVAILABLE_TEXT}
+            </p>
+          )}
+          {ask === 'consent' && <ConsentNotice onEnable={() => void suggest()} />}
+        </div>
         <ol class="day-slots">
           {state.slots.map((slot, i) => {
-            const source = slot.source_id === null ? null : sourceLabel(slot.source_id, habits);
+            const source = slot.source_id === null ? null : (cardLabel(slot.source_id, cards) ?? sourceLabel(slot.source_id, habits));
             return (
               <li key={i}>
                 {slot.mode === 'own' ? (
@@ -274,6 +369,7 @@ export function MorningForm({ day, entry, insight, habits, onSaved, saveRef }: M
           حفظ الصباح
         </Button>
       </div>
+      {ai.dialog}
     </Card>
   );
 }

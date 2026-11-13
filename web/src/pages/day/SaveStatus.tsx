@@ -134,11 +134,11 @@ export function useSaveStatus(args: SaveStatusArgs): { onSaved(record: SaveRecor
   const onUndo = useCallback(async (): Promise<void> => {
     if (record === null) return;
     const results = await Promise.all(record.ids.map((id) => discard(id)));
+    // The form hears of it first: a reading of the queue that finds the events gone must not look
+    // like «sent» to what waits for that (the closing summary).
+    if (results.every(Boolean)) record.onUndone?.();
     await refreshPending();
-    if (results.every(Boolean)) {
-      record.onUndone?.();
-      setLast({ record, undone: true });
-    }
+    if (results.every(Boolean)) setLast({ record, undone: true });
     // Otherwise an event was sent a moment ago: the line now says so by itself.
   }, [record, refreshPending]);
 

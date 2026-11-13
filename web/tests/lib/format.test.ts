@@ -142,3 +142,17 @@ describe('fmt.day and fmt.hijri', () => {
     expect(fmt.day('2028-02-29')).toContain('فبراير');
   });
 });
+
+describe('fmt.dayShort', () => {
+  it('writes the day and the month without the weekday or the year', () => {
+    setDigits('latn');
+    expect(fmt.dayShort('2026-11-09')).toBe('9 نوفمبر');
+  });
+
+  it('follows the digits setting, and gives a dash for a bad day', () => {
+    setDigits('arab');
+    expect(fmt.dayShort('2026-11-09')).toBe('٩ نوفمبر');
+    setDigits('latn');
+    expect(fmt.dayShort('not a day')).toBe('—');
+  });
+});

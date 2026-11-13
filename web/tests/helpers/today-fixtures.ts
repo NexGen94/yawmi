@@ -141,6 +141,8 @@ export interface ServerData {
   reviews?: InsightOut[];
   /** `GET /v1/habits/{code}/progress`, by habit code; a habit without one answers 404. */
   progress?: Record<string, ProgressOut>;
+  /** `GET /v1/settings` (the keys given over the defaults); without it the settings are unread (404). */
+  settings?: Record<string, unknown>;
 }
 
 const json = (body: unknown, status = 200): Response =>
@@ -174,6 +176,10 @@ export function routeFetch(
         return json({ entries: data.journal ?? [] });
       case '/v1/reviews':
         return json({ items: data.reviews ?? [] });
+      case '/v1/settings':
+        return data.settings
+          ? json({ ai_checkin: 'evening', ai_lines: 2, ai_tone: 'direct', digits: 'latn', mission: '', vision: '', ...data.settings })
+          : json({ detail: 'not found' }, 404);
       default:
         return json({ detail: 'not found' }, 404);
     }

@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { useEffect, useMemo } from 'preact/hooks';
 
+import { acceptInsight, type GroundedInsight } from '../../ai/guard';
 import { combine } from '../../data/combine';
 import { useGoals } from '../../goals/data';
 import { useHabitsToday } from '../../habits/useHabitsToday';
@@ -28,21 +29,30 @@ const CYCLE_DAYS = 56;
 /** The firm rule of the plan: the week starts on Sunday (design 13). */
 const WEEK_START = 'sun';
 
-/** The two lines under the day summary: the saved evening review once the day is closed, else the
- *  morning insight from `GET /v1/today` (which is not shown after closing). */
+/** The two lines under the day summary, by `ai_checkin` (design 4.1): with `morning` the morning
+ *  insight of `GET /v1/today` shows until the day is closed, and not after; with `evening` the saved
+ *  evening review shows once the day is closed, and not before. Both are stored rows, so a row older
+ *  than task 18 (no cards) still shows its words. One that breaks a limit is not shown. */
 function summaryInsight(
-  morning: { lines: string[]; question: string | null; source_ids: string[] } | null,
+  morning: GroundedInsight | null,
   entries: DayEntries,
+  checkin: 'morning' | 'evening',
+  maxLines: 1 | 2,
 ): SummaryInsight | null {
-  const source = entries.closed
-    ? entries.review && { kicker: 'رؤية المساء', insight: entries.review }
-    : morning && { kicker: 'رؤية الصباح', insight: morning };
-  if (!source || source.insight.lines.length === 0) return null;
+  const source =
+    checkin === 'evening'
+      ? entries.closed && entries.review ? { kicker: 'رؤية المساء', insight: entries.review } : null
+      : !entries.closed && morning ? { kicker: 'رؤية الصباح', insight: morning } : null;
+  if (!source) return null;
+  const accepted = acceptInsight(source.insight, maxLines, { cardsOptional: true });
+  if (accepted === null || accepted.lines.length === 0) return null;
   return {
     kicker: source.kicker,
-    lines: source.insight.lines,
-    question: source.insight.question,
-    sourceCount: source.insight.source_ids.length,
+    lines: accepted.lines,
+    question: accepted.question,
+    sourceCount: accepted.source_ids.length,
+    cards: accepted.cards ?? [],
+    days: accepted.days ?? [],
   };
 }
 
@@ -78,7 +88,12 @@ export default function HomePage() {
   }, [counted, badge]);
 
   const plan = habits.today?.plan;
-  const insight = summaryInsight(habits.today?.insight ?? null, entries);
+  const insight = summaryInsight(
+    habits.today?.insight ?? null,
+    entries,
+    settings.data?.ai_checkin ?? 'evening',
+    settings.data?.ai_lines ?? 2,
+  );
 
   return (
     <>

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { Day } from '../../domain/types';
 import { fmt } from '../../lib/format';
+import { useSettings } from '../../settings/data';
 import { todayRiyadh } from '../../lib/today';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
@@ -58,6 +59,10 @@ export default function DayPage() {
   }, [part, route]);
 
   const data = useDayData();
+  // The AI parts follow the settings of the person; until they are read the defaults of the server stand.
+  const settings = useSettings();
+  const aiLines = settings.data?.ai_lines ?? 2;
+  const aiCheckin = settings.data?.ai_checkin ?? 'evening';
 
   // At Riyadh midnight the page moves to the new day, unless the open side holds words that were
   // not saved: then it stays on the day that ended until they are saved there or the person moves on.
@@ -141,6 +146,9 @@ export default function DayPage() {
         day={viewDay}
         entry={morning}
         insight={live ? (data.today?.insight ?? null) : null}
+        aiLines={aiLines}
+        aiCheckin={aiCheckin}
+        autoSuggest={live && data.today !== undefined && !data.today.insight}
         habits={habits}
         onSaved={onSaved}
         saveRef={saveRef}
@@ -157,6 +165,10 @@ export default function DayPage() {
         habitsKnown={habitsKnown}
         doneCodes={doneCodes}
         closure={{ closed: evening !== undefined, waiting, offline: data.offline }}
+        aiLines={aiLines}
+        aiCheckin={aiCheckin}
+        pending={data.pending}
+        quarantine={data.quarantine}
         onSaved={onSaved}
         saveRef={saveRef}
       />

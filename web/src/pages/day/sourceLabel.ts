@@ -1,4 +1,7 @@
+import type { components } from '../../api/schema';
 import type { DayHabit } from './useDayData';
+
+type SourceCard = components['schemas']['SourceCard'];
 
 export interface SourceLabel {
   /** The kind, in Arabic («هدف»). */
@@ -24,4 +27,14 @@ export function sourceLabel(sourceId: string, habits: readonly DayHabit[]): Sour
     return habit ? { kind, ref: habit.title } : null;
   }
   return { kind, ref };
+}
+
+const CARD_KINDS: Readonly<Record<string, string>> = { habit: 'عادة', milestone: 'محطة', outcome: 'هدف' };
+
+/** The name of a source from the card the server gave for it, when there is one for that source
+ *  (a stored row older than task 18 has none: `sourceLabel` then names it from its id). */
+export function cardLabel(sourceId: string, cards: readonly SourceCard[]): SourceLabel | null {
+  const card = cards.find((c) => c.source_id === sourceId);
+  const kind = card === undefined ? undefined : CARD_KINDS[card.kind];
+  return card === undefined || kind === undefined || card.label === '' ? null : { kind, ref: card.label };
 }
