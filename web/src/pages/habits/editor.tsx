@@ -1,5 +1,5 @@
 import { useLocation } from 'preact-iso';
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { useQuery } from '../../data/query';
 import { DRAFT_FAILED, requestDraft } from '../../habits/draft';
@@ -47,6 +47,16 @@ const TYPES: readonly { value: HabitType; label: string }[] = [
   { value: 'average', label: 'متوسط' },
   { value: 'abstain', label: 'امتناع' },
 ];
+/** The polarity a type has: only «امتناع» is abstain, the other four build. */
+const polarityOfType = (type: HabitType): 'build' | 'abstain' => (type === 'abstain' ? 'abstain' : 'build');
+
+/** The draft over the form, keeping what the person already touched. */
+function mergeUntouched(current: HabitForm, draft: HabitForm, touched: ReadonlySet<keyof HabitForm>): HabitForm {
+  const merged: HabitForm = { ...draft };
+  for (const key of touched) (merged as Record<keyof HabitForm, unknown>)[key] = current[key];
+  return merged;
+}
+
 const PERIODS: readonly { value: HabitPeriod; label: string }[] = [
   { value: 'day', label: 'يومية' },
   { value: 'week', label: 'أسبوعية' },
@@ -112,7 +122,16 @@ function EditorForm({ initial, data, prefill, notice }: EditorFormProps) {
   const [draftMessage, setDraftMessage] = useState<string | null>(null);
   const [polarityLocked, setPolarityLocked] = useState(data?.hasLogs ?? false);
 
+  // The fields the person changed: a draft that comes late fills the others and leaves these.
+  const touched = useRef(new Set<keyof HabitForm>());
+  const touch = (before: HabitForm, after: HabitForm): void => {
+    for (const key of Object.keys(after) as (keyof HabitForm)[]) {
+      if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) touched.current.add(key);
+    }
+  };
+
   const change = (next: HabitForm): void => {
+    touch(form, next);
     setForm(next);
     setServerErrors({});
     if (next.target_per_period !== Number(targetText)) setTargetText(String(next.target_per_period));
@@ -127,9 +146,12 @@ function EditorForm({ initial, data, prefill, notice }: EditorFormProps) {
       if (cancelled) return;
       setDrafting(null);
       if (result.ok) {
-        const next = fromDraft(result.draft, prefill.kpi);
-        setForm(next);
-        setTargetText(String(next.target_per_period));
+        const draft = fromDraft(result.draft, prefill.kpi);
+        setForm((current) => {
+          const next = mergeUntouched(current, draft, touched.current);
+          setTargetText(String(next.target_per_period));
+          return next;
+        });
       } else {
         setDraftMessage(DRAFT_FAILED);
       }
@@ -163,7 +185,13 @@ function EditorForm({ initial, data, prefill, notice }: EditorFormProps) {
   const locked = lockedFields(form);
   const system = form.system;
   const type = habitType(form);
-  const typeLocked = system || polarityLocked;
+  // Only the polarity is fixed once a habit has a log (the server refuses nothing else): the types
+  // that would flip it are off, the others stay. A system habit's type is off whole.
+  const typeLocked = system;
+  const typeOptions = TYPES.map((option) => ({
+    ...option,
+    disabled: polarityLocked && polarityOfType(option.value) !== (original?.polarity ?? 'build'),
+  }));
   const hintFor = (field: keyof HabitForm): string | undefined => {
     // A system habit says it once, at the top of the form, not under every locked field.
     if (system) return undefined;
@@ -204,9 +232,12 @@ function EditorForm({ initial, data, prefill, notice }: EditorFormProps) {
         break;
       case 'locked':
         if (result.errors?.polarity !== undefined) {
-          // A log came in since the page opened: the type goes back to what the habit is, and stays.
+          // A log came in since the page opened: the type goes back to what it was when the page
+          // opened (an average stays an average), the flip stays blocked, and the person is told
+          // beside the button that nothing was saved.
           setPolarityLocked(true);
-          if (original !== undefined) setForm((f) => withType(f, habitType(fromHabit(original))));
+          setForm((f) => withType(f, habitType(initial)));
+          setMessage(`${result.errors.polarity}؛ أُعيد النوع ولم يُحفظ شيء بعد.`);
         } else {
           setServerErrors(result.errors ?? {});
           setMessage(result.errors?.system ?? FAILED_MESSAGE);
@@ -258,13 +289,13 @@ function EditorForm({ initial, data, prefill, notice }: EditorFormProps) {
           />
           <LockedGroup
             label="النوع"
-            locked={typeLocked}
+            locked={typeLocked || polarityLocked}
             hint={system ? undefined : POLARITY_LOCKED_HINT}
             error={errors.kind ?? errors.polarity}
           >
             <Segmented
               label="النوع"
-              options={TYPES}
+              options={typeOptions}
               value={type}
               disabled={typeLocked}
               onChange={(next) => change(withType(form, next))}
@@ -290,6 +321,7 @@ function EditorForm({ initial, data, prefill, notice }: EditorFormProps) {
             onInput={(text) => {
               setTargetText(text);
               setServerErrors({});
+              touched.current.add('target_per_period');
               setForm({ ...form, target_per_period: text === '' ? Number.NaN : Number(text) });
             }}
             error={errors.target_per_period}

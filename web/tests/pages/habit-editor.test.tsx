@@ -530,54 +530,125 @@ describe('a system habit', () => {
   });
 });
 
-describe('the type of a habit that has logs (task 13: polarity is fixed after the first log)', () => {
+describe('the type of a habit that has logs (task 13: only the polarity is fixed after the first log)', () => {
   const logged = stored({ kind: 'boolean', unit: '', target_per_period: 1 });
+  const polarityRefusal = (): Response =>
+    json(
+      {
+        detail: 'لا يمكن تغيير نوع العادة بعد تسجيلها',
+        errors: [{ loc: ['body', 'polarity'], type: 'polarity_locked' }],
+      },
+      422,
+    );
+  const aLog = {
+    'GET /v1/habit-logs': () => json({ logs: [{ habit_code: 'u_read', day: '2026-11-08', status: 'done', value: null }] }),
+  };
+  const state = (): Record<string, boolean> =>
+    Object.fromEntries(
+      (within(screen.getByRole('radiogroup', { name: 'النوع' })).getAllByRole('radio') as HTMLButtonElement[]).map((r) => [
+        r.textContent ?? '',
+        r.disabled,
+      ]),
+    );
 
-  it('is locked with the server words when the habit has a log', async () => {
-    await openEdit(logged, {
-      'GET /v1/habit-logs': () => json({ logs: [{ habit_code: 'u_read', day: '2026-11-08', status: 'done', value: null }] }),
-    });
-    const radios = within(screen.getByRole('radiogroup', { name: 'النوع' })).getAllByRole('radio') as HTMLButtonElement[];
-    expect(radios.every((r) => r.disabled)).toBe(true);
+  it('a build habit with a log blocks «امتناع» alone, and says why beside it', async () => {
+    await openEdit(logged, aLog);
+    expect(state()).toEqual({ 'نعم أو لا': false, عدد: false, مدة: false, متوسط: false, امتناع: true });
     expect(screen.getByText('لا يمكن تغيير نوع العادة بعد تسجيلها')).toBeTruthy();
     // The log is asked for this habit alone.
     expect(calls.find((c) => c.path === '/v1/habit-logs')?.search).toContain('code=u_read');
   });
 
-  it('is locked when the only log is still waiting in the outbox', async () => {
+  it('an abstain habit with a log blocks the four build types and keeps «امتناع»', async () => {
+    const abstain = stored({ kind: 'boolean', unit: '', target_per_period: 1, polarity: 'abstain' });
+    await openEdit(abstain, aLog);
+    expect(state()).toEqual({ 'نعم أو لا': true, عدد: true, مدة: true, متوسط: true, امتناع: false });
+  });
+
+  it('count to average is allowed on a logged habit, and saves the indicator alone', async () => {
+    const counted = stored({ kind: 'count', unit: '', target_per_period: 8000 });
+    await openEdit(counted, {
+      ...aLog,
+      'PUT /v1/indicators/habit/u_read': () => json({}),
+    });
+    choose('النوع', 'متوسط');
+    expect(screen.getByRole('radio', { name: 'متوسط' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(saveButton());
+    await screen.findByRole('heading', { level: 1, name: /تفاصيل u_read/ });
+    expect(sent('PATCH', '/v1/habits/u_read')).toHaveLength(0);
+    expect(sent('PUT', '/v1/indicators/habit/u_read')).toHaveLength(1);
+  });
+
+  it('build to abstain is blocked on a logged habit: the option does nothing', async () => {
+    await openEdit(logged, aLog);
+    choose('النوع', 'امتناع');
+    expect(screen.getByRole('radio', { name: 'نعم أو لا' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'امتناع' }).getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('the log still waiting in the outbox blocks the flip too', async () => {
     await enqueue('habit_logged', { habit_code: 'u_read', day: DAY, status: 'done', value: null } as never);
     await openEdit(logged);
-    await waitFor(() => {
-      const radios = within(screen.getByRole('radiogroup', { name: 'النوع' })).getAllByRole('radio') as HTMLButtonElement[];
-      expect(radios.every((r) => r.disabled)).toBe(true);
-    });
+    await waitFor(() => expect(state()['امتناع']).toBe(true));
   });
 
   it('is free when the habit has no log', async () => {
     await openEdit(logged);
-    const radios = within(screen.getByRole('radiogroup', { name: 'النوع' })).getAllByRole('radio') as HTMLButtonElement[];
-    expect(radios.some((r) => r.disabled)).toBe(false);
+    expect(Object.values(state()).some(Boolean)).toBe(false);
     expect(screen.queryByText('لا يمكن تغيير نوع العادة بعد تسجيلها')).toBeNull();
   });
 
-  it('shows the 422 of the server and locks the control when a log came in meanwhile', async () => {
-    await openEdit(logged, {
-      'PATCH /v1/habits/u_read': () =>
-        json(
-          {
-            detail: 'لا يمكن تغيير نوع العادة بعد تسجيلها',
-            errors: [{ loc: ['body', 'polarity'], type: 'polarity_locked' }],
-          },
-          422,
-        ),
-    });
+  it('a 422 polarity_locked says in an alert beside the button that nothing was saved, and why (I-1)', async () => {
+    await openEdit(logged, { 'PATCH /v1/habits/u_read': polarityRefusal });
+    type('العنوان', 'عنوان آخر');
     choose('النوع', 'امتناع');
     fireEvent.click(saveButton());
-    expect(await screen.findByText('لا يمكن تغيير نوع العادة بعد تسجيلها')).toBeTruthy();
-    const radios = within(screen.getByRole('radiogroup', { name: 'النوع' })).getAllByRole('radio') as HTMLButtonElement[];
-    expect(radios.every((r) => r.disabled)).toBe(true);
-    // The control goes back to what the habit is.
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('لا يمكن تغيير نوع العادة بعد تسجيلها');
+    expect(alert.textContent).toContain('لم يُحفظ');
+    // It stands in the summary, beside the save button, and the page did not move.
+    expect(within(screen.getByRole('region', { name: 'ملخص العادة' })).getByRole('alert')).toBe(alert);
+    expect(screen.getByRole('heading', { level: 1, name: 'تعديل العادة' })).toBeTruthy();
+    // The other edit is kept, the type goes back, and «امتناع» is blocked from now on.
+    expect((screen.getByLabelText('العنوان') as HTMLInputElement).value).toBe('عنوان آخر');
     expect(screen.getByRole('radio', { name: 'نعم أو لا' }).getAttribute('aria-checked')).toBe('true');
+    expect(state()['امتناع']).toBe(true);
+    expect(state()['عدد']).toBe(false);
+  });
+
+  it('the alert goes away with the next edit or save attempt', async () => {
+    await openEdit(logged, { 'PATCH /v1/habits/u_read': polarityRefusal });
+    choose('النوع', 'امتناع');
+    fireEvent.click(saveButton());
+    await screen.findByRole('alert');
+    answers['PATCH /v1/habits/u_read'] = () => json({ ...logged, title_ar: 'x' });
+    type('العنوان', 'x');
+    fireEvent.click(saveButton());
+    await screen.findByRole('heading', { level: 1, name: /تفاصيل u_read/ });
+  });
+
+  it('an average habit comes back as an average after the 422, and the next save keeps its indicator (M-1)', async () => {
+    const counted = stored({ kind: 'count', unit: '', target_per_period: 8000 });
+    await openEdit(counted, {
+      'GET /v1/indicators': () =>
+        json({
+          items: [{ subject_kind: 'habit', subject_ref: 'u_read', source: 'habit_logs', measure: 'avg_7d', period: 'day', display: 'number', target: 8000 }],
+        }),
+      'PATCH /v1/habits/u_read': polarityRefusal,
+      'PUT /v1/indicators/habit/u_read': () => json({}),
+      'DELETE /v1/indicators/habit/u_read': () => new Response(null, { status: 204 }),
+    });
+    expect(screen.getByRole('radio', { name: 'متوسط' }).getAttribute('aria-checked')).toBe('true');
+    choose('النوع', 'امتناع');
+    fireEvent.click(saveButton());
+    await screen.findByRole('alert');
+    expect(screen.getByRole('radio', { name: 'متوسط' }).getAttribute('aria-checked')).toBe('true');
+    answers['PATCH /v1/habits/u_read'] = () => json({ ...counted, title_ar: 'y' });
+    type('العنوان', 'y');
+    fireEvent.click(saveButton());
+    await screen.findByRole('heading', { level: 1, name: /تفاصيل u_read/ });
+    expect(sent('DELETE', '/v1/indicators/habit/u_read')).toHaveLength(0);
+    expect(sent('PUT', '/v1/indicators/habit/u_read')).toHaveLength(1);
   });
 });
 
@@ -703,6 +774,25 @@ describe('a draft from a link (the goal page): the owner rulings of D-067 item 5
     expect((screen.getByLabelText('إلى') as HTMLInputElement).value).toBe('2026-12-31');
     expect(screen.getByRole('radio', { name: 'مخصص' }).getAttribute('aria-checked')).toBe('true');
     expect(screen.getByRole('region', { name: 'ملخص العادة' }).textContent).toContain(`تنتهي في ${fmt.day('2026-12-31')}`);
+  });
+
+  it('a draft that arrives late does not overwrite what was typed meanwhile (M-2)', async () => {
+    let release: () => void = () => undefined;
+    serve({
+      'POST /v1/goals/{ref}/to-habit': () =>
+        new Promise<Response>((resolve) => {
+          release = () => resolve(json(draft({ title_ar: 'عنوان المحطة', target_per_period: 120 })));
+        }),
+    });
+    mount('/habits/new?goal=ms-7');
+    await screen.findByRole('heading', { level: 1, name: 'عادة جديدة' });
+    type('العنوان', 'كتبتها بنفسي');
+    release();
+    await waitFor(() => expect((screen.getByLabelText('الهدف في الفترة') as HTMLInputElement).value).toBe('120'));
+    // The fields the person did not touch come from the draft; the typed one stays.
+    expect((screen.getByLabelText('العنوان') as HTMLInputElement).value).toBe('كتبتها بنفسي');
+    expect(screen.getByRole('radio', { name: 'مدة' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('region', { name: 'ملخص العادة' }).textContent).toContain('يخدم المخرج O7');
   });
 
   it('another indicator keeps the draft as the server made it', async () => {
