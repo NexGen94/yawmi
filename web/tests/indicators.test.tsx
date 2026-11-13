@@ -206,6 +206,25 @@ describe('IndicatorDialog', () => {
       expect(server.called('PUT', /./)).toHaveLength(0);
     });
 
+    it('M-4: two reminders added one after the other both stay, before the page has read the habit again', async () => {
+      const { server, onChanged } = openDialog();
+      setTime('20:00');
+      fireEvent.click(screen.getByRole('button', { name: 'إضافة تذكير' }));
+      await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+      // the page has not reloaded the habit: the dialog still holds the one it was given
+      await waitFor(() => expect((screen.getByRole('button', { name: 'إضافة تذكير' }) as HTMLButtonElement).disabled).toBe(false));
+      setTime('21:00');
+      fireEvent.click(screen.getByRole('button', { name: 'إضافة تذكير' }));
+      await waitFor(() => expect(server.called('PATCH', '/v1/habits/english')).toHaveLength(2));
+      expect(server.called('PATCH', '/v1/habits/english')[1]?.body).toEqual({
+        reminders: [
+          { time: '21:30', days_mask: 127 },
+          { time: '20:00', days_mask: 127 },
+          { time: '21:00', days_mask: 127 },
+        ],
+      });
+    });
+
     it('changing a reminder that exists patches the habit with that one changed', async () => {
       const { server } = openDialog();
       fireEvent.input(screen.getByLabelText('وقت التذكير 1'), { target: { value: '22:00' } });

@@ -8,8 +8,8 @@ export interface MissionCardProps {
   vision: string;
   /** The settings are still being read. */
   loading?: boolean;
-  /** The settings could not be read, and no saved copy exists. */
-  unavailable?: boolean;
+  /** The settings could not be read, and no saved copy exists: offline, or refused. */
+  unavailable?: 'offline' | 'error';
 }
 
 function Piece({ name, text }: { name: string; text: string }) {
@@ -24,7 +24,7 @@ function Piece({ name, text }: { name: string; text: string }) {
 
 /** «رسالتي» and «رؤيتي»: shown exactly as the person wrote them in the settings, or an empty pair of
  *  brackets with the way to write them. Nothing here is generated, suggested or reworded. */
-export function MissionCard({ mission, vision, loading = false, unavailable = false }: MissionCardProps) {
+export function MissionCard({ mission, vision, loading = false, unavailable }: MissionCardProps) {
   const empty = mission === '' || vision === '';
   let body: ComponentChildren;
   if (loading) {
@@ -34,8 +34,8 @@ export function MissionCard({ mission, vision, loading = false, unavailable = fa
         <Skeleton inlineSize="70%" />
       </>
     );
-  } else if (unavailable) {
-    body = <p class="mission-empty">تعذّرت القراءة الآن.</p>;
+  } else if (unavailable !== undefined) {
+    body = <p class="mission-empty">{unavailable === 'offline' ? 'لا نسخة محفوظة بعد' : 'تعذّرت القراءة الآن.'}</p>;
   } else {
     body = (
       <>

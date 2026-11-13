@@ -3,9 +3,10 @@
 
 import { useCallback, useState } from 'preact/hooks';
 
+export { OFFLINE_NOTE } from '../lib/notes';
+
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'failed';
 
-export const OFFLINE_NOTE = 'يحتاج اتصالاً';
 
 export interface Saving {
   status: SaveStatus;

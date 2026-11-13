@@ -13,7 +13,7 @@ import { habitSpecOf } from '../habits/spec';
 import type { HabitOut } from '../habits/types';
 import type { IndicatorIO } from '../indicators/types';
 import { fmt } from '../lib/format';
-import { valueNum } from '../lib/value';
+import { points, valueNum } from '../lib/value';
 
 export interface IndicatorView {
   /** The number the card shows big; `null` when there is nothing to measure yet. */
@@ -178,9 +178,9 @@ function strengthView(
   const series: number[] = [];
   for (let i = STRENGTH_DAYS - 1; i >= 0; i -= 1) {
     const day = fromOrdinal(toOrdinal(today) - i);
-    if (day >= spec.startDay) series.push(Math.round(strengthOf(spec, logs, day, weekStart) * 100));
+    if (day >= spec.startDay) series.push(points(strengthOf(spec, logs, day, weekStart)));
   }
-  const shown = Math.round(score * 100);
+  const shown = points(score);
   return {
     value: shown,
     target: null,

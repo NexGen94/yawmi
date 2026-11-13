@@ -11,13 +11,13 @@ import { fromOrdinal, toOrdinal } from '../domain/days';
 import { strength } from '../domain/habits';
 import { periodBounds } from '../domain/periods';
 import type { Day, HabitLog, HabitSpec, WeekStart } from '../domain/types';
-import { PLAN_START } from '../goals/types';
+import { paceBasis } from '../goals/basis';
 import type { GoalOutcome, GoalsOut, MilestoneFull } from '../goals/types';
 import { toDomainLogs, type HabitLogOut } from '../data/pending';
 import { habitSpecOf } from '../habits/spec';
 import { roundUpNeed, type HabitTodayItem } from '../habits/useHabitsToday';
 import { fmt, type Noun } from '../lib/format';
-import { valueNum } from '../lib/value';
+import { points, valueNum } from '../lib/value';
 import { lastScheduledBefore } from './state';
 
 export type LateItem =
@@ -47,6 +47,8 @@ export type LateItem =
       strengthIfMissed: number;
       /** The last scheduled day that was missed, when it was not yesterday. */
       missedDay?: Day;
+      /** Today is not a scheduled day of the habit: a log today changes nothing, so the sentence promises nothing. */
+      notDueToday?: true;
     }
   | { kind: 'abstain_slip'; code: string; title: string; when: 'today' | 'yesterday'; strengthNow: number; strengthWithout: number }
   | {
@@ -83,7 +85,8 @@ function lateBy(n: number): string {
   return n === 1 ? 'يوماً واحداً' : daysAfter(n);
 }
 
-const score = (ratio: number): string => fmt.num(Math.round(ratio * 100));
+/** A strength as the ring draws it: never 0 for a ratio above zero (see `points`). */
+const score = (ratio: number): string => fmt.num(points(ratio));
 
 function periodSentence(item: Extract<LateItem, { kind: 'habit_period' }>): string {
   const remaining = item.target - item.done;
@@ -102,13 +105,14 @@ export function impactSentence(item: LateItem): string {
     case 'habit_period':
       return periodSentence(item);
     case 'habit_daily': {
-      const missed = item.missedDay === undefined ? 'فاتت أمس' : `فاتت يوم ${item.missedDay}`;
+      const missed = item.missedDay === undefined ? 'فاتت أمس' : `فاتت يوم ${fmt.day(item.missedDay)}`;
+      if (item.notDueToday) return `${missed}. درجة القوة ${score(item.strengthNow)}.`;
       return `${missed}. درجة القوة ${score(item.strengthNow)}: إنجاز اليوم يجعلها ${score(item.strengthIfDone)}، وفواته ${score(item.strengthIfMissed)}.`;
     }
     case 'abstain_slip':
       return `انزلاق مسجَّل ${item.when === 'today' ? 'اليوم' : 'أمس'}. درجة القوة ${score(item.strengthNow)}، وبدونه ${score(item.strengthWithout)}.`;
     case 'milestone': {
-      const late = `متأخرة ${lateBy(item.overdueDays)} عن موعدها ${item.dueDate}.`;
+      const late = `متأخرة ${lateBy(item.overdueDays)} عن موعدها ${fmt.day(item.dueDate)}.`;
       if (item.outcomeCode === '') return late;
       return `${late} ${item.outcomeCode}: أُنجز ${fmt.num(item.doneDue)} من ${fmt.num(item.totalDue)} محطة حان موعدها.`;
     }
@@ -191,7 +195,8 @@ function dailyItem(item: HabitTodayItem, spec: HabitSpec, logs: HabitLog[], toda
     // today stays without a log: the day passes, and the strength is taken at tomorrow
     strengthIfMissed: strength(spec, logs, fromOrdinal(toOrdinal(today) + 1), weekStart),
   };
-  return missed !== null && missed !== yesterday ? { ...base, missedDay: missed } : base;
+  const older = missed !== null && missed !== yesterday ? { ...base, missedDay: missed } : base;
+  return item.dueToday ? older : { ...older, notDueToday: true as const };
 }
 
 function slipItem(item: HabitTodayItem, spec: HabitSpec, logs: HabitLog[], today: Day, weekStart: WeekStart): LateItem {
@@ -225,19 +230,16 @@ function habitItems(input: LateInput): LateItem[] {
   return items;
 }
 
-/** An outcome measured by its milestones (the pace basis of design 9.4 when it has no KPI of its own)
- *  that is behind the straight line from the plan's start to its due day. An outcome with a KPI that
- *  has a target is paced on that KPI by the server, which the browser does not read here: it is left
- *  out rather than contradicted. */
+/** An outcome behind the straight line from the start of its basis to its due day (design 9.4). The
+ *  basis is the server's (`paceBasis`): a cumulative KPI of the outcome, else its milestones. */
 function paceItem(outcome: GoalOutcome, today: Day): LateItem | null {
-  if (outcome.kpis.some((k) => k.target !== null)) return null;
-  const start = toOrdinal(PLAN_START);
-  const due = toOrdinal(outcome.target_date);
+  const basis = paceBasis(outcome, today);
+  const start = toOrdinal(basis.start);
+  const due = toOrdinal(basis.due);
   const now = toOrdinal(today);
-  const target = outcome.milestones_total;
-  if (target <= 0 || now <= start || due <= start) return null;
+  const { current, target } = basis;
+  if (current === null || target <= 0 || now <= start || due <= start) return null;
   const expected = target * Math.min(1, Math.max(0, (now - start) / (due - start)));
-  const current = outcome.milestones_done;
   if (current >= expected - 1e-9) return null;
   return {
     kind: 'goal_pace',

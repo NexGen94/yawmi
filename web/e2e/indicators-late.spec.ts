@@ -15,6 +15,17 @@ interface StoredHabit {
   reminders: { time: string; days_mask: number }[];
 }
 
+/** The day as the page writes it (`fmt.day`): the same locale and options. */
+function written(day: string): string {
+  return new Intl.DateTimeFormat('ar-SA-u-ca-gregory-nu-latn', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${day}T00:00:00Z`));
+}
+
 /** `day` plus `n` calendar days, as an ISO day (UTC arithmetic: no zone moves it). */
 function plusDays(day: string, n: number): string {
   const [y, m, d] = day.split('-').map(Number) as [number, number, number];
@@ -110,7 +121,7 @@ test('a milestone past its day is listed as late on the home page with its impac
   const item = section.getByRole('listitem').filter({ hasText: 'اختبار تحديد المستوى' });
   await expect(item).toBeVisible();
   await expect(item).toContainText('متأخر');
-  await expect(item).toContainText(`${late === 1 ? 'يوماً واحداً' : 'يومين'} عن موعدها ${day}`);
+  await expect(item).toContainText(`${late === 1 ? 'يوماً واحداً' : 'يومين'} عن موعدها ${written(day)}`);
   await expect(item.getByRole('link')).toHaveAttribute('href', `/goals/${MILESTONE}`);
 
   await expectNoSeriousA11y(page);

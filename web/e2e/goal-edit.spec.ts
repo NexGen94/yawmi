@@ -157,7 +157,7 @@ test('the page is reachable by keyboard: the actions first, then the editable va
     h.setAttribute('tabindex', '-1');
     h.focus();
   });
-  const rings: { label: string; ring: boolean; checkbox: boolean }[] = [];
+  const rings: { label: string; ring: boolean }[] = [];
   const stop = async (): Promise<string> => {
     await page.keyboard.press('Tab');
     const now = await page.evaluate(() => {
@@ -167,7 +167,6 @@ test('the page is reachable by keyboard: the actions first, then the editable va
         label: (el.getAttribute('aria-label') ?? el.textContent ?? '').trim(),
         // the ring of the design (a shadow), or the browser's own outline on a plain link
         ring: style.boxShadow !== 'none' || (style.outlineStyle !== 'none' && style.outlineWidth !== '0px'),
-        checkbox: el.type === 'checkbox',
       };
     });
     rings.push(now);
@@ -181,5 +180,5 @@ test('the page is reachable by keyboard: the actions first, then the editable va
   expect(later.some((s) => s.startsWith('تعديل الموعد'))).toBe(true);
   // a focus ring is drawn on every stop: the
   // indicator card is among these stops now, so the check covers all of them, not only the last
-  expect(rings.filter((r) => !r.checkbox && !r.ring).map((r) => r.label)).toEqual([]);
+  expect(rings.filter((r) => !r.ring).map((r) => r.label)).toEqual([]);
 });

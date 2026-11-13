@@ -62,8 +62,12 @@ const QUIT = habit('quit', 'الامتناع', { polarity: 'abstain', start_day:
 
 interface Setup {
   habits?: HabitOut[];
+  /** The habits `GET /v1/today` lists as due (default: all of them). */
+  due?: HabitOut[];
   logs?: HabitLogOut[];
   goals?: GoalsOut;
+  /** `GET /v1/goals` answers with an error. */
+  goalsFail?: boolean;
   settings?: Partial<typeof SETTINGS>;
 }
 
@@ -71,7 +75,7 @@ async function renderHome(setup: Setup = {}): Promise<ReturnType<typeof withIndi
   const habits = setup.habits ?? [DAILY, WEEKLY];
   routeFetch(fetchMock, {
     habits,
-    today: todayOut(habits),
+    today: todayOut(setup.due ?? habits),
     logs: setup.logs ?? [...thirty('daily', '2026-10-10', '2026-11-09'), logRow('weekly', '2026-11-08', 'done', 60), logRow('weekly', DAY, 'done', 25)],
   });
   const goals = setup.goals ?? plan();
@@ -80,6 +84,7 @@ async function renderHome(setup: Setup = {}): Promise<ReturnType<typeof withIndi
   fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
     const request = input as Request;
     if (new URL(request.url).pathname === '/v1/goals') {
+      if (setup.goalsFail) return new Response(JSON.stringify({ detail: 'خطأ' }), { status: 500 });
       return new Response(JSON.stringify(goals), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
     return next(input);
@@ -127,7 +132,7 @@ describe('home: «المتأخر وغير المنجز»', () => {
     await renderHome({ goals: OVERDUE });
     const items = within(late()).getAllByRole('listitem');
     for (const item of items) expect(item.textContent).toContain('متأخر');
-    expect(items[0]?.textContent).toContain('متأخرة 8 أيام عن موعدها 2026-11-02. O1: أُنجز 0 من 3 محطة حان موعدها.');
+    expect(items[0]?.textContent).toContain('متأخرة 8 أيام عن موعدها الاثنين، 2 نوفمبر 2026. O1: أُنجز 0 من 3 محطة حان موعدها.');
     expect(items[3]?.textContent).toContain('فاتت أمس. درجة القوة 76: إنجاز اليوم يجعلها 77، وفواته 72.');
     expect(items[4]?.textContent).toContain('يلزم 200 دقيقة في 5 أيام لبلوغ هدف الأسبوع (285)، أي 40 دقيقة يومياً.');
   });
@@ -157,11 +162,11 @@ describe('home: «المتأخر وغير المنجز»', () => {
     expect(within(row).queryByRole('button', { pressed: false })).toBeNull();
   });
 
-  it('an ISO day and an outcome code inside the sentence are isolated left to right', async () => {
+  it('an outcome code inside the sentence is isolated left to right (the day is written in words)', async () => {
     await renderHome({ goals: OVERDUE });
     const first = within(late()).getByText('أولى متأخرة').closest('li') as HTMLElement;
     const isolated = [...first.querySelectorAll('bdi[dir="ltr"]')].map((el) => el.textContent);
-    expect(isolated).toEqual(['2026-11-02', 'O1']);
+    expect(isolated).toEqual(['O1']);
   });
 
   it('a milestone and a goal are links to their pages', async () => {
@@ -208,5 +213,46 @@ describe('home: رسالتي ورؤيتي', () => {
     for (const name of ['المهني', 'الصحي', 'النفسي', 'العلمي']) {
       expect(await screen.findByRole('heading', { level: 3, name })).toBeTruthy();
     }
+  });
+});
+
+describe('home: fix round 1', () => {
+  // Sunday to Thursday; Thursday 11-12 was missed; today is Friday 11-13 (the fake clock below)
+  const WORK = habit('work', 'أيام العمل', { schedule_kind: 'weekdays', weekday_mask: 0b0011111, start_day: '2026-10-10' });
+  const workLogs = Array.from({ length: 30 }, (_, i) => fromOrdinal(toOrdinal('2026-10-10') + i))
+    .filter((day) => day !== '2026-11-12')
+    .map((day) => logRow('work', day));
+
+  it('I-1: a late habit that is not due today is a link to its page, with no check mark and no promise', async () => {
+    vi.setSystemTime(new Date('2026-11-13T09:00:00Z'));
+    await renderHome({ habits: [WORK], due: [], logs: workLogs, goals: NOTHING });
+    const row = within(late()).getByText('أيام العمل').closest('li') as HTMLElement;
+    expect(within(row).queryByRole('button')).toBeNull();
+    expect(within(row).getByRole('link').getAttribute('href')).toBe('/habits/work');
+    expect(row.textContent).toContain('فاتت أمس.');
+    expect(row.textContent).not.toContain('إنجاز اليوم');
+  });
+
+  it('M-2: when the plan cannot be read the section does not say nothing is late', async () => {
+    await renderHome({ habits: [], logs: [], goalsFail: true });
+    expect(within(late()).queryByText('لا متأخرات اليوم.')).toBeNull();
+    expect(within(late()).getByText(/تعذّرت قراءة الخطة/)).toBeTruthy();
+  });
+
+  it('M-2: the plan cannot be read but a habit is late: the habit is listed, and the note stays', async () => {
+    await renderHome({ habits: [DAILY], logs: thirty('daily', '2026-10-10', '2026-11-09'), goalsFail: true });
+    expect(within(late()).getByText('تمرين')).toBeTruthy();
+    expect(within(late()).getByText(/تعذّرت قراءة الخطة/)).toBeTruthy();
+  });
+
+  it('M-3: offline with no saved settings, the card says there is no saved copy', () => {
+    render(<MissionCard mission="" vision="" unavailable="offline" />);
+    expect(screen.getByText('لا نسخة محفوظة بعد')).toBeTruthy();
+    expect(screen.queryByText('تعذّرت القراءة الآن.')).toBeNull();
+  });
+
+  it('M-3: a refused read keeps its own words', () => {
+    render(<MissionCard mission="" vision="" unavailable="error" />);
+    expect(screen.getByText('تعذّرت القراءة الآن.')).toBeTruthy();
   });
 });

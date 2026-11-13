@@ -6,6 +6,12 @@ export const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'ا
 /** Every day of the week. */
 export const ALL_DAYS = 0b1111111;
 
+/** The days of a reminder in a few words: «كل يوم» or the names. */
+export function daysWord(mask: number): string {
+  if (mask === ALL_DAYS) return 'كل يوم';
+  return namesOf(mask).join('، ') || 'لا يوم';
+}
+
 /** The names of the days a mask holds. */
 export function namesOf(mask: number | null): string[] {
   return WEEKDAYS.filter((_, bit) => ((mask ?? 0) >> bit) & 1);

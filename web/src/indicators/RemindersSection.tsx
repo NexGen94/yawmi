@@ -5,27 +5,22 @@
 
 import { useState } from 'preact/hooks';
 
-import { ALL_DAYS, maskOf, namesOf, WEEKDAYS } from '../habits/days';
+import { ALL_DAYS, daysWord, maskOf, namesOf, WEEKDAYS } from '../habits/days';
 import { maxReminders } from '../habits/form';
 import type { ReminderIn } from '../habits/types';
 import { fmt } from '../lib/format';
+import { OFFLINE_NOTE } from '../lib/notes';
 import { Button } from '../ui/Button';
 import { Chips } from '../ui/Chips';
 import { Disclosure } from '../ui/Disclosure';
 import { Field } from '../ui/Field';
 
-export const OFFLINE_NOTE = 'يحتاج اتصالاً';
 export const LIMIT_NOTE = 'ثلاثة تذكيرات على الأكثر';
 /** What a new reminder starts as: the evening, every day. */
 export const NEW_REMINDER: ReminderIn = { time: '20:00', days_mask: ALL_DAYS };
 
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DAY_OPTIONS = WEEKDAYS.map((name) => ({ value: name, label: name }));
-
-function daysWord(mask: number): string {
-  if (mask === ALL_DAYS) return 'كل يوم';
-  return namesOf(mask).join('، ') || 'لا يوم';
-}
 
 /** What is wrong with a reminder, or nothing. */
 export function reminderError(reminder: ReminderIn): string | undefined {

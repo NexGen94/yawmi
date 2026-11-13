@@ -62,6 +62,13 @@ export default function HomePage() {
     [habits.allItems, habits.logs, goals.data, day],
   );
 
+  let planState: 'loading' | 'ready' | 'unavailable' = 'ready';
+  if (goals.data === undefined) planState = goals.state === 'loading' ? 'loading' : 'unavailable';
+  let missionUnavailable: 'offline' | 'error' | undefined;
+  if (settings.data === undefined && settings.query.state !== 'loading') {
+    missionUnavailable = settings.query.state === 'offline' ? 'offline' : 'error';
+  }
+
   // The badge on the app icon: build habits still to do today. The push module is loaded on demand,
   // so it stays out of the first load.
   const counted = state === 'ready' || (state === 'offline' && stale);
@@ -97,7 +104,7 @@ export default function HomePage() {
         <div class="page-cols">
           <div class="home-main">
             <TodayHero done={done} due={due} />
-            <LateSection items={lateList} pending={goals.state === 'loading'} onTick={(code) => void habits.tick(code)} />
+            <LateSection items={lateList} plan={planState} onTick={(code) => void habits.tick(code)} />
             <DayCards morning={entries.morning} closed={entries.closed} />
             {habits.items.length > 0 && (
               <DueHabits
@@ -114,7 +121,7 @@ export default function HomePage() {
               mission={settings.data?.mission ?? ''}
               vision={settings.data?.vision ?? ''}
               loading={settings.data === undefined && settings.query.state === 'loading'}
-              unavailable={settings.data === undefined && settings.query.state !== 'loading'}
+              unavailable={missionUnavailable}
             />
             <section class="home-domains" aria-labelledby="home-domains-title">
               <h2 id="home-domains-title" class="home-domains-title">

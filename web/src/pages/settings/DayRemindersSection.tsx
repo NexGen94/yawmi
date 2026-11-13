@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 
-import { ALL_DAYS, maskOf, namesOf, WEEKDAYS } from '../../habits/days';
+import { ALL_DAYS, daysWord, maskOf, namesOf, WEEKDAYS } from '../../habits/days';
 import type { ReminderIn } from '../../habits/types';
 import { reminderError } from '../../indicators/RemindersSection';
 import type { SettingsOut, SettingsPatch } from '../../settings/data';
@@ -18,11 +18,6 @@ type DayReminders = NonNullable<SettingsOut['day_reminders']>;
 const DEFAULT_MASK: Record<Key, number> = { morning: ALL_DAYS, evening: ALL_DAYS, weekly: 0b1000000 };
 const LABEL: Record<Key, string> = { morning: 'الصباح', evening: 'المساء', weekly: 'المراجعة' };
 const DAY_OPTIONS = WEEKDAYS.map((name) => ({ value: name, label: name }));
-
-function daysWord(mask: number): string {
-  if (mask === ALL_DAYS) return 'كل يوم';
-  return namesOf(mask).join('، ') || 'لا يوم';
-}
 
 interface RowProps {
   which: Key;

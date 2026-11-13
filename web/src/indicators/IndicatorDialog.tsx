@@ -8,13 +8,14 @@ import { api } from '../api/client';
 import type { GoalIndicatorValue } from '../goals/types';
 import { fromHabit, toHabitPatch } from '../habits/form';
 import type { HabitOut, ReminderIn } from '../habits/types';
+import { OFFLINE_NOTE } from '../lib/notes';
 import { isAbortOrTimeout } from '../lib/timeout';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { Field } from '../ui/Field';
 import { type Option, Segmented } from '../ui/Segmented';
 import { deleteIndicator, putIndicator, WRITE_TIMEOUT_MS } from './data';
-import { OFFLINE_NOTE, RemindersSection } from './RemindersSection';
+import { RemindersSection } from './RemindersSection';
 import type { IndicatorDisplay, IndicatorIO, IndicatorMeasure, IndicatorPeriod, IndicatorSource } from './types';
 import './indicators.css';
 
@@ -93,8 +94,12 @@ function OpenDialog({ onClose, onChanged, subject, habit, goal, config, online }
   const stored = config !== undefined || goal?.custom === true;
   const wantsTarget = isHabit ? measure === 'total' || measure === 'avg_7d' || measure === 'avg_30d' : source !== 'linked_habits';
   const disabled = !online || busy;
-  const goalReminder = config?.reminder ? [config.reminder] : [];
-  const shownReminders = isHabit ? (habit?.reminders ?? []) : goalReminder;
+  // The reminders as the server holds them now: what the page gave when the dialog opened, and then
+  // what each save left there. The page reads the habit again only after a save, so the list is kept
+  // here: a second reminder added before that reading is added to the first, not to the old list.
+  const [reminders, setReminders] = useState<ReminderIn[]>(() =>
+    isHabit ? (habit?.reminders ?? []) : config?.reminder ? [config.reminder] : [],
+  );
 
   const body = (reminder: IndicatorIO['reminder']): IndicatorIO | undefined => {
     const target = wantsTarget ? parseTarget(targetText) : { value: null };
@@ -131,25 +136,29 @@ function OpenDialog({ onClose, onChanged, subject, habit, goal, config, online }
   };
 
   const save = (): Promise<void> | undefined => {
-    const next = body(config?.reminder);
+    const next = body(isHabit ? undefined : (reminders[0] ?? null));
     return next === undefined ? undefined : finish(() => putIndicator(next));
   };
 
   /** A reminder list saved where it lives: the habit for a habit, the indicator for a goal. */
-  const saveReminders = async (reminders: ReminderIn[]): Promise<boolean> => {
+  const saveReminders = async (wanted: ReminderIn[]): Promise<boolean> => {
     let ok: boolean;
     if (isHabit) {
       if (habit === undefined) return false;
-      const patch = toHabitPatch(habit, { ...fromHabit(habit), reminders });
+      const held = { ...habit, reminders };
+      const patch = toHabitPatch(held, { ...fromHabit(held), reminders: wanted });
       if (Object.keys(patch).length === 0) return true;
       ok = await patchHabit(habit.code, patch);
     } else {
       // The goal's indicator carries its reminder: the rest of it goes as it is shown now.
-      const next = body(reminders[0] ?? null);
+      const next = body(wanted[0] ?? null);
       if (next === undefined) return false;
       ok = await putIndicator(next);
     }
-    if (ok) onChanged();
+    if (ok) {
+      setReminders(wanted);
+      onChanged();
+    }
     return ok;
   };
 
@@ -210,7 +219,7 @@ function OpenDialog({ onClose, onChanged, subject, habit, goal, config, online }
         )}
         <RemindersSection
           kind={subject.kind}
-          reminders={shownReminders}
+          reminders={reminders}
           online={online}
           onSave={saveReminders}
         />

@@ -11,13 +11,14 @@ import { writeCache } from '../data/cache';
 import { useQuery } from '../data/query';
 import { isAbortOrTimeout } from '../lib/timeout';
 import type { CardFull, GoalEditOut, MilestoneFull } from './types';
+import { OFFLINE_NOTE } from '../lib/notes';
 
 type MilestoneEdit = components['schemas']['MilestoneEdit'];
 
 /** How long the server has to answer. */
 export const EDIT_TIMEOUT_MS = 15_000;
 /** What sits beside a control that cannot act without a connection. */
-export const OFFLINE_NOTE = 'يحتاج اتصالاً';
+export { OFFLINE_NOTE };
 export const TIMEOUT_MESSAGE = 'انتهت المهلة؛ يمكن المحاولة ثانية';
 export const FAILED_MESSAGE = 'تعذّر الحفظ؛ يمكن المحاولة ثانية';
 

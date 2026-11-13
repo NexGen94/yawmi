@@ -3,7 +3,8 @@ import { useEffect, useRef } from 'preact/hooks';
 
 import { Timeline } from '../../charts/Timeline';
 import { type GoalTable, TABLES } from '../../goals/columns';
-import { isEmptyMirror, useGoalColumns, useGoals, useOnline, useToday } from '../../goals/data';
+import { useGoalColumns } from '../../goals/columnsData';
+import { isEmptyMirror, useGoals, useOnline, useToday } from '../../goals/data';
 import { centerInScroller } from '../../goals/scroll';
 import { Segmented } from '../../ui/Segmented';
 import { Skeleton } from '../../ui/Skeleton';

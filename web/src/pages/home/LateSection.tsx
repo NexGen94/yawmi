@@ -13,8 +13,9 @@ export const SHOWN = 5;
 
 export interface LateSectionProps {
   items: readonly LateItem[];
-  /** The goals are still being read: what is late in them is not known yet, so «no late» is not said. */
-  pending?: boolean;
+  /** The plan (milestones and goals): still being read, read, or not readable. What is late in it is
+   *  not known until it is read, so «no late» is said only when it is. */
+  plan: 'loading' | 'ready' | 'unavailable';
   /** The check mark of a late habit: logs it for today, as the row of «العادات المستحقة» does. */
   onTick(code: string): void;
 }
@@ -30,11 +31,11 @@ const keyOf = (item: LateItem): string => {
   }
 };
 
-/** An ISO day or an outcome code inside an Arabic sentence is isolated left to right, so «2026-11-09»
- *  is not read backwards. The text itself is unchanged. */
+/** An outcome code inside an Arabic sentence is isolated left to right, so «O10» is not read
+ *  backwards. The text itself is unchanged. */
 function Sentence({ text }: { text: string }) {
   const nodes: ComponentChildren[] = [];
-  const isolated = /\d{4}-\d{2}-\d{2}|O\d+/g;
+  const isolated = /O\d+/g;
   let from = 0;
   for (const match of text.matchAll(isolated)) {
     const at = match.index;
@@ -50,8 +51,8 @@ function Sentence({ text }: { text: string }) {
   return <>{nodes}</>;
 }
 
-function hrefOf(item: Exclude<LateItem, { kind: 'habit_period' | 'habit_daily' }>): string {
-  if (item.kind === 'abstain_slip') return `/habits/${encodeURIComponent(item.code)}`;
+function hrefOf(item: Exclude<LateItem, { kind: 'habit_period' }>): string {
+  if (item.kind === 'abstain_slip' || item.kind === 'habit_daily') return `/habits/${encodeURIComponent(item.code)}`;
   return `/goals/${encodeURIComponent(item.kind === 'milestone' ? item.pageId : item.ref)}`;
 }
 
@@ -61,7 +62,9 @@ const LATE = <Badge tone="signal">متأخر</Badge>;
  *  milestone or a goal as a link to its page. Each says «متأخر» in words and its impact sentence. */
 function LateRow({ item, onTick }: { item: LateItem; onTick(code: string): void }) {
   const sentence = impactSentence(item);
-  if (item.kind === 'habit_period' || item.kind === 'habit_daily') {
+  // A check mark logs today: only for a habit that is scheduled today. A habit that is not (a weekday
+  // habit on its day off) is a link to its page, as an abstain habit is.
+  if (item.kind === 'habit_period' || (item.kind === 'habit_daily' && item.notDueToday !== true)) {
     return (
       <li class="late-item">
         <CheckRow
@@ -93,7 +96,7 @@ function LateRow({ item, onTick }: { item: LateItem; onTick(code: string): void 
 
 /** «المتأخر وغير المنجز»: the milestones past their day, the late habits and the goals under their
  *  pace, in that order; five of them, then «عرض الكل». */
-export function LateSection({ items, pending = false, onTick }: LateSectionProps) {
+export function LateSection({ items, plan, onTick }: LateSectionProps) {
   const [all, setAll] = useState(false);
   const shown = all ? items : items.slice(0, SHOWN);
   return (
@@ -105,8 +108,9 @@ export function LateSection({ items, pending = false, onTick }: LateSectionProps
           ))}
         </ul>
       )}
-      {items.length === 0 && pending && <Skeleton blockSize="var(--hit)" />}
-      {items.length === 0 && !pending && <p class="late-empty">لا متأخرات اليوم.</p>}
+      {items.length === 0 && plan === 'loading' && <Skeleton blockSize="var(--hit)" />}
+      {items.length === 0 && plan === 'ready' && <p class="late-empty">لا متأخرات اليوم.</p>}
+      {plan === 'unavailable' && <p class="late-empty">تعذّرت قراءة الخطة؛ قد تكون فيها محطات متأخرة.</p>}
       {!all && items.length > SHOWN && (
         <button type="button" class="btn btn-quiet" onClick={() => setAll(true)}>
           {`عرض الكل (${fmt.num(items.length)})`}

@@ -173,3 +173,19 @@ describe('habitIndicator', () => {
     expect(habitIndicator(ENGLISH, ENGLISH_LOGS, undefined, TUESDAY, 'sun').text).toBe('٣٠٪');
   });
 });
+
+describe('fix round 1', () => {
+  it('I-3: a strength above zero is never written 0: the card says what the ring draws', () => {
+    const faint = habit('faint', 'خافتة', { start_day: '2026-09-01' });
+    const view = habitIndicator(faint, [log('2026-09-01')], cfg({ measure: 'strength' }), '2026-11-13', 'sun');
+    expect(view.completion).toBeGreaterThan(0);
+    expect(view.completion).toBeLessThan(0.005);
+    expect(view.value).toBe(1);
+    expect(view.text).toBe('1');
+  });
+
+  it('I-3: an unfinished strength is never written 100 either (the ring clamps to 99%)', () => {
+    const view = habitIndicator(ENGLISH, ENGLISH_LOGS, cfg({ measure: 'strength' }), TUESDAY, 'sun', 0.9961);
+    expect(view.text).toBe('99');
+  });
+});
