@@ -250,6 +250,7 @@ describe('tokens.css values (design section 5.1)', () => {
     '--c-signal-ink': '#B8232F',
     '--c-signal-bg': '#FCE4E6',
     '--font': '"IBM Plex Sans Arabic", system-ui, sans-serif',
+    '--font-code': '"Segoe UI", system-ui, Arial, sans-serif',
     '--fs-title': '28px',
     '--fs-section': '17px',
     '--fs-body': '15px',

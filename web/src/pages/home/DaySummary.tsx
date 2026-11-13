@@ -1,4 +1,5 @@
 import type { components } from '../../api/schema';
+import { openCountText } from '../../lib/counts';
 import { fmt } from '../../lib/format';
 import { Card } from '../../ui/Card';
 
@@ -48,13 +49,7 @@ export function prioritiesOf(morning: JournalEntryOut | undefined, evening: Jour
   });
 }
 
-/** «أولويتان مفتوحتان»، «أولوية واحدة مفتوحة»، «3 أولويات مفتوحة». */
-export function openCountText(n: number): string {
-  if (n === 0) return 'لا أولويات مفتوحة';
-  if (n === 1) return 'أولوية واحدة مفتوحة';
-  if (n === 2) return 'أولويتان مفتوحتان';
-  return `${fmt.num(n)} أولويات مفتوحة`;
-}
+export { openCountText };
 
 function sourcesText(n: number): string {
   if (n === 1) return 'استناداً إلى مصدر واحد';
