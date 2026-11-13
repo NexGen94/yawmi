@@ -1,9 +1,12 @@
 /// <reference types="vite/client" />
 // (for the stylesheet import below: the test tsconfig does not load vite client types itself)
 
+import { useState } from 'preact/hooks';
+
 import { fromOrdinal, toOrdinal, weekdayOf } from '../domain/days';
 import type { Day } from '../domain/types';
 import { fmt } from '../lib/format';
+import { Disclosure } from '../ui/Disclosure';
 import { x } from './rtl';
 import './year-grid.css';
 
@@ -45,6 +48,21 @@ export function YearGrid({ year, days, label }: YearGridProps) {
   const width = columns * slot - GAP;
   const height = ROWS * slot - GAP;
   const scores = new Map(days.map((d) => [d.day, d.score]));
+  // The value of a day was only in the title of its cell (a hover). A tap or a click on a day says
+  // it in a line under the grid; the list below the key says every recorded day to a keyboard.
+  const [picked, setPicked] = useState<Day | null>(null);
+  const pick = (event: MouseEvent): void => {
+    const day = (event.target as Element).closest('[data-day]')?.getAttribute('data-day');
+    if (day) setPicked(day);
+  };
+  const pickedScore = picked === null ? undefined : scores.get(picked);
+  const readout =
+    picked === null
+      ? ''
+      : pickedScore === undefined
+        ? `${fmt.dayShort(picked)}: بلا تسجيل للمزاج`
+        : `${fmt.dayShort(picked)}: ${fmt.num(pickedScore)}`;
+  const recorded = [...days].sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
 
   const cells = [];
   for (let k = 0; k < length; k += 1) {
@@ -79,7 +97,14 @@ export function YearGrid({ year, days, label }: YearGridProps) {
 
   return (
     <div class="year-grid">
-      <svg class="chart year-svg" role="img" aria-label={label} viewBox={`0 0 ${width} ${height}`} focusable="false">
+      <svg
+        class="chart year-svg"
+        role="img"
+        aria-label={label}
+        viewBox={`0 0 ${width} ${height}`}
+        focusable="false"
+        onClick={pick}
+      >
         {cells}
       </svg>
       <ul class="year-key" aria-label="مفتاح درجات المزاج">
@@ -93,6 +118,18 @@ export function YearGrid({ year, days, label }: YearGridProps) {
         ))}
       </ul>
       <p class="year-note">الخانة الفارغة يوم بلا تسجيل للمزاج</p>
+      <p class="year-readout" role="status">
+        {readout}
+      </p>
+      {recorded.length > 0 ? (
+        <Disclosure summary="أيام المزاج المسجّلة">
+          <ul class="year-days" aria-label="أيام المزاج المسجّلة">
+            {recorded.map((d) => (
+              <li key={d.day}>{`${fmt.dayShort(d.day)}: ${fmt.num(d.score)}`}</li>
+            ))}
+          </ul>
+        </Disclosure>
+      ) : null}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import type { Page, Route } from '@playwright/test';
 
 import { expectNoSeriousA11y } from './a11y';
 import { expect, PROJECT_DATA, test } from './fixtures';
-import { expectNoHorizontalScroll, shot } from './shots';
+import { expectActiveChoiceVisible, expectNoDefaultLinks, expectNoHorizontalScroll, shot } from './shots';
 
 // Every route of design section 3, in its three states: as loaded, with the server failing, and
 // offline from the saved copy. Each state gets the same three checks: no serious or critical axe
@@ -56,6 +56,8 @@ async function settle(page: Page, heading: string | RegExp): Promise<void> {
 async function inspect(page: Page, slug: string): Promise<void> {
   await expectNoSeriousA11y(page);
   await expectNoHorizontalScroll(page);
+  await expectNoDefaultLinks(page);
+  await expectActiveChoiceVisible(page);
   await shot(page, slug);
 }
 

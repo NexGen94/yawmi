@@ -60,6 +60,14 @@ describe('the app shell', () => {
     }
   });
 
+  it('puts the brand, the navigation and the connection state inside one landmark (axe region, Task 9 M-3)', () => {
+    render(<App />);
+    const side = screen.getByRole('complementary', { name: 'الشريط الجانبي' });
+    expect(side.querySelector('.brand')).not.toBeNull();
+    expect(within(side).getByRole('navigation', { name: 'التنقل الرئيسي' })).toBeTruthy();
+    expect(side.querySelector('.connection')).not.toBeNull();
+  });
+
   it('marks the active item with aria-current="page", and only that one', async () => {
     go('/habits/water');
     render(<App />);

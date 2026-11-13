@@ -3,6 +3,27 @@
    ring when focused from the keyboard (--focus-on-ink on the ink surfaces), and stops moving
    under prefers-reduced-motion (the block at the end). */
 
+/* ---------- Links ---------- */
+
+/* A link that no rule names (a title in the goals tree, in the due report, the line of the mission
+   card) was the browser's own blue and purple: colours outside the palette. Ink with a blue
+   underline, at zero specificity (:where), so that every rule that does name a link wins. */
+a:where(:not(.btn, .nav-link, .skip-link)) {
+  color: var(--c-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--c-blue);
+  text-underline-offset: 0.2em;
+}
+
+a:where(:not(.btn, .nav-link, .skip-link)):hover {
+  text-decoration-color: var(--c-ink);
+}
+
+:is(.hero-card, .on-ink) a:where(:not(.btn)) {
+  color: var(--c-bg);
+  text-decoration-color: var(--c-blue-light);
+}
+
 /* ---------- Focus ---------- */
 
 /* The transparent outline keeps a visible ring in forced-colors mode, where box-shadow is dropped. */
@@ -1031,8 +1052,11 @@
 }
 
 .heat-future {
-  stroke: var(--c-blue-pale);
+  /* 3 to 1 on the card (WCAG 1.4.11): the pale blue was 1.2 to 1. Dashed, so that a day to come is
+     not mistaken for a day with nothing logged (the round outline of .heat-none). */
+  stroke: var(--c-blue);
   stroke-width: 1.5;
+  stroke-dasharray: 3 3;
 }
 
 .heat-today {
@@ -1046,6 +1070,10 @@
 
 :is(.hero-card, .on-ink) :is(.heat-missed, .heat-cross) {
   stroke: var(--c-signal-bg);
+}
+
+:is(.hero-card, .on-ink) .heat-future {
+  stroke: var(--c-blue-light);
 }
 
 :is(.hero-card, .on-ink) :is(.heat-skipped, .heat-hatch) {

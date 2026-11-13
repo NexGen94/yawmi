@@ -23,7 +23,7 @@ const NAV_ID = 'nav-main';
 // (layout.css) it is a top bar and the same <nav> opens below it as a drawer.
 export function Sidebar(props: { path: string }) {
   const [open, setOpen] = useState(false);
-  const sidebar = useRef<HTMLDivElement>(null);
+  const sidebar = useRef<HTMLElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const nav = useRef<HTMLElement>(null);
 
@@ -74,7 +74,7 @@ export function Sidebar(props: { path: string }) {
   };
 
   return (
-    <div ref={sidebar} class="sidebar" data-open={open ? '' : undefined}>
+    <aside ref={sidebar} class="sidebar" aria-label="الشريط الجانبي" data-open={open ? '' : undefined}>
       <div class="sidebar-bar">
         <span class="brand">يومي</span>
         <button
@@ -120,6 +120,6 @@ export function Sidebar(props: { path: string }) {
       <div class="sidebar-foot">
         <ConnectionStatus />
       </div>
-    </div>
+    </aside>
   );
 }

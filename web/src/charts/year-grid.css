@@ -21,6 +21,11 @@
   stroke-width: 1;
 }
 
+.year-cell,
+.year-empty {
+  cursor: pointer;
+}
+
 .year-empty {
   fill: none;
   stroke: var(--c-blue-light);
@@ -50,6 +55,25 @@
 
 .year-note {
   margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+/* The value of the day that was tapped: a fixed line, so the grid does not move when it fills. */
+.year-readout {
+  margin: 0;
+  min-block-size: calc(var(--fs-body) * var(--lh));
+  color: var(--c-ink);
+  font-size: var(--fs-body);
+}
+
+.year-days {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: var(--sp-1) var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
   color: var(--c-ink-2);
   font-size: var(--fs-note);
 }

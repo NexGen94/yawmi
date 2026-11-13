@@ -7,7 +7,8 @@ const WORDS = { met: 'تحقق', notMet: 'لم يتحقق', ongoing: 'جارٍ' 
 const LABEL = { week: 'الأسبوع', month: 'الشهر' } as const;
 
 /** The outcome of each week or month of a habit judged on its period, beside the grid of days: the
- *  days of such a habit are not hits or misses, the period is. Each mark says its outcome in words. */
+ *  days of such a habit are not hits or misses, the period is. Each mark says its outcome in words
+ *  and its own days: the weeks run Sunday to Saturday, the rows of the grid from the first day. */
 export function PeriodMarks({ marks, period }: { marks: PeriodMark[]; period: Exclude<HabitPeriod, 'day'> }) {
   if (marks.length === 0) return null;
   return (
@@ -15,6 +16,7 @@ export function PeriodMarks({ marks, period }: { marks: PeriodMark[]; period: Ex
       {marks.map((mark, i) => (
         <li key={mark.start} title={`${fmt.day(mark.start)} – ${fmt.day(mark.end)}`}>
           <span>{`${LABEL[period]} ${fmt.num(i + 1)}`}</span>
+          <span class="period-range">{`${fmt.dayShort(mark.start)} – ${fmt.dayShort(mark.end)}`}</span>
           <Badge>{WORDS[mark.outcome]}</Badge>
         </li>
       ))}

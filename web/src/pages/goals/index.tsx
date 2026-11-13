@@ -58,16 +58,22 @@ export default function GoalsPage() {
   const table = parseTable(location.query?.table);
   const data = goals.data;
 
-  // Five views do not fit one row on a phone: when the view changes, the chosen one is centred in the
-  // switch. Only the switch scrolls; never the window, and never on the first load.
-  const shownView = useRef(view);
+  // Five views do not fit one row on a phone: the chosen one is centred in the switch, when the
+  // switch first appears (a direct load of ?view=horizons opened with it out of sight) and whenever
+  // the view changes. Only the switch scrolls; never the window.
+  const centred = useRef<View | null>(null);
+  const switchShown = data !== undefined;
   useEffect(() => {
-    if (shownView.current === view) return;
-    shownView.current = view;
     const box = switchBox.current;
-    const chip = box?.querySelector<HTMLElement>('[aria-checked="true"]');
-    if (box && chip) centerInScroller(box, chip);
-  }, [view]);
+    if (!box) {
+      centred.current = null; // the switch is gone (loading again): its next one starts at the edge
+      return;
+    }
+    if (centred.current === view) return;
+    centred.current = view;
+    const chip = box.querySelector<HTMLElement>('[aria-checked="true"]');
+    if (chip) centerInScroller(box, chip);
+  }, [view, switchShown]);
 
   const choose = (next: { view?: View; table?: GoalTable }): void => {
     const query = new URLSearchParams({ view: next.view ?? view });

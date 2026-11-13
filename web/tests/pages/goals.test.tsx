@@ -414,6 +414,26 @@ describe('the view switch', () => {
     await waitFor(() => expect(sets.length).toBeGreaterThan(0));
   });
 
+  it('centres the chosen chip on a direct load of ?view=horizons, when the switch appears (Task 15 N-1)', async () => {
+    const sets: { name: string; value: number }[] = [];
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollLeft');
+    Object.defineProperty(HTMLElement.prototype, 'scrollLeft', {
+      configurable: true,
+      get: () => 0,
+      set(this: HTMLElement, value: number) {
+        if (this.classList.contains('goals-switch')) sets.push({ name: this.querySelector('[aria-checked="true"]')?.textContent ?? '', value });
+      },
+    });
+    try {
+      await open('/goals?view=horizons');
+      await waitFor(() => expect(sets.length).toBeGreaterThan(0));
+      expect(sets[0]?.name).toBe('الآفاق');
+    } finally {
+      if (original) Object.defineProperty(HTMLElement.prototype, 'scrollLeft', original);
+      else delete (HTMLElement.prototype as { scrollLeft?: number }).scrollLeft;
+    }
+  });
+
   it('writes the view in ?view= and opens the tree by default', async () => {
     await open();
     expect(screen.getByRole('radio', { name: 'الشجرة' }).getAttribute('aria-checked')).toBe('true');
