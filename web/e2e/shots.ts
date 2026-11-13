@@ -41,3 +41,30 @@ export async function expectActiveChoiceVisible(page: Page): Promise<void> {
   );
   expect(hidden, 'the chosen option of a switch is out of the window').toEqual([]);
 }
+
+/** Every control is at least 44 CSS pixels in its block size (the design's `--hit`, WCAG 2.5.5).
+ *  Links inside a line of text are exempt (they are as tall as the text), and so is the skip link
+ *  while it is off screen. Switches, buttons, chips, fields and rows are measured. */
+export async function expectTargets44(page: Page): Promise<void> {
+  const small = await page.evaluate(() => {
+    const selector = 'button, a[href], input:not([type="hidden"]), select, textarea, [role="button"], [role="radio"], [role="switch"], summary';
+    const out: string[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>(selector)) {
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue; // not drawn
+      if (getComputedStyle(el).visibility === 'hidden') continue;
+      if (el.classList.contains('skip-link') && box.bottom <= 0) continue;
+      if (el.closest('svg')) continue;
+      // an input drawn as a part of a bigger control (a hidden-looking checkbox of a switch)
+      const label = el.closest('label');
+      const hit = label ? label.getBoundingClientRect() : box;
+      // a link inside a line of text is as tall as the text
+      if (el.tagName === 'A' && !el.classList.contains('btn') && !el.classList.contains('nav-link') && getComputedStyle(el).display === 'inline') continue;
+      if (Math.max(box.height, hit.height) < 43.5) {
+        out.push(`${el.tagName.toLowerCase()}.${el.className.toString().split(' ')[0]} «${(el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 24)}» ${Math.round(box.width)}x${Math.round(box.height)}`);
+      }
+    }
+    return out;
+  });
+  expect(small, 'controls shorter than 44 px').toEqual([]);
+}
