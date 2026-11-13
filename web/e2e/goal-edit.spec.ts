@@ -157,9 +157,20 @@ test('the page is reachable by keyboard: the actions first, then the editable va
     h.setAttribute('tabindex', '-1');
     h.focus();
   });
+  const rings: { label: string; ring: boolean }[] = [];
   const stop = async (): Promise<string> => {
     await page.keyboard.press('Tab');
-    return page.evaluate(() => (document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? '').trim());
+    const now = await page.evaluate(() => {
+      const el = document.activeElement as HTMLInputElement;
+      const style = getComputedStyle(el);
+      return {
+        label: (el.getAttribute('aria-label') ?? el.textContent ?? '').trim(),
+        // the ring of the design (a shadow), or the browser's own outline on a plain link
+        ring: style.boxShadow !== 'none' || (style.outlineStyle !== 'none' && style.outlineWidth !== '0px'),
+      };
+    });
+    rings.push(now);
+    return now.label;
   };
   // the one prominent action, then the secondary one
   expect(await stop()).toBe('عادة من هذا الهدف');
@@ -167,7 +178,7 @@ test('the page is reachable by keyboard: the actions first, then the editable va
   const later: string[] = [];
   for (let i = 0; i < 10; i += 1) later.push(await stop());
   expect(later.some((s) => s.startsWith('تعديل الموعد'))).toBe(true);
-  // a focus ring is drawn on the stop
-  const ring = await page.evaluate(() => getComputedStyle(document.activeElement as Element).boxShadow);
-  expect(ring).not.toBe('none');
+  // a focus ring is drawn on every stop: the
+  // indicator card is among these stops now, so the check covers all of them, not only the last
+  expect(rings.filter((r) => !r.ring).map((r) => r.label)).toEqual([]);
 });

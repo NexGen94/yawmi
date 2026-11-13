@@ -3,6 +3,7 @@ import { toOrdinal } from '../domain/days';
 import type { Day } from '../domain/types';
 import type { PaceOut } from '../goals/types';
 import { fmt } from '../lib/format';
+import { valueNum } from '../lib/value';
 import { x } from './rtl';
 
 export interface PaceLineProps {
@@ -22,12 +23,8 @@ const PAD_BOTTOM = 28;
 const PLOT_W = W - PAD_START - PAD_END;
 const PLOT_H = H - PAD_TOP - PAD_BOTTOM;
 
-/** A value of the pace as text. A value that is not zero is never written «0»: below 1 it keeps two
- *  decimals, and below 0.005 it says so in words; from 1 up, one decimal. */
-export function paceNum(n: number): string {
-  if (n !== 0 && Math.abs(n) < 0.005) return 'أقل من 0.01';
-  return fmt.num(n, { maximumFractionDigits: Math.abs(n) < 1 ? 2 : 1 });
-}
+/** A value of the pace as text (the same formatter as the indicators: `lib/value`). */
+export const paceNum = valueNum;
 const num = paceNum;
 
 /** «45 يوماً حتى الموعد», «الموعد اليوم» or «تجاوز الموعد بـ5 أيام». */

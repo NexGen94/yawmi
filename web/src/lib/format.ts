@@ -43,6 +43,11 @@ export function setDigits(d: Digits): void {
   digits = d;
 }
 
+/** The digits now in force. */
+export function getDigits(): Digits {
+  return digits;
+}
+
 const numberFormats = new Map<string, Intl.NumberFormat>();
 const dateFormats = new Map<string, Intl.DateTimeFormat>();
 

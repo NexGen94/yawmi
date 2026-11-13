@@ -168,6 +168,9 @@ export interface UseHabitsToday {
   state: QueryState;
   stale: boolean;
   items: HabitTodayItem[];
+  /** Every habit the server holds with its state, whatever `scope` is: the section of what is late
+   *  counts them as the server's daily notice does (not only the habits due today). */
+  allItems: HabitTodayItem[];
   /** Habits that count in the ring, and how many of them are done today. */
   done: number;
   due: number;
@@ -272,6 +275,10 @@ export function useHabitsToday(scope: ItemScope = 'due'): UseHabitsToday {
     () => (bundle === undefined ? [] : buildItems(bundle, sent, pending, day, scope)),
     [bundle, sent, pending, day, scope],
   );
+  const allItems = useMemo(() => {
+    if (scope === 'all') return items;
+    return bundle === undefined ? [] : buildItems(bundle, sent, pending, day, 'all');
+  }, [scope, items, bundle, sent, pending, day]);
   const logs = useMemo(
     () => (bundle === undefined ? [] : overlayLogs(bundle, sent, pending, day)),
     [bundle, sent, pending, day],
@@ -385,6 +392,7 @@ export function useHabitsToday(scope: ItemScope = 'due'): UseHabitsToday {
     state,
     stale: query.stale,
     items,
+    allItems,
     done,
     due,
     badge,

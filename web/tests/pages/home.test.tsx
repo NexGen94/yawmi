@@ -71,7 +71,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const row = (title: string): HTMLElement => screen.getByText(title).closest('li') as HTMLElement;
+// A late habit is also listed in «المتأخر وغير المنجز»: a row is looked for in the habits due today.
+const row = (title: string): HTMLElement =>
+  within(screen.getByRole('region', { name: 'العادات المستحقة' })).getByText(title).closest('li') as HTMLElement;
 
 async function renderStory(): Promise<void> {
   routeFetch(fetchMock);
@@ -179,7 +181,7 @@ describe('home: the habit groups', () => {
       logs: [{ habit_code: 'week_english', day: '2026-11-08', status: 'done', value: 60 }],
     });
     render(<HomePage />);
-    const item = (await screen.findByText('إنجليزية أسبوعية')).closest('li') as HTMLElement;
+    const item = within(await screen.findByRole('region', { name: 'العادات المستحقة' })).getByText('إنجليزية أسبوعية').closest('li') as HTMLElement;
     expect(within(item).getByText(/60 من 285 دقيقة هذا الأسبوع/)).toBeTruthy();
     expect(within(item).getByText(/المطلوب يومياً: 45 دقيقة/)).toBeTruthy();
   });
@@ -269,10 +271,14 @@ describe('home: the day summary', () => {
   });
 });
 
-describe('home: the later sections have no visible stand-ins', () => {
-  it('draws no message, vision or overdue section yet', async () => {
+// The contract of the old test («the later sections have no visible stand-ins») is replaced by this one:
+// task 17 draws them (counterparts in pages/home-late.test.tsx).
+describe('home: the overdue section, the message and vision, and the domains are drawn', () => {
+  it('draws «المتأخر وغير المنجز», «رسالتي ورؤيتي» and the four domain cards', async () => {
     await renderStory();
-    for (const text of ['رسالتي', 'رؤيتي', 'المتأخر وغير المنجز']) expect(screen.queryByText(text)).toBeNull();
+    expect(screen.getByRole('region', { name: 'المتأخر وغير المنجز' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'رسالتي ورؤيتي' })).toBeTruthy();
+    expect(screen.getAllByRole('heading', { level: 3, name: /^(المهني|الصحي|النفسي|العلمي)$/ })).toHaveLength(4);
   });
 });
 
@@ -394,7 +400,7 @@ describe('home: whole units, and two quick taps', () => {
     });
     routeFetch(fetchMock, { habits: [weekly], logs: [] });
     render(<HomePage />);
-    const item = (await screen.findByText('القراءة الأسبوعية')).closest('li') as HTMLElement;
+    const item = within(await screen.findByRole('region', { name: 'العادات المستحقة' })).getByText('القراءة الأسبوعية').closest('li') as HTMLElement;
     expect(within(item).getByText(/المطلوب يومياً: 19 دقيقة/)).toBeTruthy();
     fireEvent.click(within(item).getByRole('button', { pressed: false }));
     await waitFor(async () => expect(await listPending()).toHaveLength(1));

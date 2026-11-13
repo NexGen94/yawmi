@@ -1,15 +1,22 @@
 /// <reference types="vite/client" />
-import { useEffect } from 'preact/hooks';
+import { useEffect, useMemo } from 'preact/hooks';
 
 import { combine } from '../../data/combine';
+import { useGoals } from '../../goals/data';
 import { useHabitsToday } from '../../habits/useHabitsToday';
 import { fmt } from '../../lib/format';
+import { lateItems } from '../../progress/impact';
+import { useSettings } from '../../settings/data';
+import { Skeleton } from '../../ui/Skeleton';
 import { StateFrame } from '../../ui/StateFrame';
 import { Toast } from '../../ui/Toast';
+import { DomainCards } from '../../goals/DomainCards';
 import { DayCards } from './DayCards';
 import { DaySummary, type SummaryInsight } from './DaySummary';
 import { DueHabits } from './DueHabits';
 import { HomeSkeleton } from './HomeSkeleton';
+import { LateSection } from './LateSection';
+import { MissionCard } from './MissionCard';
 import { QuickAccess } from './QuickAccess';
 import { TodayHero } from './TodayHero';
 import { type DayEntries, useDayEntries } from './useDayEntries';
@@ -18,6 +25,8 @@ import './home.css';
 
 /** Days in a cycle (design section 4, the 56-day grid). */
 const CYCLE_DAYS = 56;
+/** The firm rule of the plan: the week starts on Sunday (design 13). */
+const WEEK_START = 'sun';
 
 /** The two lines under the day summary: the saved evening review once the day is closed, else the
  *  morning insight from `GET /v1/today` (which is not shown after closing). */
@@ -43,6 +52,22 @@ export default function HomePage() {
   const { state, stale } = combine(habits, entries);
   const { done, due, badge, day } = habits;
   const note = useLogNote(habits);
+  // The plan and the settings come beside the day, not into its state: a page that cannot read them
+  // still shows the habits, and says what is missing in the cards that need them.
+  const goals = useGoals();
+  const settings = useSettings();
+  const lateList = useMemo(
+    () =>
+      lateItems({ habits: habits.allItems, logs: habits.logs, goals: goals.data, today: day, weekStart: WEEK_START }),
+    [habits.allItems, habits.logs, goals.data, day],
+  );
+
+  let planState: 'loading' | 'ready' | 'unavailable' = 'ready';
+  if (goals.data === undefined) planState = goals.state === 'loading' ? 'loading' : 'unavailable';
+  let missionUnavailable: 'offline' | 'error' | undefined;
+  if (settings.data === undefined && settings.query.state !== 'loading') {
+    missionUnavailable = settings.query.state === 'offline' ? 'offline' : 'error';
+  }
 
   // The badge on the app icon: build habits still to do today. The push module is loaded on demand,
   // so it stays out of the first load.
@@ -79,7 +104,7 @@ export default function HomePage() {
         <div class="page-cols">
           <div class="home-main">
             <TodayHero done={done} due={due} />
-            {/* later: «المتأخر وغير المنجز», the overdue section */}
+            <LateSection items={lateList} plan={planState} onTick={(code) => void habits.tick(code)} />
             <DayCards morning={entries.morning} closed={entries.closed} />
             {habits.items.length > 0 && (
               <DueHabits
@@ -92,8 +117,22 @@ export default function HomePage() {
             )}
           </div>
           <div class="home-side">
-            {/* later: «رسالتي» and «رؤيتي», written by the person only */}
-            {/* later: the four domain cards */}
+            <MissionCard
+              mission={settings.data?.mission ?? ''}
+              vision={settings.data?.vision ?? ''}
+              loading={settings.data === undefined && settings.query.state === 'loading'}
+              unavailable={missionUnavailable}
+            />
+            <section class="home-domains" aria-labelledby="home-domains-title">
+              <h2 id="home-domains-title" class="home-domains-title">
+                المجالات
+              </h2>
+              {goals.state === 'loading' && goals.data === undefined ? (
+                <Skeleton blockSize="180px" />
+              ) : (
+                <DomainCards outcomes={goals.data?.outcomes ?? []} />
+              )}
+            </section>
             <QuickAccess />
             {/* later: the favourite focus combinations, inside the quick access card */}
             <DaySummary morning={entries.morning} evening={entries.evening} insight={insight} />
