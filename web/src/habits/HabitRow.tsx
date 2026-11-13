@@ -105,12 +105,14 @@ function badgesOf(item: HabitTodayItem, showState: boolean): ComponentChildren |
   );
 }
 
-/** The second line of an abstain habit. No need per day: it has nothing to reach. */
-export function abstainNote(item: HabitTodayItem): string {
-  if (item.statusToday === 'done') return 'انزلاق مسجَّل اليوم';
-  if (item.statusToday === 'skip') return 'متخطّاة اليوم';
-  if (item.statusToday === 'vacation') return 'إجازة اليوم';
-  return isCleanToday(item) ? 'نظيف اليوم' : 'لا تسجيل اليوم';
+/** The second line of an abstain habit. No need per day: it has nothing to reach. Under a label that
+ *  already says «اليوم» (the detail page), `dated: false` leaves the day out of the words. */
+export function abstainNote(item: HabitTodayItem, { dated = true }: { dated?: boolean } = {}): string {
+  const day = dated ? ' اليوم' : '';
+  if (item.statusToday === 'done') return `انزلاق مسجَّل${day}`;
+  if (item.statusToday === 'skip') return `متخطّاة${day}`;
+  if (item.statusToday === 'vacation') return `إجازة${day}`;
+  return isCleanToday(item) ? `نظيف${day}` : `لا تسجيل${day}`;
 }
 
 /** One habit due today: the check mark, the title and progress, the outcome code, and the quick

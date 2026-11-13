@@ -26,6 +26,12 @@ export interface CommitmentInput {
   weekStart: WeekStart;
 }
 
+function lastLoggedDay(logs: readonly HabitLogOut[], code: string): Day | null {
+  let last: Day | null = null;
+  for (const log of logs) if (log.habit_code === code && (last === null || log.day > last)) last = log.day;
+  return last;
+}
+
 /** The days kept of the daily habits in `month` against the days due, or null when no day was due. */
 export function monthCommitment({ habits, logs, month, today, weekStart }: CommitmentInput): Commitment | null {
   const first: Day = `${month}-01`;
@@ -35,11 +41,16 @@ export function monthCommitment({ habits, logs, month, today, weekStart }: Commi
   let reached = 0;
   let total = 0;
   for (const habit of habits) {
-    if (!habit.active || habit.period !== 'day') continue;
+    if (habit.period !== 'day') continue;
     const prepared = prepare(habit, logs);
     if (prepared === null) continue;
+    // An archived habit used to leave every month, so archiving changed the figure of a month that
+    // was over (Task 21 N-1). The server keeps no archive day, so it is owed up to the last day it
+    // was logged: the months before that stay as they were, and one with no log at all stays out.
+    const lastLogged = habit.active ? null : lastLoggedDay(logs, habit.code);
+    if (!habit.active && lastLogged === null) continue;
+    const to = [last, habit.end_day ?? last, lastLogged ?? last].reduce((a, b) => (a < b ? a : b));
     const from = habit.start_day > first ? habit.start_day : first;
-    const to = habit.end_day != null && habit.end_day < last ? habit.end_day : last;
     if (from > to) continue;
     for (const day of scheduledDays(prepared.spec, from, to)) {
       if (isNeutral(prepared.logs, day)) continue;

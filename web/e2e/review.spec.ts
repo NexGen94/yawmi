@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Page } from '@playwright/test';
 
 import { expectNoSeriousA11y } from './a11y';
-import { type Api, expect, riyadhToday, test } from './fixtures';
+import { type Api, expect, riyadhToday, sharedStateTest as test } from './fixtures';
 import { expectNoHorizontalScroll, shot } from './shots';
 
 // The review page against the real test server and the fake provider (no network, no key). The

@@ -380,11 +380,13 @@ describe('habit detail: the rest of the page', () => {
     expect(screen.queryByText('متأخرة')).toBeNull();
   });
 
-  it('an abstain habit says «نظيف اليوم» for today, not a build target', async () => {
+  it('an abstain habit says «نظيف» for today, not a build target (and not «اليوم: نظيف اليوم», Task 11 M-2)', async () => {
     const abstain = habit('no_sugar', 'ترك السكر', { polarity: 'abstain', start_day: '2026-11-01' });
     serve({ habits: [abstain], logs: [], progress: { no_sugar: PROGRESS } });
     mount('no_sugar');
-    await screen.findByText('نظيف اليوم');
+    const term = await screen.findByText('اليوم', { selector: 'dt' });
+    expect(term.nextElementSibling?.textContent).toBe('نظيف');
+    expect(screen.queryByText('نظيف اليوم')).toBeNull();
     expect(screen.queryByText(/من 1 مرة/)).toBeNull();
   });
 

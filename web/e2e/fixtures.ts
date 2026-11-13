@@ -1,5 +1,6 @@
 import { expect, test as base, type APIRequestContext, type Page } from '@playwright/test';
 
+import { acquire } from './exclusive';
 import { PORTS } from './ports';
 
 /** The test API, by address (not through the web proxy): the suite's own server on this machine. */
@@ -94,6 +95,24 @@ export const test = base.extend<Fixtures>({
     await expect(page.getByRole('heading', { level: 1, name: 'الرئيسية' })).toBeVisible();
     await use(page);
   },
+});
+
+/** `test` for a spec that changes what every device of the user shares (the AI consent and memory):
+ *  each of its tests holds a lock for the API it talks to, so that two workers never withdraw the
+ *  consent under each other (the flake of ask.spec under `--workers=2` or more). */
+export const sharedStateTest = test.extend<{ sharedState: void }>({
+  sharedState: [
+    async ({}, use) => {
+      const release = await acquire(`state-${PORTS.api}`);
+      try {
+        await use();
+      } finally {
+        await release();
+      }
+    },
+    // Waiting for the lock is not the test's time: the fixture has its own timeout.
+    { auto: true, timeout: 12 * 60_000 },
+  ],
 });
 
 export { expect };

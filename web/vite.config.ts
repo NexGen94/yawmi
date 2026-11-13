@@ -48,6 +48,21 @@ export default defineConfig({
   build: {
     rolldownOptions: {
       output: {
+        // The UI primitives that only lazy pages use were one tiny chunk each (a page needing five
+        // fetched five files). One named group puts them in a single chunk that the first load never
+        // imports (tests/chunks.test.ts). The group takes the matched modules alone
+        // (`includeDependenciesRecursively: false`): what they import, `ui/layer.ts` for one, stays
+        // where the first load needs it.
+        codeSplitting: {
+          groups: [
+            {
+              name: 'lazy-ui',
+              test: /[\\/]src[\\/]ui[\\/](?:Chips|Dialog|Disclosure|Field|Segmented|Slider|direction)\.tsx?$/,
+              includeDependenciesRecursively: false,
+              priority: 10,
+            },
+          ],
+        },
         // Every lazy page gets a recognizable chunk name, so scripts/check-budget.mjs can refuse
         // any page but home in what index.html loads first.
         chunkFileNames: (chunk) => {

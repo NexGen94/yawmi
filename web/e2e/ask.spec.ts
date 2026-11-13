@@ -1,10 +1,12 @@
 import { expectNoSeriousA11y } from './a11y';
-import { expect, riyadhToday, SYNC_TIMEOUT, test } from './fixtures';
+import { expect, riyadhToday, sharedStateTest as test, SYNC_TIMEOUT } from './fixtures';
 import { expectNoHorizontalScroll, shot } from './shots';
 
 // The first web consumer of the server AI, against the fake provider of the test server (no
 // network, no key). Each test starts from a withdrawn consent so the dialog is always seen, and
-// leaves the memory empty and the consent withdrawn for the tests after it.
+// leaves the memory empty and the consent withdrawn for the tests after it. The consent is the
+// user's, not a device's: `sharedStateTest` makes the tests of this file (and of review.spec) take
+// turns when the suite runs with more than one worker.
 
 const QUESTION = 'ما حالة أهدافي هذا الأسبوع؟';
 const FAKE_LINES = ['ملخص تجريبي لليوم.', 'هذا رد ثابت من مزوّد وهمي للاختبار.'];

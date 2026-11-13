@@ -231,7 +231,7 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
                       <dt>{habit.polarity === 'abstain' ? 'اليوم' : 'الفترة الحالية'}</dt>
                       <dd>
                         {habit.polarity === 'abstain'
-                          ? abstainNote(item)
+                          ? abstainNote(item, { dated: false })
                           : `${fmt.num(item.progress.done)} من ${amount(item.progress.target, habit.kind === 'boolean' ? '' : habit.unit)} ${PERIOD_WORD[habit.period]}`}
                       </dd>
                     </div>

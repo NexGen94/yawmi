@@ -8,6 +8,9 @@
 // show something (`userVisibleOnly`), so an unreadable payload still shows a neutral one.
 
 const TITLE = 'يومي';
+/** The message of a notification the server sent with neither a title nor a body (or none the worker
+ *  could read): a title alone says nothing. A noun phrase, so it addresses no one. */
+const NEUTRAL_BODY = 'تنبيه جديد';
 
 interface PushData {
   json(): unknown;
@@ -55,7 +58,7 @@ function read(data: PushData | null): Shown {
     message = null;
   }
   const n = (message as { notification?: Record<string, unknown> } | null)?.notification ?? {};
-  const body = str(n.body);
+  const body = str(n.body) ?? (str(n.title) === undefined ? NEUTRAL_BODY : undefined);
   const badge = typeof n.app_badge === 'number' && Number.isInteger(n.app_badge) && n.app_badge >= 0 ? n.app_badge : undefined;
   return {
     title: str(n.title) ?? TITLE,
