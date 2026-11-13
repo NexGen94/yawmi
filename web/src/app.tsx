@@ -2,6 +2,7 @@ import type { AnyComponent } from 'preact';
 import { lazy as isoLazy, LocationProvider, Route, Router } from 'preact-iso';
 
 import HomePage from './pages/home';
+import { useDigits } from './settings/digits';
 import { AppShell, focusPageHeading, syncPageTitle } from './shell/AppShell';
 import { NotFound } from './shell/NotFound';
 
@@ -51,6 +52,8 @@ const SettingsPage = lazy(() => import('./pages/settings'));
 const PairPage = lazy(() => import('./pages/pair'));
 
 export function App() {
+  // The whole app is drawn again when the digits setting changes (`fmt` reads it in one place).
+  useDigits();
   return (
     <LocationProvider>
       <AppShell>

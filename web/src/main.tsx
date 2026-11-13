@@ -4,10 +4,13 @@ import { registerSW } from 'virtual:pwa-register';
 import { App } from './app';
 import { UpdatePrompt } from './shell/UpdatePrompt';
 import './styles/index.css';
+import { restoreDigits } from './settings/digits';
 import { installFlushTriggers } from './sync/triggers';
 
 // Flush the outbox when online, foregrounded or launched.
 installFlushTriggers();
+// The digits this device remembers, so a start without a connection draws them too.
+void restoreDigits();
 
 const root = document.getElementById('app');
 if (!root) throw new Error('#app root element is missing from index.html');

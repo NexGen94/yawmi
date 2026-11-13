@@ -94,11 +94,14 @@ describe('SettingsPage StateFrame states', () => {
   beforeEach(() => {
     closeDb();
     Object.assign(globalThis, { indexedDB: new IDBFactory() });
+    // the page also reads the settings of the person; these tests do not serve them
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
   });
 
   afterEach(() => {
     closeDb();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('loading: shows skeleton / loading indicator', () => {
@@ -147,6 +150,7 @@ describe('SettingsPage real route driving four states', () => {
   beforeEach(() => {
     closeDb();
     Object.assign(globalThis, { indexedDB: new IDBFactory() });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
   });
 
   afterEach(() => {

@@ -1,0 +1,103 @@
+/* The sections of the settings page added in task 17. Colors only through the tokens; logical
+   properties only. The cards stack in the page's one column, as the session and notifications do. */
+
+.settings-page .settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin-block-start: var(--sp-6);
+}
+
+.settings-note,
+.settings-hint {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.settings-status,
+.settings-error {
+  margin: 0;
+  font-size: var(--fs-note);
+}
+
+.settings-error {
+  color: var(--c-signal-ink);
+}
+
+.settings-reminder,
+.settings-late {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-block-end: var(--sp-4);
+  border-block-end: 1px solid var(--c-blue-pale);
+}
+
+.settings-late {
+  padding-block-end: 0;
+  border-block-end: 0;
+}
+
+.settings-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-block-size: var(--hit);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-switch input {
+  inline-size: 24px;
+  block-size: 24px;
+  accent-color: var(--c-ink);
+}
+
+.settings-sample {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+}
+
+.shortcut {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+}
+
+.shortcut dt {
+  flex: none;
+  min-inline-size: 8rem;
+}
+
+.shortcut dd {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+kbd {
+  display: inline-block;
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--c-blue);
+  border-radius: var(--sp-2);
+  background: var(--c-surface);
+  color: var(--c-ink);
+  font-family: var(--font-code);
+  font-size: var(--fs-note);
+  unicode-bidi: isolate;
+}
