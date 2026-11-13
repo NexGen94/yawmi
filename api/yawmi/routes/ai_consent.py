@@ -14,7 +14,6 @@ from fastapi.responses import JSONResponse
 from yawmi.ai.consent import (
     MSG_PROVIDER_MISMATCH,
     PROVIDER_MISMATCH,
-    AiErrorBody,
     ConsentIn,
     ConsentOut,
     ConsentStoreDep,
@@ -24,7 +23,7 @@ from yawmi.ai.consent import (
 )
 from yawmi.auth.deps import USER_KINDS, SettingsDep, require_kind
 from yawmi.auth.tokens import AccessClaims
-from yawmi.errors import FORBIDDEN, INVALID, UNAUTHORIZED
+from yawmi.errors import FORBIDDEN, INVALID, UNAUTHORIZED, ValidationErrorBody
 
 router = APIRouter(
     prefix="/v1",
@@ -53,7 +52,10 @@ async def get_consent(_: DeviceDep, store: ConsentStoreDep, settings: SettingsDe
         "الموافقة بعد السحب تجدّد الصف نفسه."
     ),
     response_model=ConsentOut,
-    responses={409: {"model": AiErrorBody, "description": MSG_PROVIDER_MISMATCH}, **INVALID},
+    responses={
+        409: {"model": ValidationErrorBody, "description": MSG_PROVIDER_MISMATCH},
+        **INVALID,
+    },
 )
 async def put_consent(
     body: ConsentIn, device: DeviceDep, store: ConsentStoreDep, settings: SettingsDep

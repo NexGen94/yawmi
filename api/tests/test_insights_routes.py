@@ -21,9 +21,11 @@ from fastapi import FastAPI
 from httpx import ASGITransport
 from pydantic import SecretStr
 
+from yawmi.ai.base import PolicyViolation
 from yawmi.ai.consent import InMemoryConsentStore
 from yawmi.ai.reader import InMemorySessionReader
 from yawmi.ai.schema import InsightResponse
+from yawmi.ai.service import InsightService
 from yawmi.ai.store import InMemoryInsightStore, new_insight
 from yawmi.auth.memory_store import InMemoryDeviceStore
 from yawmi.auth.tokens import issue_access
@@ -356,6 +358,26 @@ async def test_a_transport_error_is_a_502(client, anthropic):
     response = await client.post("/v1/ask", json=ask_body(), headers=auth())
     assert response.status_code == 502
     assert response.json()["errors"][0]["type"] == "ai_unavailable"
+
+
+class _WithholdingProvider:
+    """Stands for any day a server source could carry raw health (none does yet)."""
+
+    async def complete(self, system: str, user: str, schema: dict, model: str) -> dict:
+        raise PolicyViolation("raw health samples must never be sent to DeepSeek")
+
+
+async def test_a_withheld_raw_health_payload_is_still_a_422_without_a_500():
+    """M-6: the `raw_health_not_allowed` mapping stays reachable and tested."""
+    app = build_app()
+    app.state.insights = InsightService(_WithholdingProvider(), app.state.settings)
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.post("/v1/ask", json=ask_body(), headers=auth())
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "لا تُرسل بيانات صحية خام إلى هذا المزوّد",
+        "errors": [{"loc": ["body"], "type": "raw_health_not_allowed"}],
+    }
 
 
 async def test_a_missing_key_is_a_503():

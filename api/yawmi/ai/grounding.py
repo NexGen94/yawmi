@@ -14,9 +14,21 @@ so the cited ones can be shown (`yawmi.ai.cards`). Sources, in this order:
 | `focus:<day>` · `breath:<day>` | `focus` · `breath` | minutes and sessions |
 | `mission` · `vision` | `mission` · `vision` | the text, only with `personal_text` |
 
-A daily habit counts the scheduled days of the last seven that met its target (for an abstain
-habit, the scheduled days without a slip); a weekly or monthly one its current period. No health
-metric (`daily_metrics`) is read, so none reaches a provider. Pure but for the reader: no clock.
+«هذا الأسبوع» is the calendar week (`week_start`), for every habit (I-1): a daily habit counts
+the scheduled days from the week's first day to `day` that met its target (for an abstain habit,
+those without a slip) against the scheduled days of the whole week; a weekly or monthly habit
+its current period. A habit with no scheduled day in its period is no source (no «0 من 0»). The
+card's `trend` is the last seven days. Milestones: every open one already due, and those due
+from the span's start to `day + 14`; at most 12, the nearest to `day`.
+
+Bounds (I-2): a source text longer than `MAX_SOURCE_TEXT` is cut, on a word boundary when one is
+near, and ends with «…». Over `MAX_SOURCES` sources, sources are dropped kind by kind in
+`DROP_ORDER` (journal first, then mood, focus, breath, milestones, «رسالتي» and «رؤيتي»,
+outcomes, habits last), and within a kind in the order they were added (for the day sources the
+oldest day first, a morning entry before the evening one). Cards exist only for kept sources.
+
+No health metric (`daily_metrics`) is read, so none reaches a provider. Pure but for the reader:
+no clock.
 """
 
 from collections.abc import Sequence
@@ -29,12 +41,11 @@ from yawmi.ai.consent import Consent
 from yawmi.ai.reader import GroundingReader, SessionDay
 from yawmi.ai.schema import InsightKind, Source
 from yawmi.domain.habits import HabitLog, period_progress
-from yawmi.domain.periods import WeekStart, is_scheduled
-from yawmi.habits.models import domain_logs
+from yawmi.domain.periods import WeekStart, is_scheduled, period_bounds
 from yawmi.journal.store import JournalRow, MoodRow
 from yawmi.prefs.models import SettingsOut
-from yawmi.today.assemble import current_cycle, habit_spec, logs_window
-from yawmi.today.reader import CycleRow, GoalRow, HabitRow, LogRow, MilestoneRow
+from yawmi.today.assemble import current_cycle, habit_spec, logs_by_habit, logs_window
+from yawmi.today.reader import CycleRow, GoalRow, HabitRow, MilestoneRow
 
 Range = Literal["7d", "30d", "cycle"]
 RANGE_DAYS = {"7d": 7, "30d": 30}
@@ -44,6 +55,21 @@ MAX_MILESTONES = 12
 PERIOD_WORDS = {"day": "الأسبوع", "week": "الأسبوع", "month": "الشهر"}
 JOURNAL_LABELS = {"morning": "يومية الصباح", "evening": "يومية المساء"}
 JOURNAL_SEPARATOR = " · "
+MAX_SOURCES = 60
+MAX_SOURCE_TEXT = 500
+ELLIPSIS = "…"
+WORD_CUT_REACH = 60  # cut at the last space if it lies within this many characters of the cap
+DROP_ORDER = (
+    "journal",
+    "mood",
+    "focus",
+    "breath",
+    "milestone",
+    "mission",
+    "vision",
+    "outcome",
+    "habit",
+)
 
 
 @dataclass
@@ -62,6 +88,17 @@ def span_for(range_: Range, day: date, cycles: Sequence[CycleRow]) -> tuple[date
             return cycle.start_date, day
         range_ = "30d"
     return day - timedelta(days=RANGE_DAYS[range_] - 1), day
+
+
+def clip(text: str) -> str:
+    """`text` cut to `MAX_SOURCE_TEXT` characters ending with «…» when longer."""
+    if len(text) <= MAX_SOURCE_TEXT:
+        return text
+    cut = text[: MAX_SOURCE_TEXT - len(ELLIPSIS)]
+    space = cut.rfind(" ")
+    if space >= len(cut) - WORD_CUT_REACH:
+        cut = cut[:space].rstrip()
+    return cut + ELLIPSIS
 
 
 def _num(value: float) -> str:
@@ -85,6 +122,7 @@ class _Builder:
         trend: list[float | None] | None = None,
         day: date | None = None,
     ) -> None:
+        text = clip(text)
         self.sources.append(Source(id=source_id, kind=kind, text=text))
         self.cards.append(
             SourceCard(
@@ -98,6 +136,20 @@ class _Builder:
                 day=day,
             )
         )
+
+    def bounded(self) -> tuple[list[Source], list[SourceCard]]:
+        """At most `MAX_SOURCES`, dropped by `DROP_ORDER`, the rest in their order."""
+        excess = len(self.sources) - MAX_SOURCES
+        if excess <= 0:
+            return self.sources, self.cards
+        rank = {kind: n for n, kind in enumerate(DROP_ORDER)}
+        order = sorted(
+            range(len(self.sources)),
+            key=lambda i: (rank.get(self.sources[i].kind, len(DROP_ORDER)), i),
+        )
+        dropped = set(order[:excess])
+        keep = [i for i in range(len(self.sources)) if i not in dropped]
+        return [self.sources[i] for i in keep], [self.cards[i] for i in keep]
 
 
 # --- habits ------------------------------------------------------------------------------------
@@ -124,20 +176,25 @@ def _habit(
     spec = habit_spec(row)
     by_day = {log.day: log for log in logs}
     window = [day - timedelta(days=n) for n in range(HABIT_DAYS - 1, -1, -1)]
-    scheduled = [d for d in window if is_scheduled(d, spec)]
     trend: list[float | None] = [
-        (_day_value(row, by_day.get(d)) if d in scheduled else None) for d in window
+        (_day_value(row, by_day.get(d)) if is_scheduled(d, spec) else None) for d in window
     ]
-    if row.polarity == "abstain":
-        done = float(sum(1 for d in scheduled if not _met(row, by_day.get(d))))
-        target = float(len(scheduled))
-        trend = [None if v is None else float(v == 0) for v in trend]
-    elif row.period == "day":
-        done = float(sum(1 for d in scheduled if _met(row, by_day.get(d))))
+    if row.polarity == "abstain" or row.period == "day":
+        week_first, week_last = period_bounds(day, "week", week_start)
+        week = [week_first + timedelta(days=n) for n in range((week_last - week_first).days + 1)]
+        scheduled = [d for d in week if is_scheduled(d, spec)]
+        elapsed = [d for d in scheduled if d <= day]
+        if row.polarity == "abstain":
+            done = float(sum(1 for d in elapsed if not _met(row, by_day.get(d))))
+            trend = [None if v is None else float(v == 0) for v in trend]
+        else:
+            done = float(sum(1 for d in elapsed if _met(row, by_day.get(d))))
         target = float(len(scheduled))
     else:
         progress = period_progress(spec, logs, day, week_start)
         done, target = progress.done, progress.target
+    if target <= 0:
+        return  # nothing scheduled in the period: «0 من 0» says nothing
     word = PERIOD_WORDS.get(row.period, "الأسبوع")
     unit = f"من {_num(target)}"
     text = f"{row.title_ar}: {_num(done)} {unit} هذا {word}"
@@ -149,11 +206,17 @@ def _habit(
 
 def _milestones(b: _Builder, rows: Sequence[MilestoneRow], first: date, day: date) -> None:
     last = day + timedelta(days=MILESTONE_AHEAD_DAYS)
-    near = sorted(
-        (m for m in rows if m.due_date is not None and first <= m.due_date <= last),
-        key=lambda m: (m.due_date, m.page_id),
+    dated = [m for m in rows if m.due_date is not None]
+    chosen = [
+        m
+        for m in dated
+        if (not m.done and m.due_date < day) or first <= m.due_date <= last  # type: ignore[operator]
+    ]
+    nearest = sorted(
+        chosen,
+        key=lambda m: (abs((m.due_date - day).days), m.due_date, m.page_id),  # type: ignore[operator]
     )[:MAX_MILESTONES]
-    for m in near:
+    for m in sorted(nearest, key=lambda m: (m.due_date, m.page_id)):  # type: ignore[arg-type, return-value]
         state = "منجزة" if m.done else "مفتوحة"
         text = f"{m.title}، موعدها {m.due_date.isoformat()}، {state}"  # type: ignore[union-attr]
         b.add(f"ms:{m.page_id}", "milestone", m.title, text)
@@ -235,7 +298,7 @@ async def build_grounding(
     b = _Builder()
 
     habit_first = min(logs_window(day, week_start)[0], day - timedelta(days=HABIT_DAYS - 1))
-    logs = _logs_by_habit(await reader.habit_logs(habit_first, day))
+    logs = logs_by_habit(await reader.habit_logs(habit_first, day))
     for row in await reader.habits(day):
         _habit(b, row, logs.get(row.code, []), day, week_start)
 
@@ -258,11 +321,5 @@ async def build_grounding(
         "span": {"first": first.isoformat(), "last": last.isoformat()},
         "style": {"lines": prefs.ai_lines, "tone": prefs.ai_tone},
     }
-    return Grounding(context=context, sources=b.sources, cards=b.cards)
-
-
-def _logs_by_habit(rows: Sequence[LogRow]) -> dict[str, list[HabitLog]]:
-    grouped: dict[str, list[LogRow]] = {}
-    for row in rows:
-        grouped.setdefault(row.habit_code, []).append(row)
-    return {code: domain_logs(group) for code, group in grouped.items()}
+    sources, cards = b.bounded()
+    return Grounding(context=context, sources=sources, cards=cards)

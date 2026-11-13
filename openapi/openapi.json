@@ -1,27 +1,6 @@
 {
   "components": {
     "schemas": {
-      "AiErrorBody": {
-        "description": "The error body of the AI routes: `detail`, and the code in `errors` when there is one.",
-        "properties": {
-          "detail": {
-            "title": "Detail",
-            "type": "string"
-          },
-          "errors": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationErrorItem"
-            },
-            "title": "Errors",
-            "type": "array"
-          }
-        },
-        "required": [
-          "detail"
-        ],
-        "title": "AiErrorBody",
-        "type": "object"
-      },
       "AskRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5599,7 +5578,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AiErrorBody"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             },
@@ -5666,7 +5645,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AiErrorBody"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorDetail"
+                    }
+                  ],
+                  "title": "Response 403 Ask V1 Ask Post"
                 }
               }
             },
@@ -5679,7 +5666,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AiErrorBody"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             },
@@ -5689,7 +5676,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AiErrorBody"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             },
@@ -5969,7 +5956,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AiErrorBody"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorDetail"
+                    }
+                  ],
+                  "title": "Response 403 Close Day V1 Day Close Post"
                 }
               }
             },
@@ -5982,7 +5977,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AiErrorBody"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             },
@@ -5992,7 +5987,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AiErrorBody"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             },

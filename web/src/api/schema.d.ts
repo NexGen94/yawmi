@@ -710,16 +710,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /**
-         * AiErrorBody
-         * @description The error body of the AI routes: `detail`, and the code in `errors` when there is one.
-         */
-        AiErrorBody: {
-            /** Detail */
-            detail: string;
-            /** Errors */
-            errors?: components["schemas"]["ValidationErrorItem"][];
-        };
         /** AskRequest */
         AskRequest: {
             /** Question */
@@ -2906,7 +2896,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AiErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
             /** @description طلب غير صالح */
@@ -2995,7 +2985,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AiErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["ErrorDetail"];
                 };
             };
             /** @description طلب غير صالح، أو امتنع النموذج عن الرد */
@@ -3011,7 +3001,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AiErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
             /** @description مفتاح المزوّد غير مضبوط */
@@ -3020,7 +3010,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AiErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };
@@ -3201,7 +3191,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AiErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["ErrorDetail"];
                 };
             };
             /** @description طلب غير صالح، أو امتنع النموذج عن الرد */
@@ -3217,7 +3207,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AiErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
             /** @description مفتاح المزوّد غير مضبوط */
@@ -3226,7 +3216,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AiErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };

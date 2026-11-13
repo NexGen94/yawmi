@@ -36,7 +36,7 @@ from yawmi.ai.base import (
     ProviderRefusal,
 )
 from yawmi.ai.cards import GroundedInsight, InsightOut, cards_for, cited_ids, grounded
-from yawmi.ai.consent import AiErrorBody, Consent, ConsentDep, ConsentRoute, problem
+from yawmi.ai.consent import Consent, ConsentDep, ConsentRoute, problem
 from yawmi.ai.grounding import Grounding, Range, build_grounding, span_for
 from yawmi.ai.reader import (
     AsyncpgSessionReader,
@@ -58,7 +58,7 @@ from yawmi.auth.deps import SettingsDep, require_kind
 from yawmi.auth.tokens import AccessClaims
 from yawmi.db.pool import get_pool
 from yawmi.domain.days import day_key
-from yawmi.errors import ErrorDetail
+from yawmi.errors import ErrorDetail, ValidationErrorBody
 from yawmi.events import models as event_models
 from yawmi.events.project import MAX_BACKDATE_DAYS
 from yawmi.goals.edits_store import AsyncpgEditStore, EditStore
@@ -241,12 +241,12 @@ async def ground(
 _ERRORS: dict[int | str, dict[str, Any]] = {
     401: {"model": ErrorDetail, "description": "غير مصرّح"},
     403: {
-        "model": AiErrorBody,
+        "model": ValidationErrorBody | ErrorDetail,
         "description": "غير مسموح (رمز الخدمة)، أو لا موافقة سارية (`ai_consent_required`)",
     },
     422: {"description": "طلب غير صالح، أو امتنع النموذج عن الرد"},
-    502: {"model": AiErrorBody, "description": "تعذّر الحصول على ردّ صالح من المزوّد"},
-    503: {"model": AiErrorBody, "description": "مفتاح المزوّد غير مضبوط"},
+    502: {"model": ValidationErrorBody, "description": "تعذّر الحصول على ردّ صالح من المزوّد"},
+    503: {"model": ValidationErrorBody, "description": "مفتاح المزوّد غير مضبوط"},
 }
 
 

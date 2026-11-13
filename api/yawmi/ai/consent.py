@@ -25,7 +25,6 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from yawmi.auth.deps import SettingsDep
 from yawmi.db.pool import get_pool
-from yawmi.errors import ValidationErrorItem
 
 AiProvider = Literal["anthropic", "deepseek"]
 
@@ -63,13 +62,6 @@ class ConsentOut(BaseModel):
     granted: bool = Field(description="موافقة سارية لهذا المزوّد")
     personal_text: bool = Field(description="«رسالتي» و«رؤيتي» مشمولتان")
     granted_at: datetime | None = Field(description="وقت الموافقة السارية، أو `null`")
-
-
-class AiErrorBody(BaseModel):
-    """The error body of the AI routes: `detail`, and the code in `errors` when there is one."""
-
-    detail: str
-    errors: list[ValidationErrorItem] = Field(default_factory=list)
 
 
 def consent_out(provider: AiProvider, consent: Consent | None) -> ConsentOut:
@@ -183,7 +175,8 @@ class ConsentRequired(Exception):
 def problem(
     status: int, detail: str, code: str, loc: list[str | int] | None = None
 ) -> JSONResponse:
-    """The AI routes' error body; `code` is ours, never text from a provider."""
+    """The AI routes' coded error, in the `ValidationErrorBody` shape (`yawmi.errors`): `detail`
+    and one `errors` item carrying the code. `code` is ours, never text from a provider."""
     body = {"detail": detail, "errors": [{"loc": loc or ["body"], "type": code}]}
     return JSONResponse(status_code=status, content=body)
 
