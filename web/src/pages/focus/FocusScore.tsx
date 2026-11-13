@@ -23,7 +23,7 @@ export function FocusScore({ minutes, target }: FocusScoreProps) {
       ) : (
         <>
           <p class="focus-score-line">{minutes > 0 ? `${fmt.count(minutes, 'minute')} اليوم` : 'لا دقائق تركيز اليوم'}</p>
-          <p class="focus-score-note">{`${NO_TARGET}: يُحدَّد من الدقائق المقررة في يومية الصباح`}</p>
+          <p class="focus-score-note">{`${NO_TARGET}: يُحدَّد من الدقائق المقررة في يومية الصباح أو من الإعدادات`}</p>
         </>
       )}
     </Card>

@@ -3,7 +3,7 @@ import { useEffect, useMemo } from 'preact/hooks';
 
 import { acceptInsight, type GroundedInsight } from '../../ai/guard';
 import { combine } from '../../data/combine';
-import { useFocusPlans, useFocusSessions } from '../../focus/data';
+import { useFocusPlans, useFocusSessions, useStoredSession } from '../../focus/data';
 import { focusTarget, minutesOn } from '../../focus/today';
 import { useGoals } from '../../goals/data';
 import { useHabitsToday } from '../../habits/useHabitsToday';
@@ -70,6 +70,7 @@ export default function HomePage() {
   const settings = useSettings();
   const focusPlans = useFocusPlans();
   const focusSessions = useFocusSessions(day);
+  const storedSession = useStoredSession();
   const lateList = useMemo(
     () =>
       lateItems({ habits: habits.allItems, logs: habits.logs, goals: goals.data, today: day, weekStart: WEEK_START }),
@@ -163,7 +164,7 @@ export default function HomePage() {
                 <DomainCards outcomes={goals.data?.outcomes ?? []} />
               )}
             </section>
-            <QuickAccess favorites={(focusPlans.data ?? []).filter((p) => p.favorite && p.active)} />
+            <QuickAccess favorites={(focusPlans.data ?? []).filter((p) => p.favorite && p.active)} session={storedSession} />
             <DaySummary morning={entries.morning} evening={entries.evening} insight={insight} focus={focus} />
           </div>
         </div>

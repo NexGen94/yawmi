@@ -2,6 +2,7 @@ import { useId, useState } from 'preact/hooks';
 
 import type { components } from '../../api/schema';
 import { maskOf, WEEKDAYS } from '../../focus/format';
+import { fmt } from '../../lib/format';
 import { OFFLINE_NOTE } from '../../lib/notes';
 import { Button } from '../../ui/Button';
 import { Chips } from '../../ui/Chips';
@@ -44,7 +45,7 @@ export function PlanForm({ online, habits, goalRef, onSave }: PlanFormProps) {
     event.preventDefault();
     const n = Number(minutes);
     if (title.trim() === '') return setError('العنوان مطلوب');
-    if (!Number.isInteger(n) || n < 5 || n > 240) return setError('المدة من 5 إلى 240 دقيقة');
+    if (!Number.isInteger(n) || n < 5 || n > 240) return setError(`المدة من ${fmt.num(5)} إلى ${fmt.count(240, 'minute')}`);
     if ((days.length > 0) !== (time !== '')) return setError('الأيام والوقت معاً أو بدونهما');
     if (time !== '' && !TIME.test(time)) return setError('الوقت غير صالح');
     setError('');

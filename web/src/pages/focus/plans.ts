@@ -4,6 +4,7 @@
 import { api } from '../../api/client';
 import type { components } from '../../api/schema';
 import { unwrap } from '../../api/unwrap';
+import { type QueryResult, useQuery } from '../../data/query';
 import type { FocusPlanOut } from '../../focus/today';
 import { isAbortOrTimeout } from '../../lib/timeout';
 
@@ -36,5 +37,18 @@ export function patchPlan(id: string, body: FocusPlanPatch): Promise<PlanResult>
     api
       .PATCH('/v1/focus/plans/{plan_id}', { params: { path: { plan_id: id } }, body, signal: AbortSignal.timeout(SAVE_TIMEOUT_MS) })
       .then(unwrap),
+  );
+}
+
+export const allPlansQueryKey = 'focus-plans-all';
+
+/** Every plan the server holds, the stopped ones included (`?all=true`): the page lists the stopped
+ *  ones apart so that «إيقاف» can be taken back. */
+export function useAllFocusPlans(): QueryResult<FocusPlanOut[]> {
+  return useQuery<FocusPlanOut[]>(allPlansQueryKey, () =>
+    api
+      .GET('/v1/focus/plans', { params: { query: { all: true } } })
+      .then(unwrap)
+      .then((list) => list.items),
   );
 }

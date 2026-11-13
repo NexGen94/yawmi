@@ -13,6 +13,7 @@ import { type QueryResult, useQuery } from '../data/query';
 import { fromOrdinal, toOrdinal } from '../domain/days';
 import type { Day } from '../domain/types';
 import { listPending, type OutboxEvent } from '../sync/outbox';
+import { loadEnding, loadSession } from './timer';
 import { applyPendingFocus, type FocusPlanOut, type FocusSessionOut } from './today';
 
 /** The sessions the page reads: today and the 27 days before it (design 9.5: the last 28 days). */
@@ -96,4 +97,22 @@ export function useFocusSessions(day: Day): FocusSessions {
     [query.data, pending],
   );
   return { query, sessions, refresh };
+}
+
+/** What the device holds of a session: `running`, or `unsaved` when it was ended and its wrap-up was
+ *  left open; null when there is none. Read once; the home page shows it as a way back. */
+export function useStoredSession(): 'running' | 'unsaved' | null {
+  const [mark, setMark] = useState<'running' | 'unsaved' | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void Promise.all([loadSession(), loadEnding()])
+      .then(([session, ending]) => {
+        if (alive) setMark(session === null ? null : ending === null ? 'running' : 'unsaved');
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return mark;
 }

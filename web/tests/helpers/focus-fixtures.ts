@@ -99,7 +99,7 @@ export function routeFocus(
         return json(created, 201);
       }
       requests.gets.push(url.pathname + url.search);
-      return json({ items: plans.filter((p) => p.active) });
+      return json({ items: url.searchParams.get('all') === 'true' ? plans : plans.filter((p) => p.active) });
     }
     const patch = /^\/v1\/focus\/plans\/([^/]+)$/.exec(url.pathname);
     if (patch && request.method === 'PATCH') {

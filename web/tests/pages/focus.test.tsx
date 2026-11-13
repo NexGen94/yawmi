@@ -7,14 +7,20 @@ import { LocationProvider } from 'preact-iso';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { writeCache } from '../../src/data/cache';
+import { logHabit } from '../../src/data/events';
 import { plansQueryKey, sessionsQueryKey } from '../../src/focus/data';
 import { loadEnding, loadSession } from '../../src/focus/timer';
 import { setDigits } from '../../src/lib/format';
 import FocusPage from '../../src/pages/focus/index';
+import { discardWindow } from '../../src/pages/focus/useSession';
 import { clearOutbox, closeDb, listPending, type OutboxEvent } from '../../src/sync/outbox';
-import { PLAN_ID, plan, routeFocus, sessionOut } from '../helpers/focus-fixtures';
+import { PLAN_ID, PLAN_ID_2, plan, routeFocus, sessionOut } from '../helpers/focus-fixtures';
 import { DAY, ENGLISH, NOON_RIYADH } from '../helpers/today-fixtures';
 
+vi.mock('../../src/data/events', async (original) => {
+  const real = await original<typeof import('../../src/data/events')>();
+  return { ...real, logHabit: vi.fn(real.logHabit) };
+});
 vi.mock('../../src/sync/outbox', async (original) => ({
   ...(await original<typeof import('../../src/sync/outbox')>()),
   scheduleFlush: vi.fn(),
@@ -214,14 +220,70 @@ describe('ending a session', () => {
     expect('next_step' in payload).toBe(false);
   });
 
-  it('«تجاهل الجلسة» queues no focus_ended and frees the page', async () => {
+  it('«تجاهل الجلسة» keeps the session for an undo window, and «تراجع» brings the wrap-up back with the same minutes', async () => {
     routeFocus(fetchMock);
     renderPage();
     await start();
+    await moveClockTo(at(12));
     click('إنهاء');
     fireEvent.click(await screen.findByRole('button', { name: 'تجاهل الجلسة' }));
-    await screen.findByRole('button', { name: 'بدء' });
+    const undo = await screen.findByRole('button', { name: 'تراجع' });
+    // Nothing is thrown away yet: the session and its frozen end are still on the device.
+    expect(await loadSession()).not.toBeNull();
+    expect(await loadEnding()).toBe(new Date(at(12)).toISOString());
+    fireEvent.click(undo);
+    await screen.findByRole('button', { name: 'حفظ الجلسة' });
+    expect(screen.getByText(/12 دقيقة من 25/)).toBeTruthy();
+    expect(await loadSession()).not.toBeNull();
     expect(await ofType('focus_ended')).toEqual([]);
+  });
+
+  it('after the window the session is gone, nothing was queued, and the page is free', async () => {
+    const before = discardWindow.ms;
+    discardWindow.ms = 60;
+    try {
+      routeFocus(fetchMock);
+      renderPage();
+      await start();
+      click('إنهاء');
+      fireEvent.click(await screen.findByRole('button', { name: 'تجاهل الجلسة' }));
+      await screen.findByRole('button', { name: 'بدء' });
+      expect(await ofType('focus_ended')).toEqual([]);
+      expect(await loadSession()).toBeNull();
+      expect(await loadEnding()).toBeNull();
+    } finally {
+      discardWindow.ms = before;
+    }
+  });
+
+  it('the undo window is the usual five seconds', () => {
+    expect(discardWindow.ms).toBe(5000);
+  });
+
+  it('a session within an hour of its planned time is not offered the planned-time save', async () => {
+    routeFocus(fetchMock);
+    renderPage();
+    await start();
+    await moveClockTo(at(25 + 30));
+    click('إنهاء');
+    await screen.findByRole('button', { name: 'حفظ الجلسة' });
+    expect(screen.queryByRole('button', { name: 'حفظ بالمدة المقررة' })).toBeNull();
+  });
+
+  it('over an hour past the planned time, «حفظ بالمدة المقررة» records the planned minutes, ending at the planned time', async () => {
+    routeFocus(fetchMock);
+    renderPage();
+    await start();
+    await moveClockTo(at(25 + 61));
+    click('إنهاء');
+    fireEvent.click(await screen.findByRole('button', { name: 'حفظ بالمدة المقررة' }));
+    await waitFor(async () => expect(await ofType('focus_ended')).toHaveLength(1));
+    expect((await ofType('focus_ended'))[0]?.payload).toMatchObject({
+      planned_minutes: 25,
+      actual_minutes: 25,
+      started_at: new Date(at(0)).toISOString(),
+      ended_at: new Date(at(25)).toISOString(),
+    });
     expect(await loadSession()).toBeNull();
   });
 });
@@ -264,6 +326,67 @@ describe('the duration habit of a plan', () => {
     const types = (await listPending()).map((e) => e.type);
     expect(types).toEqual(['focus_started', 'focus_ended', 'habit_logged']);
     expect((await ofType('focus_ended'))[0]?.payload).toMatchObject({ habit_code: ENGLISH.code, goal_ref: 'O7', actual_minutes: 31 });
+  });
+});
+
+describe('the habit minutes and the order of the save', () => {
+  const plans = [plan({ id: PLAN_ID, title_ar: 'الإنجليزية العميقة', minutes: 25, habit_code: ENGLISH.code })];
+
+  async function loadPlanPage(): Promise<void> {
+    history.replaceState(null, '', `/focus?plan=${PLAN_ID}`);
+    routeFocus(fetchMock, { plans });
+    renderPage();
+    await screen.findByText(/الإنجليزية العميقة/);
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([r]) => new URL((r as Request).url).pathname === '/v1/habit-logs')).toBe(true),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+
+  it('the habit log of a same-day session has no day of its own', async () => {
+    await loadPlanPage();
+    click('بدء');
+    await screen.findByRole('timer');
+    await moveClockTo(at(31));
+    click('إنهاء');
+    fireEvent.click(await screen.findByRole('button', { name: 'حفظ الجلسة' }));
+    await waitFor(async () => expect(await ofType('habit_logged')).toHaveLength(1));
+    expect('day' in ((await ofType('habit_logged'))[0]?.payload ?? {})).toBe(false);
+  });
+
+  it('the session is cleared as soon as focus_ended is queued: a habit log that fails cannot leave a second save', async () => {
+    await loadPlanPage();
+    click('بدء');
+    await screen.findByRole('timer');
+    await moveClockTo(at(31));
+    click('إنهاء');
+    const save = await screen.findByRole('button', { name: 'حفظ الجلسة' });
+    vi.mocked(logHabit).mockImplementationOnce(async () => {
+      throw new Error('indexeddb');
+    });
+    fireEvent.click(save);
+    await screen.findByRole('button', { name: 'بدء' });
+    expect(await ofType('focus_ended')).toHaveLength(1);
+    expect(await ofType('habit_logged')).toEqual([]);
+    expect(await loadSession()).toBeNull();
+    expect(screen.getByText(/لم تُسجَّل الدقائق في العادة المرتبطة/)).toBeTruthy();
+  });
+
+  it("a session that began before midnight logs the habit on the day it began, with that day's value", async () => {
+    vi.setSystemTime(new Date('2026-11-10T20:50:00Z')); // 23:50 in Riyadh
+    await loadPlanPage();
+    click('بدء');
+    await screen.findByRole('timer');
+    await moveClockTo(Date.parse('2026-11-10T21:21:00Z')); // 00:21 the next day
+    click('إنهاء');
+    fireEvent.click(await screen.findByRole('button', { name: 'حفظ الجلسة' }));
+    await waitFor(async () => expect(await ofType('habit_logged')).toHaveLength(1));
+    expect((await ofType('habit_logged'))[0]?.payload).toMatchObject({
+      habit_code: ENGLISH.code,
+      status: 'done',
+      value: 56,
+      day: DAY,
+    });
   });
 });
 
@@ -472,6 +595,89 @@ describe('digits', () => {
     expect(within(group).getByRole('radio', { name: /٢٥/ })).toBeTruthy();
     click('بدء');
     expect((await screen.findByRole('timer')).textContent).toBe('٢٥:٠٠');
+  });
+});
+
+describe('the daily target of the settings', () => {
+  const sessions = [
+    sessionOut('2026-11-10T06:40:00Z', '2026-11-10T07:25:00Z', { actual_minutes: 45, id: '00000000-0000-7000-8000-0000000000b2' }),
+  ];
+
+  it('with focus_daily_target_min set and no morning plan, the score is measured against it', async () => {
+    routeFocus(fetchMock, { sessions, settings: { focus_daily_target_min: 120 } });
+    renderPage();
+    const card = await screen.findByRole('region', { name: 'درجة التركيز' });
+    await waitFor(() => expect(card.textContent).toContain('38'));
+    expect(card.textContent).toContain('45 من 120 دقيقة · للوعي الذاتي');
+  });
+
+  it('with the target cleared (null) there is no score again', async () => {
+    routeFocus(fetchMock, { sessions, settings: { focus_daily_target_min: null } });
+    renderPage();
+    const card = await screen.findByRole('region', { name: 'درجة التركيز' });
+    await waitFor(() => expect(card.textContent).toContain('45 دقيقة'));
+    expect(card.textContent).toContain('لا هدف يومي للتركيز بعد');
+  });
+
+  it('the note without a target names both places a target can come from', async () => {
+    routeFocus(fetchMock, { sessions });
+    renderPage();
+    const card = await screen.findByRole('region', { name: 'درجة التركيز' });
+    await waitFor(() => expect(card.textContent).toContain('يومية الصباح'));
+    expect(card.textContent).toContain('الإعدادات');
+  });
+});
+
+describe('stopped plans', () => {
+  const stopped = plan({ id: PLAN_ID_2, title_ar: 'خطة قديمة', minutes: 40, active: false });
+
+  it('are listed apart, and «تفعيل» brings one back with a PATCH', async () => {
+    const requests = routeFocus(fetchMock, { plans: [plan(), stopped] });
+    renderPage();
+    const list = await screen.findByRole('region', { name: 'الخطط الموقوفة' });
+    expect(within(list).getByText('خطة قديمة')).toBeTruthy();
+    fireEvent.click(within(list).getByRole('button', { name: 'تفعيل خطة قديمة' }));
+    await waitFor(() => expect(requests.patches).toHaveLength(1));
+    expect(requests.patches[0]?.body).toEqual({ active: true });
+    const active = await screen.findByRole('region', { name: 'خطط التركيز' });
+    expect(await within(active).findByText('خطة قديمة')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'الخطط الموقوفة' })).toBeNull());
+  });
+
+  it('are not shown when there is none', async () => {
+    routeFocus(fetchMock, { plans: [plan()] });
+    renderPage();
+    await screen.findByRole('region', { name: 'خطط التركيز' });
+    expect(screen.queryByRole('region', { name: 'الخطط الموقوفة' })).toBeNull();
+  });
+
+  it('«إيقاف» moves a plan into the stopped list', async () => {
+    routeFocus(fetchMock, { plans: [plan()] });
+    renderPage();
+    const list = await screen.findByRole('region', { name: 'خطط التركيز' });
+    fireEvent.click(within(list).getByRole('button', { name: 'إيقاف عمل عميق' }));
+    const stoppedList = await screen.findByRole('region', { name: 'الخطط الموقوفة' });
+    expect(within(stoppedList).getByText('عمل عميق')).toBeTruthy();
+  });
+});
+
+describe('numbers in the digits of the setting', () => {
+  it('the window of the hours, the rating scale and the minutes of the plan form use the digits setting', async () => {
+    setDigits('arab');
+    routeFocus(fetchMock, { plans: [plan()] });
+    renderPage();
+    expect(await screen.findByText(/آخر ٢٨ يوماً/)).toBeTruthy();
+    // an invalid number of minutes in the plan form
+    fireEvent.input(screen.getByLabelText('عنوان الخطة'), { target: { value: 'خطة' } });
+    fireEvent.input(screen.getByLabelText('الدقائق'), { target: { value: '3' } });
+    fireEvent.submit(screen.getByRole('button', { name: 'حفظ الخطة' }).closest('form') as HTMLFormElement);
+    expect((await screen.findByRole('alert')).textContent).toBe('المدة من ٥ إلى ٢٤٠ دقيقة');
+    // the rating scale of the wrap-up
+    fireEvent.click(await screen.findByRole('button', { name: 'بدء' }));
+    await screen.findByRole('timer');
+    click('إنهاء');
+    await screen.findByRole('button', { name: 'حفظ الجلسة' });
+    expect(screen.getByText(/من ١ \(أقل تركيزاً\) إلى ٥ \(أكثر تركيزاً\)/)).toBeTruthy();
   });
 });
 

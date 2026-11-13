@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { HourBars, hourText } from '../../charts/HourBars';
 import { combine } from '../../data/combine';
 import { type FocusPlanOut, focusTarget, hourBins, minutesOn, PRESET_MINUTES } from '../../focus/calc';
-import { useFocusPlans, useFocusSessions } from '../../focus/data';
+import { SESSION_WINDOW_DAYS, useFocusPlans, useFocusSessions } from '../../focus/data';
 import { useGoals, useOnline, useToday } from '../../goals/data';
 import { resolveGoal, titleOf } from '../../goals/target';
 import { useHabitsToday } from '../../habits/useHabitsToday';
@@ -16,7 +16,8 @@ import { Skeleton } from '../../ui/Skeleton';
 import { StateFrame } from '../../ui/StateFrame';
 import { useDayEntries } from '../home/useDayEntries';
 import { FocusScore } from './FocusScore';
-import { PlansList, PlanTools } from './PlansList';
+import { PlansList, PlanTools, StoppedPlans } from './PlansList';
+import { useAllFocusPlans } from './plans';
 import { ScheduledBlocks } from './ScheduledBlocks';
 import { SessionTimer } from './SessionTimer';
 import { useFocusSession } from './useSession';
@@ -35,6 +36,7 @@ export default function FocusPage() {
   const online = useOnline();
   const { query } = useLocation();
   const plans = useFocusPlans();
+  const allPlans = useAllFocusPlans();
   const sessions = useFocusSessions(day);
   const settings = useSettings();
   const entries = useDayEntries(day);
@@ -74,7 +76,10 @@ export default function FocusPage() {
   const goal = goals.data !== undefined && goalRef !== null ? resolveGoal(goals.data, goalRef) : undefined;
   const goalTitle = goal === undefined ? null : titleOf(goal);
 
-  const { state, stale } = combine(plans, sessions.query);
+  // A reading that is repeated after a change keeps showing what it has: only the first one is a loading state.
+  const settled = <T,>(q: { state: 'loading' | 'ready' | 'error' | 'offline'; stale: boolean; data: T | undefined }) =>
+    q.state === 'loading' && q.data !== undefined ? { state: 'ready' as const, stale: false } : q;
+  const { state, stale } = combine(settled(plans), settled(sessions.query));
   const minutesToday = minutesOn(sessions.sessions, day);
   const target = focusTarget(
     plannedOf(entries.morning?.answers as Record<string, unknown> | undefined),
@@ -85,7 +90,13 @@ export default function FocusPage() {
   const habitChoices = habits.allItems
     .filter((i) => i.habit.kind === 'duration' && (i.habit.unit === 'min' || i.habit.unit === 'hour'))
     .map((i) => ({ code: i.habit.code, title: i.habit.title_ar }));
-  const tools = { online, habits: habitChoices, goalRef, onChanged: plans.reload };
+  // The active list and the list with the stopped ones are read together after a change.
+  const reloadPlans = (): void => {
+    plans.reload();
+    allPlans.reload();
+  };
+  const stopped = (allPlans.data ?? []).filter((p) => !p.active);
+  const tools = { online, habits: habitChoices, goalRef, onChanged: reloadPlans };
   const empty = plans.data !== undefined && plans.data.length === 0 && sessions.query.data !== undefined && sessions.sessions.length === 0;
 
   return (
@@ -108,7 +119,12 @@ export default function FocusPage() {
         stale={stale}
         empty={empty}
         emptyText="لا خطط ولا جلسات بعد"
-        emptyAction={<PlanTools {...tools} />}
+        emptyAction={
+          <>
+            <PlanTools {...tools} />
+            <StoppedPlans plans={stopped} online={online} onChanged={reloadPlans} />
+          </>
+        }
         onRetry={() => {
           plans.reload();
           sessions.query.reload();
@@ -124,12 +140,13 @@ export default function FocusPage() {
           <div class="focus-col">
             <PlansList {...tools} plans={planList} chosenId={planId} onChoose={choose} />
             <ScheduledBlocks plans={planList} />
+            <StoppedPlans plans={stopped} online={online} onChanged={reloadPlans} />
           </div>
           <div class="focus-col">
             <FocusScore minutes={minutesToday} target={target} />
             <Card title="توزيع الساعات" class="focus-hours">
               <HourBars bins={bins} />
-              <p class="focus-note">آخر 28 يوماً، بتوقيت الرياض</p>
+              <p class="focus-note">{`آخر ${fmt.count(SESSION_WINDOW_DAYS, 'day')}، بتوقيت الرياض`}</p>
               <Disclosure summary="جدول الساعات">
                 <HoursTable bins={bins} />
               </Disclosure>

@@ -11,7 +11,7 @@ import { HeroCard } from '../../ui/HeroCard';
 import { Segmented } from '../../ui/Segmented';
 import { Skeleton } from '../../ui/Skeleton';
 import { PresetButtons } from './PresetButtons';
-import { EXTEND_MINUTES, minutesText, type UseFocusSession } from './useSession';
+import { EXTEND_MINUTES, minutesText, OVERFLOW_OFFER_MINUTES, type UseFocusSession } from './useSession';
 
 /** What the person has chosen before starting. */
 export interface Selection {
@@ -145,6 +145,8 @@ function Wrapup({ focus }: Pick<SessionTimerProps, 'focus'>) {
   const elapsed = elapsedMinutes(session, end);
   const recorded = Math.round(elapsed);
   const stage = plantStage(elapsed, session.plannedMinutes);
+  const pastPlanned = elapsed - session.plannedMinutes > OVERFLOW_OFFER_MINUTES;
+  const wrapup = () => ({ rating: rating === '' ? null : Number(rating), nextStep: step });
   return (
     <div class="focus-wrapup">
       <div class="focus-visual">
@@ -163,13 +165,35 @@ function Wrapup({ focus }: Pick<SessionTimerProps, 'focus'>) {
         value={rating}
         onChange={setRating}
       />
-      <p class="focus-note">من 1 (أقل تركيزاً) إلى 5 (أكثر تركيزاً)</p>
+      <p class="focus-note">{`من ${fmt.num(1)} (أقل تركيزاً) إلى ${fmt.num(5)} (أكثر تركيزاً)`}</p>
       <Field label="الخطوة التالية" value={step} onInput={setStep} maxLength={500} />
       <div class="focus-actions">
-        <Button variant="primary" onClick={() => void focus.save({ rating: rating === '' ? null : Number(rating), nextStep: step })}>
+        <Button variant="primary" onClick={() => void focus.save(wrapup())}>
           حفظ الجلسة
         </Button>
+        {pastPlanned && <Button onClick={() => void focus.save(wrapup(), { atPlanned: true })}>حفظ بالمدة المقررة</Button>}
         <Button onClick={() => void focus.discard()}>تجاهل الجلسة</Button>
+      </div>
+      {pastPlanned && (
+        <p class="focus-note">
+          {`مضى أكثر من ${minutesText(OVERFLOW_OFFER_MINUTES)} على الوقت المقرر: يمكن حفظ الجلسة بالمدة المقررة`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** «تجاهل الجلسة» pressed: the session is still on the device until the window ends. */
+function Discarded({ focus }: Pick<SessionTimerProps, 'focus'>) {
+  return (
+    <div class="focus-idle">
+      <p class="focus-name" role="status">
+        أُلغيت الجلسة
+      </p>
+      <div class="focus-actions">
+        <Button variant="primary" onClick={() => focus.undoDiscard()}>
+          تراجع
+        </Button>
       </div>
     </div>
   );
@@ -182,6 +206,7 @@ export function SessionTimer(props: SessionTimerProps) {
   let body;
   if (!focus.ready) body = <Skeleton blockSize="120px" />;
   else if (focus.session === null) body = <Idle {...props} />;
+  else if (focus.endedAt !== null && focus.discarding) body = <Discarded focus={focus} />;
   else if (focus.endedAt !== null) body = <Wrapup focus={focus} />;
   else body = <Active {...props} />;
   return (

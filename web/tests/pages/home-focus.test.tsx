@@ -5,6 +5,7 @@ import { render, screen, waitFor, within } from '@testing-library/preact';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { kvSet } from '../../src/data/cache';
 import HomePage from '../../src/pages/home/index';
 import { closeDb } from '../../src/sync/outbox';
 import { PLAN_ID, plan, routeFocus, sessionOut } from '../helpers/focus-fixtures';
@@ -97,5 +98,36 @@ describe('home: the focus score in the day summary', () => {
     render(<HomePage />);
     const summary = await screen.findByRole('region', { name: 'ملخص اليوم' });
     expect(within(summary).queryByText(/التركيز/)).toBeNull();
+  });
+});
+
+describe('home: a session in progress or waiting to be saved', () => {
+  const session = { startedAt: '2026-11-10T08:50:00.000Z', plannedMinutes: 25 };
+
+  it('a running session is a link to the focus page in the quick access', async () => {
+    await kvSet('focus_session', session);
+    routeFocus(fetchMock, {});
+    render(<HomePage />);
+    const card = await screen.findByRole('region', { name: 'وصول سريع' });
+    const link = await within(card).findByRole('link', { name: 'جلسة تركيز جارية' });
+    expect(link.getAttribute('href')).toBe('/focus');
+  });
+
+  it('a session whose end is frozen says it was not saved', async () => {
+    await kvSet('focus_session', session);
+    await kvSet('focus_ending', '2026-11-10T09:00:00.000Z');
+    routeFocus(fetchMock, {});
+    render(<HomePage />);
+    const card = await screen.findByRole('region', { name: 'وصول سريع' });
+    expect(await within(card).findByRole('link', { name: 'جلسة تركيز بلا حفظ' })).toBeTruthy();
+    expect(within(card).queryByRole('link', { name: 'جلسة تركيز جارية' })).toBeNull();
+  });
+
+  it('without a session there is neither link', async () => {
+    routeFocus(fetchMock, {});
+    render(<HomePage />);
+    const card = await screen.findByRole('region', { name: 'وصول سريع' });
+    await screen.findByText('3 من 6');
+    expect(within(card).queryByRole('link', { name: /جلسة تركيز/ })).toBeNull();
   });
 });

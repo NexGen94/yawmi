@@ -135,3 +135,45 @@ export function PlansList(props: PlansListProps) {
     </Card>
   );
 }
+
+export interface StoppedPlansProps {
+  plans: FocusPlanOut[];
+  online: boolean;
+  onChanged(): void;
+}
+
+/** The plans that were stopped, each with «تفعيل» (PATCH `active: true`). Nothing is ever deleted. */
+export function StoppedPlans({ plans, online, onChanged }: StoppedPlansProps) {
+  const [note, setNote] = useState('');
+  if (plans.length === 0) return null;
+  return (
+    <Card title="الخطط الموقوفة" class="focus-plans">
+      <ul class="focus-plan-list">
+        {plans.map((plan) => (
+          <li key={plan.id} class="focus-plan">
+            <div class="focus-plan-text">
+              <p class="focus-plan-title">{plan.title_ar}</p>
+              <p class="focus-note">{minutesText(plan.minutes)}</p>
+            </div>
+            <Button
+              aria-label={`تفعيل ${plan.title_ar}`}
+              disabled={!online}
+              onClick={() => {
+                setNote('');
+                void patchPlan(plan.id, { active: true }).then((r: PlanResult) => {
+                  if (r.ok) onChanged();
+                  else setNote(REASON[r.reason]);
+                });
+              }}
+            >
+              تفعيل
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <p class="focus-note" role="status">
+        {note}
+      </p>
+    </Card>
+  );
+}
