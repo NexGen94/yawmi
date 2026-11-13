@@ -8,11 +8,14 @@ export interface RingProps {
   label: string;
   /** Outer size in pixels (default 120). */
   size?: number;
+  /** Print the percentage in the middle (default). A card that prints its own big number leaves it
+   *  out: one big number per card (Task 24); the accessible name keeps the value. */
+  figure?: boolean;
 }
 
 /** A progress ring: one number in the middle, the arc filling from the top in the reading
  *  direction (counter-clockwise, because the page reads from the right). */
-export function Ring({ value, label, size = 120 }: RingProps) {
+export function Ring({ value, label, size = 120, figure = true }: RingProps) {
   const v = ratio(value);
   const stroke = Math.max(4, Math.round(size / 12));
   const c = x(0, 1, size);
@@ -44,7 +47,7 @@ export function Ring({ value, label, size = 120 }: RingProps) {
         stroke-dasharray={`${dash} ${circumference}`}
         transform={toReadingDirection}
       />
-      {size >= 40 && (
+      {figure && size >= 40 && (
         <text
           class="ring-value"
           x={c}

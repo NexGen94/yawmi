@@ -106,7 +106,7 @@ function Active({ focus, plans, goalTitle }: SessionTimerProps) {
   return (
     <div class="focus-active" data-phase={current}>
       <div class="focus-visual">
-        <Ring value={minutes / planned} label="تقدّم الجلسة" size={120} />
+        <Ring value={minutes / planned} label="تقدّم الجلسة" size={120} figure={false} />
         <div class="focus-figures">
           <p class="focus-name">{plan ? <bdi>{plan.title_ar}</bdi> : 'جلسة تركيز'}</p>
           <p class="focus-clock" role="timer" aria-label="الوقت" data-phase={current}>

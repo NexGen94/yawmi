@@ -496,9 +496,59 @@ describe('Chips', () => {
 });
 
 describe('Field', () => {
-  it.each(['text', 'number', 'date', 'time'] as const)('renders a labelled %s input', (type) => {
+  it.each(['text', 'number'] as const)('renders a labelled %s input', (type) => {
     render(<Field label="القيمة" type={type} value="" onInput={() => undefined} />);
     expect((screen.getByLabelText('القيمة') as HTMLInputElement).type).toBe(type);
+  });
+
+  // The browser's own date and time controls spoke English («mm/dd/yyyy», «08:00 PM») on an Arabic
+  // page (Task 24): a date and a time are a text field with an Arabic placeholder, 24 hours, and the
+  // value the callers always had («2026-12-08», «20:00»).
+  describe('date and time', () => {
+    it('are text fields with an Arabic placeholder, read from left to right', () => {
+      render(
+        <>
+          <Field label="الوقت" type="time" value="" onInput={() => undefined} />
+          <Field label="اليوم" type="date" value="" onInput={() => undefined} />
+        </>,
+      );
+      const time = screen.getByLabelText('الوقت') as HTMLInputElement;
+      const date = screen.getByLabelText('اليوم') as HTMLInputElement;
+      expect([time.type, date.type]).toEqual(['text', 'text']);
+      expect(time.placeholder).toBe('ساعة:دقيقة');
+      expect(date.placeholder).toBe('سنة-شهر-يوم');
+      expect([time.getAttribute('dir'), date.getAttribute('dir')]).toEqual(['ltr', 'ltr']);
+    });
+
+    it('a time reports «HH:MM» once it is a time, and an empty value until then; Arabic-Indic digits count', () => {
+      const onInput = vi.fn();
+      render(<Field label="الوقت" type="time" value="" onInput={onInput} />);
+      const input = screen.getByLabelText('الوقت');
+      for (const typed of ['2', '20:', '8:05', '٢٠:٣٠', '24:00', '12:60', 'abc']) fireEvent.input(input, { target: { value: typed } });
+      expect(onInput.mock.calls.map((c) => c[0])).toEqual(['', '', '08:05', '20:30', '', '', '']);
+    });
+
+    it('a date reports «YYYY-MM-DD» once it is a real day, and an empty value until then', () => {
+      const onInput = vi.fn();
+      render(<Field label="اليوم" type="date" value="" onInput={onInput} />);
+      const input = screen.getByLabelText('اليوم');
+      for (const typed of ['2026', '2026-12', '2026-12-08', '٢٠٢٦-١٢-٠٩', '2026-02-30', '2026-13-01']) fireEvent.input(input, { target: { value: typed } });
+      expect(onInput.mock.calls.map((c) => c[0])).toEqual(['', '', '2026-12-08', '2026-12-09', '', '']);
+    });
+
+    it('keeps what is being typed, and follows the value when the page changes it', () => {
+      const { rerender } = render(<Field label="اليوم" type="date" value="" onInput={() => undefined} />);
+      const input = screen.getByLabelText('اليوم') as HTMLInputElement;
+      fireEvent.input(input, { target: { value: '2026-1' } });
+      expect(input.value).toBe('2026-1');
+      rerender(<Field label="اليوم" type="date" value="2026-12-31" onInput={() => undefined} />);
+      expect(input.value).toBe('2026-12-31');
+    });
+
+    it('says a valid date in words under the field', () => {
+      render(<Field label="اليوم" type="date" value="2026-11-14" onInput={() => undefined} />);
+      expect(screen.getByText('السبت، 14 نوفمبر 2026')).toBeTruthy();
+    });
   });
 
   it('reports the typed value', () => {

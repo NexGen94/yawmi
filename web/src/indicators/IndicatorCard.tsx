@@ -32,7 +32,7 @@ export function IndicatorCard({ subject, value, display, onCustomize }: Indicato
   return (
     <Card title="المؤشر" class="indicator-card">
       <div class={`indicator-body indicator-${drawn}`}>
-        {drawn === 'ring' && ratio !== null && <Ring value={ratio} label={label} size={96} />}
+        {drawn === 'ring' && ratio !== null && <Ring value={ratio} label={label} size={96} figure={repeatsRing} />}
         <div class="indicator-figures">
           {!repeatsRing && <p class="indicator-text">{value.text}</p>}
           {value.reason !== undefined && <p class="indicator-reason">{value.reason}</p>}

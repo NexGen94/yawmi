@@ -358,3 +358,23 @@
     inline-size: 100%;
   }
 }
+
+/* ---------- A closed day: what was written, read-only ---------- */
+
+.day-closed-list {
+  display: grid;
+  gap: var(--sp-3);
+  margin: 0;
+}
+
+.day-closed-list dt {
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+  font-weight: 600;
+}
+
+.day-closed-list dd {
+  margin: 0;
+  font-size: var(--fs-body);
+  overflow-wrap: anywhere;
+}

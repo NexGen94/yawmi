@@ -341,3 +341,14 @@ describe('Heatmap', () => {
     expect(chart(container).getAttribute('aria-label')).toBe('أيام الدورة: لا بيانات بعد');
   });
 });
+
+describe('Ring: one big number per card (Task 24)', () => {
+  it('prints its percentage by default, and leaves it out for a card that prints its own, keeping the name', () => {
+    const on = render(<Ring value={0.5} label="س" />);
+    expect(on.container.querySelector('.ring-value')?.textContent).toBe('50%');
+    on.unmount();
+    const off = render(<Ring value={0.5} label="س" figure={false} />);
+    expect(off.container.querySelector('.ring-value')).toBeNull();
+    expect(off.container.querySelector('svg')?.getAttribute('aria-label')).toContain('50%');
+  });
+});
