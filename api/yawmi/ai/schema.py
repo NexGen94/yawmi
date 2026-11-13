@@ -13,7 +13,7 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-InsightKind = Literal["morning", "evening", "weekly", "ask"]
+InsightKind = Literal["morning", "evening", "weekly", "ask", "deeper"]
 
 # Keywords that are not part of the common denominator (or are only noise for a provider).
 _DROPPED_KEYWORDS = frozenset(
