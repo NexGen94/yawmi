@@ -124,11 +124,11 @@ test('pair: as loaded, a refused code, and offline', async ({ page, context }) =
   // A refused code, answered by the test itself: a real failed pairing would count against the
   // server's limit of 20 failures in ten minutes, which the suite never touches.
   await page.route('**/v1/devices/pair', (route) =>
-    route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"الكود غير صالح"}' }),
+    route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"الكود غير صالح أو منتهٍ"}' }),
   );
   await page.getByLabel('كود الإقران').fill('XXXXXXXX');
-  await page.getByRole('button', { name: 'إقران الجهاز' }).click();
-  await expect(page.getByText('الكود غير صالح').first()).toBeVisible();
+  await page.getByRole('button', { name: 'إقران هذا الجهاز' }).click();
+  await expect(page.getByText('الكود غير صالح أو منتهٍ').first()).toBeVisible();
   await inspect(page, 'pair-error');
   await page.unroute('**/v1/devices/pair');
 

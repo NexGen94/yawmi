@@ -93,7 +93,7 @@ export function PlansList(props: PlansListProps) {
   };
 
   return (
-    <Card title="خطط التركيز" class="focus-plans">
+    <Card title="خطط التركيز" class="focus-plans" id="focus-plans">
       {plans.length === 0 ? (
         <p class="focus-note">لا خطط بعد</p>
       ) : (

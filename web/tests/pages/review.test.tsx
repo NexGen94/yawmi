@@ -776,8 +776,8 @@ describe('the mood tab', () => {
     await openReview('/review?tab=mood');
     const grid = await screen.findByRole('img', { name: /^المزاج في 2026/ });
     const shades = new Set<string>();
-    for (const cell of Array.from(grid.querySelectorAll('[data-score]'))) shades.add(`${cell.getAttribute('data-score')}:${cell.getAttribute('fill-opacity')}`);
-    expect([...shades].sort()).toEqual(['1:0.2', '2:0.4', '3:0.6', '4:0.8', '5:1']);
+    for (const cell of Array.from(grid.querySelectorAll('[data-score]'))) shades.add(`${cell.getAttribute('data-score')}:${/year-grade-(\d)/.exec(cell.getAttribute('class') ?? '')?.[1]}`);
+    expect([...shades].sort()).toEqual(['1:1', '2:2', '3:3', '4:4', '5:5']);
     const css = readFileSync(join(import.meta.dirname, '../../src/charts/year-grid.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
     expect(css).not.toMatch(/signal|[^\w-]red[^\w-]/);
     expect(css).toMatch(/var\(--c-blue\)/);

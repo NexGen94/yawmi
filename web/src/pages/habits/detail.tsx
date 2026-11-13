@@ -19,6 +19,7 @@ import { useIndicators } from '../../indicators/data';
 import { fmt } from '../../lib/format';
 import { habitIndicator } from '../../progress/indicator';
 import type { HabitState } from '../../progress/state';
+import { LinkButton } from '../home/LinkButton';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
@@ -263,7 +264,10 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
                 <Card title="المرسى والتذكيرات">
                   <p class="detail-anchor">{ANCHOR[habit.anchor]}</p>
                   {habit.reminders.length === 0 ? (
-                    <p class="detail-note">لا تذكيرات.</p>
+                    <>
+                      <p class="detail-note">لا تذكيرات.</p>
+                      <LinkButton href={`/habits/${encodeURIComponent(habit.code)}/edit`}>إضافة تذكير</LinkButton>
+                    </>
                   ) : (
                     <ul class="reminders">
                       {habit.reminders.map((r) => (

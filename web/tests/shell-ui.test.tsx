@@ -68,6 +68,15 @@ describe('the app shell', () => {
     expect(side.querySelector('.connection')).not.toBeNull();
   });
 
+  it('shows no navigation on the pairing page: every item would lead back to it (Task 24)', async () => {
+    go('/pair');
+    render(<App />);
+    await screen.findByRole('heading', { level: 1, name: 'الإقران' });
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(screen.getByRole('complementary', { name: 'الشريط الجانبي' }).querySelector('.brand')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'القائمة' })).toBeNull();
+  });
+
   it('marks the active item with aria-current="page", and only that one', async () => {
     go('/habits/water');
     render(<App />);

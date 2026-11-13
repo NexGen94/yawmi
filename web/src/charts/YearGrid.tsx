@@ -23,9 +23,10 @@ const CELL = 12;
 const GAP = 3;
 const ROWS = 7;
 
-/** The five grades are five lightnesses of one blue: the fill opacity of the cell, never another hue
- *  (and never red). The word and the number of the grade are in the key and in each day's title. */
-export const SHADES: Readonly<Record<number, number>> = { 1: 0.2, 2: 0.4, 3: 0.6, 4: 0.8, 5: 1 };
+/** The five grades are five steps of the palette's own blues, from the palest to the ink (the
+ *  classes `year-grade-1` to `-5` in year-grid.css): mixed tints were off the palette, and the first
+ *  step could not be told from an empty cell. Never red. The word and the number of the grade are in
+ *  the key and in each day's title. */
 
 /** The words beside a grade in the key: the two ends say what they are. */
 function keyWord(score: number): string {
@@ -34,7 +35,7 @@ function keyWord(score: number): string {
   return fmt.num(score);
 }
 
-const shade = (score: number): number => SHADES[Math.min(5, Math.max(1, Math.round(score)))] ?? SHADES[3] ?? 0.6;
+const grade = (score: number): number => Math.min(5, Math.max(1, Math.round(score)));
 
 /** The mood of a year as a calendar of weeks (a column a week, Sunday on top, the first week at the
  *  right edge), with a text key under it. Only the days with a mood are shaded; the others stay empty
@@ -79,10 +80,9 @@ export function YearGrid({ year, days, label }: YearGridProps) {
       ) : (
         <rect
           key={day}
-          class="year-cell"
+          class={`year-cell year-grade-${grade(score)}`}
           data-day={day}
           data-score={score}
-          fill-opacity={shade(score)}
           x={left}
           y={top}
           width={CELL}
@@ -111,7 +111,7 @@ export function YearGrid({ year, days, label }: YearGridProps) {
         {SCORES.map((score) => (
           <li key={score}>
             <svg class="year-key-swatch" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-              <rect class="year-cell" fill-opacity={SHADES[score]} x="1" y="1" width="14" height="14" rx="3" />
+              <rect class={`year-cell year-grade-${score}`} x="1" y="1" width="14" height="14" rx="3" />
             </svg>
             {keyWord(score)}
           </li>

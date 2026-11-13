@@ -26,6 +26,9 @@ export function Sidebar(props: { path: string }) {
   const sidebar = useRef<HTMLElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const nav = useRef<HTMLElement>(null);
+  // Without a session every item would lead back to the pairing page: it shows the name and the
+  // connection state only (Task 24).
+  const pairing = props.path === '/pair';
 
   // A new page closes the drawer.
   useEffect(() => setOpen(false), [props.path]);
@@ -77,46 +80,50 @@ export function Sidebar(props: { path: string }) {
     <aside ref={sidebar} class="sidebar" aria-label="الشريط الجانبي" data-open={open ? '' : undefined}>
       <div class="sidebar-bar">
         <span class="brand">يومي</span>
-        <button
-          ref={button}
-          type="button"
-          class="menu-button"
-          aria-label="القائمة"
-          aria-expanded={open ? 'true' : 'false'}
-          aria-controls={NAV_ID}
-          onClick={() => setOpen(!open)}
-        >
-          <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d={open ? 'M6 6l12 12M18 6 6 18' : 'M4 7h16M4 12h16M4 17h16'} />
-          </svg>
-        </button>
+        {!pairing && (
+          <button
+            ref={button}
+            type="button"
+            class="menu-button"
+            aria-label="القائمة"
+            aria-expanded={open ? 'true' : 'false'}
+            aria-controls={NAV_ID}
+            onClick={() => setOpen(!open)}
+          >
+            <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d={open ? 'M6 6l12 12M18 6 6 18' : 'M4 7h16M4 12h16M4 17h16'} />
+            </svg>
+          </button>
+        )}
       </div>
-      <nav ref={nav} id={NAV_ID} class="sidebar-nav" aria-label="التنقل الرئيسي">
-        {NAV.map((group, g) => (
-          <div class="nav-group" key={group.label}>
-            <p class="nav-group-label" id={`nav-group-${g}`}>
-              {group.label}
-            </p>
-            <ul class="nav-list" role="list" aria-labelledby={`nav-group-${g}`}>
-              {NAV[g]?.items.map((item) => (
-                <li key={item.href}>
-                  <a
-                    class="nav-link"
-                    href={item.href}
-                    aria-current={isActive(item.href, props.path) ? 'page' : undefined}
-                    onClick={onNavLinkClick}
-                  >
-                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path d={ICONS[item.href]} />
-                    </svg>
-                    <span>{item.label}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </nav>
+      {!pairing && (
+        <nav ref={nav} id={NAV_ID} class="sidebar-nav" aria-label="التنقل الرئيسي">
+          {NAV.map((group, g) => (
+            <div class="nav-group" key={group.label}>
+              <p class="nav-group-label" id={`nav-group-${g}`}>
+                {group.label}
+              </p>
+              <ul class="nav-list" role="list" aria-labelledby={`nav-group-${g}`}>
+                {NAV[g]?.items.map((item) => (
+                  <li key={item.href}>
+                    <a
+                      class="nav-link"
+                      href={item.href}
+                      aria-current={isActive(item.href, props.path) ? 'page' : undefined}
+                      onClick={onNavLinkClick}
+                    >
+                      <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d={ICONS[item.href]} />
+                      </svg>
+                      <span>{item.label}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+      )}
       <div class="sidebar-foot">
         <ConnectionStatus />
       </div>

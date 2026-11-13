@@ -90,7 +90,7 @@ export const test = base.extend<Fixtures>({
     const code = await newPairCode(request);
     await page.goto('/pair');
     await page.getByLabel('كود الإقران').fill(code);
-    await page.getByRole('button', { name: 'إقران الجهاز' }).click();
+    await page.getByRole('button', { name: 'إقران هذا الجهاز' }).click();
     await page.waitForURL((url) => url.pathname === '/');
     await expect(page.getByRole('heading', { level: 1, name: 'الرئيسية' })).toBeVisible();
     await use(page);

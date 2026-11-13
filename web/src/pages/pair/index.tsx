@@ -103,7 +103,7 @@ export default function PairPage() {
               variant="primary"
               disabled={submitting || !code.trim() || isOffline}
             >
-              إقران الجهاز
+              إقران هذا الجهاز
             </Button>
           </div>
         </form>

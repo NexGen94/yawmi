@@ -450,6 +450,7 @@ export function EveningForm(props: EveningFormProps) {
             <Button disabled={!moodDirty || busy} onClick={() => void saveMood()}>
               تسجيل المزاج
             </Button>
+            {!moodDirty && state.score !== null && <span class="day-note">سُجّل المزاج</span>}
           </div>
         </section>
 

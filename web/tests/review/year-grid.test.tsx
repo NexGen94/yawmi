@@ -55,16 +55,16 @@ describe('YearGrid', () => {
       />,
     );
     expect(container.querySelectorAll('[data-score]')).toHaveLength(2);
-    expect(cell(container, '2026-11-01').getAttribute('fill-opacity')).toBe('0.2');
-    expect(cell(container, '2026-11-02').getAttribute('fill-opacity')).toBe('1');
+    expect(cell(container, '2026-11-01').getAttribute('class')).toContain('year-grade-1');
+    expect(cell(container, '2026-11-02').getAttribute('class')).toContain('year-grade-5');
     expect(cell(container, '2026-11-03').getAttribute('data-score')).toBeNull();
     expect(cell(container, '2026-11-02').textContent).toContain('2 نوفمبر: 5');
   });
 
   it('a score outside 1 to 5 is drawn at the nearest grade', () => {
     const { container } = render(<YearGrid year={2026} days={[{ day: '2026-02-01', score: 9 }, { day: '2026-02-02', score: 0 }]} label="س" />);
-    expect(cell(container, '2026-02-01').getAttribute('fill-opacity')).toBe('1');
-    expect(cell(container, '2026-02-02').getAttribute('fill-opacity')).toBe('0.2');
+    expect(cell(container, '2026-02-01').getAttribute('class')).toContain('year-grade-5');
+    expect(cell(container, '2026-02-02').getAttribute('class')).toContain('year-grade-1');
   });
 
   it('the key names the five grades and the empty cell', () => {

@@ -563,6 +563,52 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
   color: var(--c-ink-2);
 }
 
+/* ---------- Checkbox ---------- */
+
+/* The native checkbox, drawn in the palette: a 24 px box with a blue border, ink when checked (the
+   browser's own grey border and tick were off the palette). The label around it is the 44 px row. */
+input[type='checkbox'] {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex: none;
+  inline-size: 24px;
+  block-size: 24px;
+  margin: 0;
+  border: 2px solid var(--c-blue);
+  border-radius: 6px;
+  background: var(--c-surface);
+  cursor: pointer;
+}
+
+input[type='checkbox']::after {
+  content: '';
+  inline-size: 14px;
+  block-size: 11px;
+  background: var(--c-surface);
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0, 43% 62%);
+  transform: scale(0);
+}
+
+input[type='checkbox']:checked {
+  border-color: var(--c-ink);
+  background: var(--c-ink);
+}
+
+input[type='checkbox']:checked::after {
+  transform: scale(1);
+}
+
+input[type='checkbox']:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+input[type='checkbox']:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--focus);
+}
+
 /* ---------- Chips ---------- */
 
 .chips {

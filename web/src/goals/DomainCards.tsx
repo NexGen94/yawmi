@@ -33,11 +33,8 @@ export function DomainCards({ outcomes }: DomainCardsProps) {
         const mean = meanOf(mine.map((o) => o.completion));
         return (
           <Card key={domain.key} title={domain.label} headingLevel={3} class="domain-card">
-            {domain.headline !== null && (
-              <p class="domain-headline">
-                <bdi dir="ltr">{domain.headline}</bdi>
-              </p>
-            )}
+            {/* always a row, empty or not, so that the figures of the four cards share a baseline */}
+            <p class="domain-headline">{domain.headline !== null && <bdi dir="ltr">{domain.headline}</bdi>}</p>
             <p class="domain-figure">
               <span class="num-lg">{pctOrDash(mean)}</span>
               <span class="domain-figure-note">{mine.length > 1 ? 'متوسط مخرجات المجال' : 'إنجاز المجال'}</span>

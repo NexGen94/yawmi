@@ -1,6 +1,5 @@
 /* The year grid of the mood (task 21). Colors only through the tokens; logical properties only. The
-   five grades are five lightnesses of the one blue (the fill opacity is set on each cell), so no hue
-   other than the blue of the app is used, and none of them is red. */
+   five grades are five steps of the palette's blues, pale to ink, and none of them is red. */
 
 .year-grid {
   display: flex;
@@ -16,9 +15,33 @@
 }
 
 .year-cell {
+  stroke-width: 1;
+}
+
+/* Five steps of the palette: pale to ink. Grade 3 is the blue of the bars. */
+.year-grade-1 {
+  fill: var(--c-blue-pale);
+  stroke: var(--c-blue-light);
+}
+
+.year-grade-2 {
+  fill: var(--c-blue-light);
+  stroke: var(--c-blue-light);
+}
+
+.year-grade-3 {
   fill: var(--c-blue);
   stroke: var(--c-blue);
-  stroke-width: 1;
+}
+
+.year-grade-4 {
+  fill: var(--c-ink-2);
+  stroke: var(--c-ink-2);
+}
+
+.year-grade-5 {
+  fill: var(--c-ink);
+  stroke: var(--c-ink);
 }
 
 .year-cell,
