@@ -3,7 +3,9 @@
 Guarantees, in order of enforcement:
 1. Health policy: `raw_samples` is stripped from the payload unless `send_raw_health` is on, and
    is never allowed to reach DeepSeek (`PolicyViolation` before any call).
-2. The reply must match `InsightResponse` (strict keys, at most two lines).
+2. The reply must match `InsightResponse` (strict keys, at most two lines) and the length caps
+   (M-2): at most `max_lines` lines (the `ai_lines` setting), each up to 200 characters without a
+   line break, a question up to 200 characters, priority titles up to 80.
 3. Every cited `source_id` (in `source_ids` and in `priorities`) must be one of the request's
    sources: a fabricated id is rejected.
 A rejected reply gets exactly one repair attempt (the same request plus a corrective note); a
@@ -41,7 +43,11 @@ SYSTEM_PROMPT_PATH = Path(__file__).parent / "prompts" / "ar_system.md"
 
 _CORRECTIONS = {
     "schema": "الرد السابق لا يطابق المخطط: كائن JSON واحد بالمفاتيح المطلوبة الأربعة فقط.",
-    "too_many_lines": "الرد السابق تجاوز سطرين في lines؛ الحد الأقصى سطران.",
+    "too_many_lines": "الرد السابق تجاوز عدد الأسطر المسموح في lines.",
+    "line_too_long": "في الرد السابق سطر أطول من 200 حرف؛ الحد 200 حرف للسطر.",
+    "line_break": "في الرد السابق سطر فيه فاصل أسطر؛ كل سطر جملة واحدة بلا فاصل.",
+    "question_too_long": "السؤال في الرد السابق أطول من 200 حرف.",
+    "priority_too_long": "عنوان أولوية في الرد السابق أطول من 80 حرفاً.",
     "unknown_source": "الرد السابق ذكر معرّف مصدر غير موجود في المدخل.",
     "empty": "الرد السابق كان فارغاً أو ليس كائن JSON.",
 }
@@ -97,6 +103,29 @@ def build_provider(settings: Settings) -> Provider:
     return AnthropicProvider(settings.anthropic_api_key)
 
 
+MAX_LINE_CHARS = 200
+MAX_QUESTION_CHARS = 200
+MAX_PRIORITY_TITLE_CHARS = 80
+BREAKS = frozenset({"\n", "\r", "\u2028", "\u2029"})  # one line on every screen
+LINE_COUNT_NOTE = {1: "الحد سطر واحد فقط.", 2: "الحد سطران."}
+
+
+def _cap_reasons(response: InsightResponse, max_lines: int) -> list[str]:
+    """The length caps (M-2) a schema-valid reply breaks, in a fixed order."""
+    reasons = []
+    if len(response.lines) > max_lines:
+        reasons.append("too_many_lines")
+    if any(len(line) > MAX_LINE_CHARS for line in response.lines):
+        reasons.append("line_too_long")
+    if any(BREAKS & set(line) for line in response.lines):
+        reasons.append("line_break")
+    if response.question is not None and len(response.question) > MAX_QUESTION_CHARS:
+        reasons.append("question_too_long")
+    if any(len(p.title) > MAX_PRIORITY_TITLE_CHARS for p in response.priorities):
+        reasons.append("priority_too_long")
+    return reasons
+
+
 def _is_too_many_lines(error: Any) -> bool:
     return error["type"] == "too_long" and error["loc"][:1] == ("lines",)
 
@@ -126,7 +155,9 @@ class InsightService:
         return self._settings.model_weekly if req.kind == "weekly" else self._settings.model_daily
 
     @staticmethod
-    def _check(raw: dict, allowed_ids: set[str]) -> tuple[InsightResponse | None, list[str]]:
+    def _check(
+        raw: dict, allowed_ids: set[str], max_lines: int = 2
+    ) -> tuple[InsightResponse | None, list[str]]:
         """Validate a reply; the second item lists reason codes (never any reply content)."""
         try:
             response = InsightResponse.model_validate(raw)
@@ -138,14 +169,19 @@ class InsightService:
             if any(not _is_too_many_lines(e) for e in errors):
                 reasons.append("schema")
             return None, reasons
+        caps = _cap_reasons(response, max_lines)
+        if caps:
+            return None, caps
         cited = set(response.source_ids) | {p.source_id for p in response.priorities}
         if not cited <= allowed_ids:
             return None, ["unknown_source"]
         return response, []
 
     @staticmethod
-    def _corrective_note(reasons: list[str], allowed_ids: set[str]) -> str:
+    def _corrective_note(reasons: list[str], allowed_ids: set[str], max_lines: int = 2) -> str:
         parts = [_CORRECTIONS[r] for r in reasons]
+        if "too_many_lines" in reasons:
+            parts.append(LINE_COUNT_NOTE.get(max_lines, LINE_COUNT_NOTE[2]))
         if "unknown_source" in reasons:
             if allowed_ids:
                 ids = json.dumps(sorted(allowed_ids), ensure_ascii=False)
@@ -154,7 +190,7 @@ class InsightService:
                 parts.append("لا مصادر في المدخل: source_ids وpriorities فارغتان.")
         return "[تصحيح] " + " ".join(parts) + " المطلوب: كائن JSON واحد صالح يطابق المخطط."
 
-    async def generate(self, req: InsightRequest) -> InsightResponse:
+    async def generate(self, req: InsightRequest, max_lines: int = 2) -> InsightResponse:
         payload = self._payload(req)
         digest = request_hash(payload)
         model = self._model_for(req)
@@ -167,7 +203,7 @@ class InsightService:
         for attempt in (1, 2):
             message = user
             if attempt == 2:
-                message = f"{user}\n\n{self._corrective_note(reasons, allowed_ids)}"
+                message = f"{user}\n\n{self._corrective_note(reasons, allowed_ids, max_lines)}"
             try:
                 raw = await self._provider.complete(system, message, schema, model)
             except (ProviderEmpty, ProviderMalformed):
@@ -182,7 +218,7 @@ class InsightService:
                     digest,
                 )
                 raise
-            response, reasons = self._check(raw, allowed_ids)
+            response, reasons = self._check(raw, allowed_ids, max_lines)
             if response is not None:
                 logger.info(
                     "insight ok kind=%s model=%s attempts=%d request_hash=%s",

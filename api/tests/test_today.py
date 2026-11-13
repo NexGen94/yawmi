@@ -740,7 +740,8 @@ def test_today_contract_carries_a_typed_insight_not_a_list_of_strings() -> None:
         option.get("$ref") or option.get("type")
         for option in today["properties"]["insight"]["anyOf"]
     }
-    assert refs == {"#/components/schemas/InsightResponse", "null"}
+    # since task 18 the stored morning insight, with its cards and days (design §7.2)
+    assert refs == {"#/components/schemas/InsightOut", "null"}
     assert "insight" in today["required"]
 
 

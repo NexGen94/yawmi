@@ -3,15 +3,19 @@
 Both are read-only. The local day is the server's day in Asia/Riyadh. The pieces are built by
 `yawmi.today.assemble` from rows read through a `TodayReader`; this module only wires them. The
 milestones and cards are the shown ones: the goal edits laid over the mirror, as in `GET /v1/goals`.
-`insight` (the morning insight, typed as the AI reply) is `null` until its generation exists. Habit indicators (each due
+`insight` is the stored morning insight of the day (with its cards and days), or `null`: this
+route never calls a provider. Habit indicators (each due
 habit's `period_progress`, each card's linked habits with their adherence) come from the pure
 rules in `yawmi.domain.habits`, with the week starting on the `week_start` setting.
 """
 
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
+from yawmi.ai.cards import InsightOut
+from yawmi.ai.store import AsyncpgInsightStore, InsightStore, insight_out
 from yawmi.auth.deps import SettingsDep, require_kind
 from yawmi.db.pool import get_pool
 from yawmi.domain.days import DEFAULT_TZ, day_key
@@ -65,6 +69,27 @@ def get_today_edits(request: Request) -> EditStore | None:
 
 TodayEditsDep = Annotated[EditStore | None, Depends(get_today_edits)]
 
+MORNING_KIND = "morning"
+
+
+def get_today_insights(request: Request) -> InsightStore | None:
+    """The stored insights: the store injected into the app, else Postgres. A test that injects
+    only a mirror reader (no insight store) has no morning insight."""
+    injected: InsightStore | None = getattr(request.app.state, "insights_store", None)
+    if injected is not None:
+        return injected
+    if getattr(request.app.state, "today", None) is not None:
+        return None
+    return AsyncpgInsightStore(get_pool())
+
+
+TodayInsightsDep = Annotated[InsightStore | None, Depends(get_today_insights)]
+
+
+async def morning_insight(store: InsightStore | None, day: date) -> InsightOut | None:
+    row = None if store is None else await store.get_for_day(MORNING_KIND, day)
+    return None if row is None else insight_out(row)
+
 
 @router.get(
     "/today",
@@ -75,7 +100,10 @@ TodayEditsDep = Annotated[EditStore | None, Depends(get_today_edits)]
     ),
 )
 async def get_today(
-    reader: TodayReaderDep, edits: TodayEditsDep, settings: SettingsDep
+    reader: TodayReaderDep,
+    edits: TodayEditsDep,
+    insights: TodayInsightsDep,
+    settings: SettingsDep,
 ) -> TodayOut:
     day = day_key(event_models.server_now(), DEFAULT_TZ)
     milestones, _ = overlay(await reader.milestones(), await current_edits(edits))
@@ -89,7 +117,7 @@ async def get_today(
             await reader.habit_logs(logs_first, logs_last),
             settings.week_start,
         ),
-        insight=None,
+        insight=await morning_insight(insights, day),
         health=build_health(day, await reader.daily_metrics(first, last)),
         plan=build_plan(day, await reader.cycles(), milestones),
     )

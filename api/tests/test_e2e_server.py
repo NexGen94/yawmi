@@ -116,17 +116,19 @@ async def test_today_lists_the_four_e2e_habits_among_the_due(client: httpx.Async
 async def test_close_day_returns_the_two_fixed_lines_of_the_fake_provider(
     client: httpx.AsyncClient,
 ) -> None:
-    body = {
-        "day": TODAY.isoformat(),
-        "context": {},
-        "sources": [{"id": "habit:x", "kind": "habit", "text": "عادة: 1 من 1"}],
-    }
-    res = await client.post("/v1/day/close", json=body, headers=_device())
-    assert res.status_code == 200
+    """Since task 18 the server builds the sources and a consent comes first; the fake provider
+    cites the first source of the request, a seeded habit, and its card comes back."""
+    device = _device()
+    consent = {"provider": "anthropic", "personal_text": False}
+    assert (await client.put("/v1/ai/consent", json=consent, headers=device)).status_code == 200
+    res = await client.post("/v1/day/close", json={"day": TODAY.isoformat()}, headers=device)
+    assert res.status_code == 200, res.text
     out = res.json()
     assert out["lines"] == list(fake_provider.LINES)
     assert len(out["lines"]) == 2
-    assert out["source_ids"] == ["habit:x"]
+    [cited] = out["source_ids"]
+    assert cited.startswith("habit:")
+    assert [c["source_id"] for c in out["cards"]] == [cited]
 
 
 # --- the fake provider -----------------------------------------------------------------------

@@ -1,36 +1,49 @@
 {
   "components": {
     "schemas": {
-      "AskRequest": {
+      "AiErrorBody": {
+        "description": "The error body of the AI routes: `detail`, and the code in `errors` when there is one.",
         "properties": {
-          "context": {
-            "additionalProperties": true,
-            "description": "ملخصات اليوم المجمّعة",
-            "title": "Context",
-            "type": "object"
-          },
-          "day": {
-            "format": "date",
-            "title": "Day",
+          "detail": {
+            "title": "Detail",
             "type": "string"
           },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationErrorItem"
+            },
+            "title": "Errors",
+            "type": "array"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "AiErrorBody",
+        "type": "object"
+      },
+      "AskRequest": {
+        "additionalProperties": false,
+        "properties": {
           "question": {
             "maxLength": 500,
             "minLength": 1,
             "title": "Question",
             "type": "string"
           },
-          "sources": {
-            "items": {
-              "$ref": "#/components/schemas/ClientSource"
-            },
-            "maxItems": 50,
-            "title": "Sources",
-            "type": "array"
+          "range": {
+            "default": "7d",
+            "description": "المدى: سبعة أيام أو ثلاثون أو الدورة الجارية",
+            "enum": [
+              "7d",
+              "30d",
+              "cycle"
+            ],
+            "title": "Range",
+            "type": "string"
           }
         },
         "required": [
-          "day",
           "question"
         ],
         "title": "AskRequest",
@@ -489,31 +502,73 @@
         "title": "ChangeResult",
         "type": "object"
       },
-      "ClientSource": {
-        "description": "A citable fact from the client, with bounded field sizes.",
+      "ConsentIn": {
+        "additionalProperties": false,
         "properties": {
-          "id": {
-            "maxLength": 64,
-            "title": "Id",
-            "type": "string"
+          "personal_text": {
+            "default": false,
+            "description": "إرسال «رسالتي» و«رؤيتي» أيضاً، ومغلق افتراضاً",
+            "title": "Personal Text",
+            "type": "boolean"
           },
-          "kind": {
-            "maxLength": 32,
-            "title": "Kind",
-            "type": "string"
-          },
-          "text": {
-            "maxLength": 500,
-            "title": "Text",
+          "provider": {
+            "description": "المزوّد الحالي، وغيره 409 `provider_mismatch`",
+            "enum": [
+              "anthropic",
+              "deepseek"
+            ],
+            "title": "Provider",
             "type": "string"
           }
         },
         "required": [
-          "id",
-          "kind",
-          "text"
+          "provider"
         ],
-        "title": "ClientSource",
+        "title": "ConsentIn",
+        "type": "object"
+      },
+      "ConsentOut": {
+        "properties": {
+          "granted": {
+            "description": "موافقة سارية لهذا المزوّد",
+            "title": "Granted",
+            "type": "boolean"
+          },
+          "granted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "وقت الموافقة السارية، أو `null`",
+            "title": "Granted At"
+          },
+          "personal_text": {
+            "description": "«رسالتي» و«رؤيتي» مشمولتان",
+            "title": "Personal Text",
+            "type": "boolean"
+          },
+          "provider": {
+            "description": "المزوّد الحالي",
+            "enum": [
+              "anthropic",
+              "deepseek"
+            ],
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "granted",
+          "personal_text",
+          "granted_at"
+        ],
+        "title": "ConsentOut",
         "type": "object"
       },
       "CycleOut": {
@@ -944,25 +999,18 @@
         "type": "object"
       },
       "DayCloseRequest": {
+        "additionalProperties": false,
         "properties": {
-          "context": {
-            "additionalProperties": true,
-            "description": "ملخصات اليوم المجمّعة",
-            "title": "Context",
-            "type": "object"
-          },
           "day": {
             "format": "date",
             "title": "Day",
             "type": "string"
           },
-          "sources": {
-            "items": {
-              "$ref": "#/components/schemas/ClientSource"
-            },
-            "maxItems": 50,
-            "title": "Sources",
-            "type": "array"
+          "regenerate": {
+            "default": false,
+            "description": "إعادة التوليد: يُنادى المزوّد فقط إن تغيّرت المصادر عن المخزَّن",
+            "title": "Regenerate",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2052,6 +2100,77 @@
           "pending_edits"
         ],
         "title": "GoalsOut",
+        "type": "object"
+      },
+      "GroundedInsight": {
+        "additionalProperties": false,
+        "description": "A validated reply with the cards of the sources it cited and their days.",
+        "properties": {
+          "cards": {
+            "description": "بطاقات المصادر المستشهد بها، بترتيب الاستشهاد",
+            "items": {
+              "$ref": "#/components/schemas/SourceCard"
+            },
+            "title": "Cards",
+            "type": "array"
+          },
+          "days": {
+            "description": "أيام البطاقات المختلفة غير الفارغة، تصاعدياً",
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "lines": {
+            "description": "سطران كحد أقصى",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "title": "Lines",
+            "type": "array"
+          },
+          "priorities": {
+            "description": "ثلاث أولويات كحد أقصى",
+            "items": {
+              "$ref": "#/components/schemas/Priority"
+            },
+            "maxItems": 3,
+            "title": "Priorities",
+            "type": "array"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "سؤال واحد على الأكثر، أو null",
+            "title": "Question"
+          },
+          "source_ids": {
+            "description": "معرّفات المصادر المعطاة التي استند إليها الرد",
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines",
+          "question",
+          "source_ids",
+          "priorities",
+          "cards",
+          "days"
+        ],
+        "title": "GroundedInsight",
         "type": "object"
       },
       "HabitDraft": {
@@ -3283,8 +3402,16 @@
       },
       "InsightOut": {
         "additionalProperties": false,
-        "description": "A stored insight: the validated reply plus its identity.",
+        "description": "A stored insight: the grounded reply plus its identity.",
         "properties": {
+          "cards": {
+            "description": "بطاقات المصادر المستشهد بها، بترتيب الاستشهاد",
+            "items": {
+              "$ref": "#/components/schemas/SourceCard"
+            },
+            "title": "Cards",
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -3294,6 +3421,15 @@
             "format": "date",
             "title": "Day",
             "type": "string"
+          },
+          "days": {
+            "description": "أيام البطاقات المختلفة غير الفارغة، تصاعدياً",
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Days",
+            "type": "array"
           },
           "id": {
             "format": "uuid",
@@ -3348,6 +3484,8 @@
           "question",
           "source_ids",
           "priorities",
+          "cards",
+          "days",
           "id",
           "kind",
           "day",
@@ -4799,6 +4937,95 @@
         "title": "SettingsPatch",
         "type": "object"
       },
+      "SourceCard": {
+        "description": "One cited source as the screen shows it.",
+        "properties": {
+          "day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "يوم المصدر إن كان ليوم واحد",
+            "title": "Day"
+          },
+          "kind": {
+            "description": "نوع المصدر: habit أو milestone أو outcome أو journal أو …",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "description": "اسم قصير للبطاقة",
+            "title": "Label",
+            "type": "string"
+          },
+          "source_id": {
+            "description": "معرّف المصدر كما أُرسل إلى المزوّد",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "text": {
+            "description": "نص المصدر كما أُرسل",
+            "title": "Text",
+            "type": "string"
+          },
+          "trend": {
+            "description": "قيم الأيام السبعة الأخيرة للعادة، وإلا فارغة",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Trend",
+            "type": "array"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ما يلي الرقم، مثل «من 7»",
+            "title": "Unit"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "الرقم الرئيس إن وُجد",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "source_id",
+          "kind",
+          "label",
+          "value",
+          "unit",
+          "text",
+          "trend",
+          "day"
+        ],
+        "title": "SourceCard",
+        "type": "object"
+      },
       "StoredEvent": {
         "description": "An event as stored, with the server-side `received_at` that `GET /v1/events` pages by.",
         "properties": {
@@ -5017,13 +5244,13 @@
           "insight": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/InsightResponse"
+                "$ref": "#/components/schemas/InsightOut"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "رؤية الصباح: سطران وحتى ثلاث أولويات بمعرّفات مصادرها. `null` إلى أن تُبنى خدمة توليدها"
+            "description": "رؤية الصباح المخزّنة لليوم: سطران وحتى ثلاث أولويات بمصادرها، مع بطاقاتها وأيامها. `null` بلا صف `morning` لليوم. لا يُستدعى المزوّد هنا أبداً"
           },
           "plan": {
             "$ref": "#/components/schemas/TodayPlan"
@@ -5234,26 +5461,16 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/v1/ask": {
-      "post": {
-        "description": "الجواب لا يستشهد إلا بمصادر الطلب. لا يُحفظ شيء.",
-        "operationId": "ask_v1_ask_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AskRequest"
-              }
-            }
-          },
-          "required": true
-        },
+    "/v1/ai/consent": {
+      "delete": {
+        "description": "يملأ `revoked_at` ولا يحذف الصف، فتعيد مسارات الذكاء 403 بعده. تكراره بلا أثر.",
+        "operationId": "delete_consent_v1_ai_consent_delete",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InsightResponse"
+                  "$ref": "#/components/schemas/ConsentOut"
                 }
               }
             },
@@ -5277,15 +5494,205 @@
                 }
               }
             },
-            "description": "غير مسموح (رمز الخدمة)"
+            "description": "غير مسموح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "سحب الموافقة",
+        "tags": [
+          "ai"
+        ]
+      },
+      "get": {
+        "operationId": "get_consent_v1_ai_consent_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "الموافقة على إرسال البيانات إلى مزوّد الذكاء الحالي",
+        "tags": [
+          "ai"
+        ]
+      },
+      "put": {
+        "description": "يُرسل أرقام العادات والأهداف وكلمات اليومية إلى المزوّد الحالي بعد الموافقة. و`personal_text` يضيف «رسالتي» و«رؤيتي». مزوّد غير الحالي 409 `provider_mismatch`. الموافقة بعد السحب تجدّد الصف نفسه.",
+        "operationId": "put_consent_v1_ai_consent_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiErrorBody"
+                }
+              }
+            },
+            "description": "المزوّد المذكور ليس المزوّد الحالي"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "منح الموافقة أو تجديدها",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ask": {
+      "post": {
+        "description": "يرسل العميل السؤال والمدى وحدهما (`7d` افتراضاً، أو `30d`، أو `cycle` للدورة الجارية). يبني الخادم المصادر لذلك المدى، والجواب لا يستشهد إلا بها، ويعود مع بطاقاتها وأيامها. لا يُحفظ شيء. يحتاج موافقة سارية للمزوّد الحالي.",
+        "operationId": "ask_v1_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroundedInsight"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiErrorBody"
+                }
+              }
+            },
+            "description": "غير مسموح (رمز الخدمة)، أو لا موافقة سارية (`ai_consent_required`)"
           },
           "422": {
             "description": "طلب غير صالح، أو امتنع النموذج عن الرد"
           },
           "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiErrorBody"
+                }
+              }
+            },
             "description": "تعذّر الحصول على ردّ صالح من المزوّد"
           },
           "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiErrorBody"
+                }
+              }
+            },
             "description": "مفتاح المزوّد غير مضبوط"
           }
         },
@@ -5525,7 +5932,7 @@
     },
     "/v1/day/close": {
       "post": {
-        "description": "يستلم ملخصات اليوم ومصادره، ويعيد ملخصاً من سطرين كحد أقصى لا يستشهد إلا بمصادر الطلب. يُقبل اليوم الحالي والأيام السبعة قبله فقط (`day_out_of_window` لما قبلها). أول إغلاق لليوم يُحفظ، وكل تكرار لليوم نفسه يعيده دون استدعاء المزوّد. الملخصات والمصادر يرسلها العميل حالياً إلى أن يبنيها الخادم (المهمتان 8b و10b).",
+        "description": "يبني الخادم ملخصات اليوم ومصادره من البيانات المخزّنة (سبعة أيام تنتهي باليوم)، ويعيد ملخصاً لا يتجاوز `ai_lines` سطراً لا يستشهد إلا بتلك المصادر، مع بطاقاتها وأيامها. يُقبل اليوم الحالي والأيام السبعة قبله فقط (`day_out_of_window` لما قبلها). أول إغلاق لليوم يُحفظ، وكل تكرار يعيده دون استدعاء المزوّد. ومع `regenerate` يُستدعى المزوّد فقط إن تغيّرت المصادر، ويُستبدل الصف. يحتاج موافقة سارية للمزوّد الحالي.",
         "operationId": "close_day_v1_day_close_post",
         "requestBody": {
           "content": {
@@ -5562,19 +5969,33 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
+                  "$ref": "#/components/schemas/AiErrorBody"
                 }
               }
             },
-            "description": "غير مسموح (رمز الخدمة)"
+            "description": "غير مسموح (رمز الخدمة)، أو لا موافقة سارية (`ai_consent_required`)"
           },
           "422": {
             "description": "طلب غير صالح، أو امتنع النموذج عن الرد"
           },
           "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiErrorBody"
+                }
+              }
+            },
             "description": "تعذّر الحصول على ردّ صالح من المزوّد"
           },
           "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiErrorBody"
+                }
+              }
+            },
             "description": "مفتاح المزوّد غير مضبوط"
           }
         },
@@ -7971,7 +8392,7 @@
                 }
               }
             },
-            "description": "غير مسموح (رمز الخدمة)"
+            "description": "غير مسموح"
           },
           "422": {
             "description": "طلب غير صالح، أو امتنع النموذج عن الرد"
