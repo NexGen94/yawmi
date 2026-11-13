@@ -14,6 +14,7 @@ import { Card } from '../../ui/Card';
 import { CheckRow } from '../../ui/CheckRow';
 import { Field } from '../../ui/Field';
 import { Slider } from '../../ui/Slider';
+import { Switch } from '../../ui/Switch';
 import { ActivityChips } from './ActivityChips';
 import { ClosureAi, type Summary } from './ClosureAi';
 import { ClosureCard } from './ClosureCard';
@@ -187,7 +188,6 @@ export function EveningForm(props: EveningFormProps) {
   const latest = useRef(state);
   latest.current = state;
   const outcomeId = useId();
-  const switchId = useId();
   const ai = useAi();
   const [summary, setSummary] = useState<Summary>({ kind: 'none' });
   const linesNow = useRef(aiLines);
@@ -372,27 +372,12 @@ export function EveningForm(props: EveningFormProps) {
       )}
 
       <section class="day-section">
-        <button
-          type="button"
-          role="switch"
-          class="day-switch"
-          aria-checked={state.oneMinute ? 'true' : 'false'}
-          aria-labelledby={`${switchId}-label`}
-          aria-describedby={`${switchId}-hint`}
-          onClick={() => update({ oneMinute: !state.oneMinute })}
-        >
-          <span class="day-switch-track" aria-hidden="true">
-            <span class="day-switch-thumb" />
-          </span>
-          <span class="day-switch-text">
-            <span id={`${switchId}-label`} class="day-switch-label">
-              دقيقة واحدة
-            </span>
-            <span id={`${switchId}-hint`} class="day-switch-hint">
-              يُخفي منزلقات الحالة وحقل «تعلّمت»
-            </span>
-          </span>
-        </button>
+        <Switch
+          checked={state.oneMinute}
+          onChange={(oneMinute) => update({ oneMinute })}
+          label="دقيقة واحدة"
+          hint="يُخفي منزلقات الحالة وحقل «تعلّمت»"
+        />
       </section>
 
       <section class="day-section" aria-labelledby="e-mood">

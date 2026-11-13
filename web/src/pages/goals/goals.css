@@ -38,13 +38,20 @@
 }
 
 @media (width < 700px) {
+  /* Five views do not fit a phone: a scroller whose ends are padded and faded, so that the first
+     and the last label are whole at rest and a cut chip says «there is more» (Task 24). */
   .goals-switch {
     overflow-x: auto;
+    scroll-padding-inline: var(--sp-6);
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, transparent, var(--c-ink) var(--sp-6), var(--c-ink) calc(100% - var(--sp-6)), transparent);
+    mask-image: linear-gradient(to right, transparent, var(--c-ink) var(--sp-6), var(--c-ink) calc(100% - var(--sp-6)), transparent);
   }
 
   .goals-switch .segmented {
     flex-wrap: nowrap;
     inline-size: max-content;
+    padding-inline: var(--sp-6);
   }
 
   .goals-switch .segment {

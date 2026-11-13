@@ -68,3 +68,29 @@ export async function expectTargets44(page: Page): Promise<void> {
   });
   expect(small, 'controls shorter than 44 px').toEqual([]);
 }
+
+/** The open dialog or drawer is inside the window, and so is every action under its content: the
+ *  body scrolls, the buttons never sit below the fold (Task 24: the Save button of the indicator
+ *  dialog was cut by the bottom of the window at 1280x800 and 390x844). */
+export async function expectLayerFits(page: Page): Promise<void> {
+  const report = await page.evaluate(() => {
+    const panel = document.querySelector<HTMLElement>('.dialog, .drawer');
+    if (!panel) return { found: false, problems: [] as string[] };
+    const view = { w: document.documentElement.clientWidth, h: window.innerHeight };
+    const problems: string[] = [];
+    const inside = (name: string, box: DOMRect): void => {
+      if (box.top < -0.5 || box.bottom > view.h + 0.5 || box.left < -0.5 || box.right > view.w + 0.5) {
+        problems.push(`${name} ${Math.round(box.left)},${Math.round(box.top)} to ${Math.round(box.right)},${Math.round(box.bottom)} in ${view.w}x${view.h}`);
+      }
+    };
+    inside('panel', panel.getBoundingClientRect());
+    for (const button of panel.querySelectorAll<HTMLElement>('.layer-actions button, .layer-actions a')) {
+      inside(`action «${(button.textContent ?? '').trim()}»`, button.getBoundingClientRect());
+    }
+    const body = panel.querySelector<HTMLElement>('.layer-body');
+    if (!body || body.clientHeight < 40) problems.push('the body of the panel has no room');
+    return { found: true, problems };
+  });
+  expect(report.found, 'a dialog or a drawer is open').toBe(true);
+  expect(report.problems, 'parts of the panel outside the window').toEqual([]);
+}

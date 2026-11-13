@@ -11,11 +11,13 @@ export interface DrawerProps {
   /** Called by Escape, the close button and a click on the backdrop. */
   onClose(): void;
   children: ComponentChildren;
+  /** Buttons pinned under the content, the main one first. */
+  actions?: ComponentChildren;
 }
 
 /** A side panel at the inline end (the left in RTL), full height, modal like Dialog: it traps the
  *  focus, closes with Escape, and gives the focus back. */
-export function Drawer({ open, title, onClose, children }: DrawerProps) {
+export function Drawer({ open, title, onClose, children, actions }: DrawerProps) {
   const panel = useRef<HTMLDialogElement>(null);
   const id = useId();
   useModalLayer(open, panel, onClose);
@@ -33,6 +35,7 @@ export function Drawer({ open, title, onClose, children }: DrawerProps) {
         <div class="layer-body" data-layer-body>
           {children}
         </div>
+        {actions && <div class="layer-actions">{actions}</div>}
       </dialog>
     </div>
   );

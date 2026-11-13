@@ -1,9 +1,9 @@
 /* The pairing page. Colors only through the tokens; logical properties only. The red text is the
-   ink red (--c-signal-ink): the drawing red is for marks, not for words. */
+   ink red (--c-signal-ink) and only for a refused code: a missing connection is a state, in --c-ink-2. */
 
 .pair-notice {
   margin-block-end: var(--sp-4);
-  color: var(--c-signal-ink);
+  color: var(--c-ink-2);
 }
 
 .pair-error {

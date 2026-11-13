@@ -44,7 +44,7 @@ beforeAll(async () => {
   });
 }, 120_000);
 
-const LAZY_UI = ['Chips', 'Dialog', 'Disclosure', 'Field', 'Segmented', 'Slider'];
+const LAZY_UI = ['Chips', 'Dialog', 'Disclosure', 'Field', 'Segmented', 'Slider', 'Switch'];
 
 function firstLoad(): Set<string> {
   const byName = new Map(chunks.map((c) => [c.fileName, c]));
@@ -60,7 +60,7 @@ function firstLoad(): Set<string> {
 }
 
 describe('the chunk of the modules that only lazy pages share', () => {
-  it('holds the six UI primitives that no first-load module imports, in one file', () => {
+  it('holds the seven UI primitives that no first-load module imports, in one file', () => {
     const shared = chunks.filter((c) => /\/lazy-ui-[\w-]+\.js$/.test(`/${c.fileName}`));
     expect(shared, 'a chunk named lazy-ui-<hash>.js').toHaveLength(1);
     for (const name of LAZY_UI) {
@@ -77,7 +77,7 @@ describe('the chunk of the modules that only lazy pages share', () => {
     const shared = chunks.find((c) => /\/lazy-ui-[\w-]+\.js$/.test(`/${c.fileName}`));
     expect(shared).toBeDefined();
     const sources = (shared?.moduleIds ?? []).filter((id) => id.includes('/src/'));
-    expect(sources.every((id) => /\/src\/ui\/(Chips|Dialog|Disclosure|Field|Segmented|Slider|direction)\.tsx?$/.test(id)), sources.join(', ')).toBe(true);
+    expect(sources.every((id) => /\/src\/ui\/(Chips|Dialog|Disclosure|Field|Segmented|Slider|Switch|direction)\.tsx?$/.test(id)), sources.join(', ')).toBe(true);
   });
 
   it('is not part of the first load', () => {

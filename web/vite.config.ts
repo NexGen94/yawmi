@@ -57,7 +57,7 @@ export default defineConfig({
           groups: [
             {
               name: 'lazy-ui',
-              test: /[\\/]src[\\/]ui[\\/](?:Chips|Dialog|Disclosure|Field|Segmented|Slider|direction)\.tsx?$/,
+              test: /[\\/]src[\\/]ui[\\/](?:Chips|Dialog|Disclosure|Field|Segmented|Slider|Switch|direction)\.tsx?$/,
               includeDependenciesRecursively: false,
               priority: 10,
             },

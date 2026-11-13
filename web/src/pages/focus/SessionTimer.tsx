@@ -78,6 +78,7 @@ function Idle({ focus, plans, selection, goalTitle, onMinutes, onClearPlan, onCl
       <div class="focus-actions">
         <Button
           variant="primary"
+          class="btn-start"
           onClick={() =>
             void focus.start({ minutes, goalRef, habitCode: plan?.habit_code ?? null, planId: plan?.id ?? null })
           }

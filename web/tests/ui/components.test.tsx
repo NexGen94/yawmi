@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/preact';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/preact';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { useState } from 'preact/hooks';
@@ -373,6 +373,28 @@ describe('CheckRow', () => {
   it('a note may be markup, not only text', () => {
     render(<CheckRow checked={false} label="المشي" note={<span class="lead">جملة</span>} onToggle={() => undefined} />);
     expect(document.querySelector('.check-note .lead')?.textContent).toBe('جملة');
+  });
+});
+
+describe('Segmented with many options (Task 24)', () => {
+  const many = (n: number) => Array.from({ length: n }, (_, i) => ({ value: `v${i}`, label: `خيار ${i}` }));
+  const css = readFileSync(join(resolve(import.meta.dirname, '../../src/styles'), 'components.css'), 'utf8');
+
+  it('is a track of up to four options and separate chips beyond that, with the same radio semantics', () => {
+    const { container, rerender } = render(<Segmented label="س" options={many(4)} value="v0" onChange={() => undefined} />);
+    expect(container.querySelector('.segmented')?.classList.contains('segmented-chips')).toBe(false);
+    rerender(<Segmented label="س" options={many(5)} value="v0" onChange={() => undefined} />);
+    const group = screen.getByRole('radiogroup', { name: 'س' });
+    expect(group.classList.contains('segmented-chips')).toBe(true);
+    expect(within(group).getAllByRole('radio')).toHaveLength(5);
+  });
+
+  it('a track never wraps, and the chips of five or more do', () => {
+    const rule = (selector: string): string =>
+      css.split('}').map((block) => block.split('{')).find(([head]) => (head ?? '').trim().endsWith(selector))?.[1] ?? '';
+    expect(rule('.segmented')).toContain('flex-wrap: nowrap');
+    expect(rule('.segmented-chips')).toContain('flex-wrap: wrap');
+    expect(rule('.segmented-chips')).not.toContain('background: var(--c-blue-pale)');
   });
 });
 
@@ -869,9 +891,10 @@ describe('components.css', () => {
     expect(sheet).toMatch(
       /:is\(\.hero-card,\s*\.on-ink\)\s+\.chip\[aria-pressed='true'\]\s*\{[^}]*border-color:\s*var\(--c-blue-light\);[^}]*background:\s*var\(--c-ink-2\);/s,
     );
-    expect(sheet).toMatch(
-      /:is\(\.dialog,\s*\.drawer\)\s+\.chip\[aria-pressed='true'\]\s*\{[^}]*border-color:\s*var\(--c-ink\);[^}]*background:\s*var\(--c-ink\);/s,
-    );
+    // Off the ink surfaces a pressed chip is white with an ink border, never the navy fill that the
+    // one prominent button of a view has (Task 24 ruling); a dialog needs no rule of its own.
+    expect(sheet).toMatch(/\.chip\[aria-pressed='true'\]\s*\{[^}]*border-color:\s*var\(--c-ink\);[^}]*background:\s*var\(--c-surface\);/s);
+    expect(sheet).not.toMatch(/:is\(\.dialog,\s*\.drawer\)\s+\.chip\[aria-pressed='true'\]/);
 
     withStyles();
     render(

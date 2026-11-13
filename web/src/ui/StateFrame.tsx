@@ -28,6 +28,7 @@ export interface StateFrameProps {
 const TEXT = {
   loading: 'جارٍ التحميل',
   error: 'تعذّر التحميل',
+  errorNote: 'لم يستجب الخادم. لم يتغيّر شيء مما هو محفوظ.',
   retry: 'إعادة المحاولة',
   stale: 'نسخة محفوظة · بلا اتصال',
   noCopy: 'لا نسخة محفوظة بعد',
@@ -69,9 +70,12 @@ export function StateFrame(props: StateFrameProps) {
       break;
     case 'error':
       body = (
-        <div class="state-message" role="alert">
-          <p class="state-text">{TEXT.error}</p>
-          <Button onClick={onRetry}>{TEXT.retry}</Button>
+        <div class="state-message state-error" role="alert">
+          <p class="state-title">{TEXT.error}</p>
+          <p class="state-text">{TEXT.errorNote}</p>
+          <Button variant="primary" onClick={onRetry}>
+            {TEXT.retry}
+          </Button>
         </div>
       );
       break;

@@ -116,6 +116,19 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
   cursor: not-allowed;
 }
 
+/* The one prominent button of a session surface (focus, breathing): the largest control on it. */
+.btn-start {
+  min-inline-size: 160px;
+  min-block-size: 52px;
+  font-size: var(--fs-section);
+}
+
+@media (max-inline-size: 600px) {
+  .btn-start {
+    inline-size: 100%;
+  }
+}
+
 /* ---------- Cards ---------- */
 
 .card {
@@ -164,6 +177,16 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
 }
 
 :is(.hero-card, .on-ink) .btn-quiet:hover:not(:disabled) {
+  background: var(--c-ink-2);
+}
+
+:is(.hero-card, .on-ink) .chip {
+  border-color: var(--c-blue-light);
+  background: transparent;
+  color: var(--c-bg);
+}
+
+:is(.hero-card, .on-ink) .chip:hover {
   background: var(--c-ink-2);
 }
 
@@ -226,12 +249,6 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
 
 :is(.dialog, .drawer) .btn-quiet:hover:not(:disabled) {
   background: var(--c-blue-pale);
-}
-
-:is(.dialog, .drawer) .chip[aria-pressed='true'] {
-  border-color: var(--c-ink);
-  background: var(--c-ink);
-  color: var(--c-surface);
 }
 
 :is(.dialog, .drawer) :is(.check-note, .field-label, .field-hint, .slider-label, .state-text, .heat-key) {
@@ -382,13 +399,34 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
 
 .segmented {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--sp-1);
   inline-size: fit-content;
   max-inline-size: 100%;
   padding: var(--sp-1);
   border-radius: var(--radius-pill);
   background: var(--c-blue-pale);
+}
+
+.segmented-chips {
+  flex-wrap: wrap;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.segmented-chips .segment {
+  border: 1px solid var(--c-blue);
+  background: var(--c-surface);
+}
+
+.segmented-chips .segment:hover {
+  background: var(--c-blue-pale);
+}
+
+.segmented-chips .segment[aria-checked='true'] {
+  border-color: var(--c-ink);
+  box-shadow: inset 0 0 0 1px var(--c-ink);
 }
 
 .segment {
@@ -421,8 +459,108 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
 }
 
 .segment[aria-checked='true'] {
+  /* White with a blue border: the navy fill belongs to the one prominent button of a view (Task 24). */
+  background: var(--c-surface);
+  color: var(--c-ink);
+  box-shadow: inset 0 0 0 2px var(--c-blue);
+}
+
+/* ---------- Switch ---------- */
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  inline-size: fit-content;
+  min-block-size: var(--hit);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--c-ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.switch:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--focus);
+  border-radius: var(--radius-pill);
+}
+
+.switch-track {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-start;
+  inline-size: 52px;
+  block-size: 30px;
+  padding: 3px;
+  border: 1px solid var(--c-blue);
+  border-radius: var(--radius-pill);
+  background: var(--c-surface);
+}
+
+.switch-thumb {
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: 50%;
+  background: var(--c-blue);
+}
+
+.switch[aria-checked='true'] .switch-track {
+  justify-content: flex-end;
+  border-color: var(--c-ink);
   background: var(--c-ink);
-  color: var(--c-surface);
+}
+
+.switch[aria-checked='true'] .switch-thumb {
+  background: var(--c-bg);
+}
+
+.switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+:is(.hero-card, .on-ink) .switch {
+  color: var(--c-bg);
+}
+
+:is(.hero-card, .on-ink) .switch-hint {
+  color: var(--c-blue-light);
+}
+
+:is(.hero-card, .on-ink) .switch-track {
+  background: transparent;
+  border-color: var(--c-blue-light);
+}
+
+:is(.hero-card, .on-ink) .switch-thumb {
+  background: var(--c-blue-light);
+}
+
+:is(.hero-card, .on-ink) .switch[aria-checked='true'] .switch-track {
+  background: var(--c-bg);
+  border-color: var(--c-bg);
+}
+
+:is(.hero-card, .on-ink) .switch[aria-checked='true'] .switch-thumb {
+  background: var(--c-ink);
+}
+
+.switch-text {
+  display: grid;
+}
+
+.switch-label {
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.switch-hint {
+  font-size: var(--fs-note);
+  color: var(--c-ink-2);
 }
 
 /* ---------- Chips ---------- */
@@ -458,9 +596,12 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
 }
 
 .chip[aria-pressed='true'] {
+  /* White with a heavier ink border (and the check mark): not the navy of the prominent button. */
   border-color: var(--c-ink);
-  background: var(--c-ink);
-  color: var(--c-surface);
+  background: var(--c-surface);
+  color: var(--c-ink);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--c-ink);
 }
 
 .chip-check {
@@ -694,6 +835,26 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
   padding-block: var(--sp-5);
 }
 
+.state-error {
+  max-inline-size: 28rem;
+  padding: var(--sp-6);
+  border: 1px solid var(--c-blue-pale);
+  border-radius: var(--radius-card);
+  background: var(--c-surface);
+}
+
+.state-title {
+  margin: 0;
+  font-size: var(--fs-section);
+  font-weight: 600;
+}
+
+:is(.hero-card, .on-ink) .state-error {
+  border-color: var(--c-blue-light);
+  background: transparent;
+  color: var(--c-bg);
+}
+
 .state-text {
   margin: 0;
   font-size: var(--fs-body);
@@ -731,12 +892,14 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
 
 .dialog {
   position: relative;
+  display: flex;
+  flex-direction: column;
   inline-size: min(100%, 480px);
   max-block-size: calc(100dvh - 2 * var(--sp-4));
-  overflow: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
   margin: 0;
-  padding: var(--sp-6);
+  padding: 0;
   border: 0;
   border-radius: var(--radius-hero);
   background: var(--c-surface);
@@ -756,10 +919,10 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
   inline-size: min(100%, 420px);
   block-size: 100%;
   max-block-size: 100%;
-  overflow: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
   margin: 0;
-  padding: var(--sp-6);
+  padding: 0;
   border: 0;
   border-start-start-radius: var(--radius-hero);
   border-end-start-radius: var(--radius-hero);
@@ -768,12 +931,26 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
   animation: layer-fade 200ms ease-out;
 }
 
+/* Three parts, so that no action is ever below the fold: the head and the actions keep their place,
+   and only the body scrolls (Task 24: the Save button of the indicator dialog was out of sight at
+   1280x800 and 390x844). Under 600 px a dialog is a sheet at the bottom of the window. */
 .layer-head {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
-  margin-block-end: var(--sp-4);
+  padding-block: var(--sp-5) var(--sp-3);
+  padding-inline: var(--sp-6);
+}
+
+.layer-body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-block: var(--sp-2) var(--sp-5);
+  padding-inline: var(--sp-6);
 }
 
 .layer-title {
@@ -784,10 +961,27 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
 }
 
 .layer-actions {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-3);
-  margin-block-start: var(--sp-6);
+  padding: var(--sp-4) var(--sp-6);
+  border-block-start: 1px solid var(--c-blue-pale);
+  background: var(--c-surface);
+}
+
+@media (max-inline-size: 600px) {
+  .layer:not(.layer-drawer) {
+    place-items: end stretch;
+    padding: 0;
+  }
+
+  .layer:not(.layer-drawer) .dialog {
+    inline-size: 100%;
+    max-block-size: calc(100dvh - var(--sp-6));
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
 }
 
 .icon-btn {
