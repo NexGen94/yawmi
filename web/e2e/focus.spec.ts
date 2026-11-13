@@ -103,17 +103,28 @@ test('a favourite plan opens from the home page and starts with its own minutes'
   await expect(page.getByRole('timer')).toHaveText(/^(49|50):\d\d$/);
   await expect(page.getByRole('timer')).toBeVisible();
 
-  // Stopped at once, with nothing recorded: no session reaches the server.
+  // Ended and put aside: «تراجع» brings the wrap-up back, and once the window has passed the page is free.
+  // Nothing is recorded: no session reaches the server.
   await page.getByRole('button', { name: 'إنهاء' }).click();
   await page.getByRole('button', { name: 'تجاهل الجلسة' }).click();
-  await expect(page.getByRole('button', { name: 'بدء' })).toBeVisible();
+  await page.getByRole('button', { name: 'تراجع' }).click();
+  await expect(page.getByRole('button', { name: 'حفظ الجلسة' })).toBeVisible();
+  await page.getByRole('button', { name: 'تجاهل الجلسة' }).click();
+  await expect(page.getByRole('button', { name: 'بدء' })).toBeVisible({ timeout: 15_000 });
 
   await expectNoSeriousA11y(page);
   await expectNoHorizontalScroll(page);
   await shot(page, 'focus-plan-from-home');
 });
 
-test('without a connection the session still starts and ends, and plans say they need one', async ({ paired: page, context }) => {
+test('without a connection a session starts, ends and is saved, and it is sent when the connection returns', async ({
+  paired: page,
+  context,
+  api,
+  projectName,
+}) => {
+  const marker = `خطوة بلا اتصال ${projectName} ${Date.now()}`;
+  const today = riyadhToday();
   await page.goto('/focus');
   await expect(page.getByRole('heading', { level: 1, name: 'التركيز' })).toBeVisible();
   await expect(page.getByRole('group', { name: 'قوالب جاهزة' })).toBeVisible();
@@ -128,7 +139,24 @@ test('without a connection the session still starts and ends, and plans say they
   await expectNoSeriousA11y(page);
   await shot(page, 'focus-offline-running');
   await page.getByRole('button', { name: 'إنهاء' }).click();
-  await page.getByRole('button', { name: 'تجاهل الجلسة' }).click();
-  await expect(page.getByRole('button', { name: 'بدء' })).toBeVisible();
+  await page
+    .getByRole('radiogroup', { name: 'تقييم التركيز' })
+    .getByRole('radio', { name: '3', exact: true })
+    .click();
+  await page.getByLabel('الخطوة التالية').fill(marker);
+  await page.getByRole('button', { name: 'حفظ الجلسة' }).click();
+  await expect(page.getByText(/حُفظت الجلسة/)).toBeVisible();
+
+  // Nothing has reached the server while offline; it does when the connection is back.
   await context.setOffline(false);
+  await expect
+    .poll(
+      async () => {
+        const { items } = await api.get<SessionList>(`/v1/focus/sessions?from=${today}&to=${today}`);
+        const mine = items.find((s) => s.next_step === marker);
+        return mine && { planned: mine.planned_minutes, rating: mine.focus_rating };
+      },
+      { timeout: SYNC_TIMEOUT },
+    )
+    .toEqual({ planned: 25, rating: 3 });
 });
