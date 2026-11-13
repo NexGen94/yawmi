@@ -102,10 +102,12 @@ interface EditorFormProps {
   data?: EditorData;
   /** A draft to ask for on opening: the page was reached from a goal. */
   prefill?: { goal: string; kpi: string | null; period: HabitPeriod } | null;
+  /** The page was reached with no goal named (`?source=goal`, the home page): it opens on «من هدف», where the goal is chosen. */
+  chooseGoal?: boolean;
   notice?: string;
 }
 
-function EditorForm({ initial, data, prefill, notice }: EditorFormProps) {
+function EditorForm({ initial, data, prefill, chooseGoal, notice }: EditorFormProps) {
   const location = useLocation();
   const today = todayRiyadh();
   const online = useOnline();
@@ -113,7 +115,7 @@ function EditorForm({ initial, data, prefill, notice }: EditorFormProps) {
 
   const [form, setForm] = useState<HabitForm>(initial);
   const [targetText, setTargetText] = useState(String(initial.target_per_period));
-  const [source, setSource] = useState<'free' | 'goal'>(initial.goal_ref !== null || prefill ? 'goal' : 'free');
+  const [source, setSource] = useState<'free' | 'goal'>(initial.goal_ref !== null || prefill || chooseGoal ? 'goal' : 'free');
   const [attempted, setAttempted] = useState(false);
   const [serverErrors, setServerErrors] = useState<FormErrors>({});
   const [message, setMessage] = useState<string | null>(null);
@@ -431,7 +433,7 @@ function NewHabit() {
   return (
     <>
       <h1>عادة جديدة</h1>
-      <EditorForm key={goal} initial={initial} prefill={prefill} />
+      <EditorForm key={goal} initial={initial} prefill={prefill} chooseGoal={query.source === 'goal'} />
     </>
   );
 }

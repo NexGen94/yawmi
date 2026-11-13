@@ -276,10 +276,11 @@ describe('home: the later sections have no visible stand-ins', () => {
 });
 
 describe('home: quick access', () => {
-  it('offers links to habits and goals and the ask button', async () => {
+  it('offers links to habits and to a habit from a goal, and the ask button', async () => {
     await renderStory();
     expect(screen.getByRole('link', { name: 'تسجيل عادة' }).getAttribute('href')).toBe('/habits');
-    expect(screen.getByRole('link', { name: 'عادة من هدف' }).getAttribute('href')).toBe('/goals');
+    // opens the habit editor on its «من هدف» source (it was /goals, one step further away)
+    expect(screen.getByRole('link', { name: 'عادة من هدف' }).getAttribute('href')).toBe('/habits/new?source=goal');
     expect(screen.getByRole('button', { name: 'سؤال' })).toBeTruthy();
   });
 });
