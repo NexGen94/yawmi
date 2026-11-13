@@ -39,6 +39,7 @@ import {
   todayOut,
   type,
 } from './day-helpers';
+import { morningInsight } from '../helpers/today-fixtures';
 
 beforeEach(() => {
   closeDb();
@@ -157,7 +158,7 @@ describe('the morning page', () => {
   it('shows the insight priorities as suggestions with their source, to accept or replace', async () => {
     stubApi({
       today: todayOut({
-        insight: {
+        insight: morningInsight({
           lines: ['سطر'],
           priorities: [
             { source_id: 'goal:O5', title: 'قراءة ثلاثين دقيقة' },
@@ -166,7 +167,7 @@ describe('the morning page', () => {
           ],
           question: null,
           source_ids: ['goal:O5', 'goal:O6', 'milestone:m1'],
-        },
+        }),
       }),
     });
     await openDay('/day/morning');

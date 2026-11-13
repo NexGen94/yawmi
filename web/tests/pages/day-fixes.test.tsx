@@ -22,6 +22,7 @@ import {
   todayOut,
   type,
 } from './day-helpers';
+import { morningInsight } from '../helpers/today-fixtures';
 
 // The timer behind scheduleFlush would outlive a test: a test plays «sent» and «refused» itself.
 vi.mock('../../src/sync/outbox', async (importOriginal) => {
@@ -592,7 +593,7 @@ describe('small things (M-3, M-4, M-5, M-6)', () => {
     stubApi({
       today: todayOut({
         habits_due: [habit('h_read', 'القراءة')],
-        insight: {
+        insight: morningInsight({
           lines: [],
           question: null,
           source_ids: [],
@@ -601,7 +602,7 @@ describe('small things (M-3, M-4, M-5, M-6)', () => {
             { source_id: 'milestone:m12', title: 'تسليم المسودة' },
             { source_id: 'zzz:internal', title: 'بند بلا مصدر معروف' },
           ],
-        },
+        }),
       }),
     });
     await openDay('/day/morning');
