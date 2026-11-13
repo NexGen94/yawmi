@@ -13,6 +13,8 @@ so the cited ones can be shown (`yawmi.ai.cards`). Sources, in this order:
 | `mood:<day>` | `mood` | «المزاج {score} من 5: {feelings}» |
 | `focus:<day>` · `breath:<day>` | `focus` · `breath` | minutes and sessions |
 | `mission` · `vision` | `mission` · `vision` | the text, only with `personal_text` |
+| `note:<id>` | `memory_note` | a note the user saved (active only) |
+| `rule:<id>` | `standing_rule` | a lens the user wrote (active only) |
 
 «هذا الأسبوع» is the calendar week (`week_start`), for every habit (I-1): a daily habit counts
 the scheduled days from the week's first day to `day` that met its target (for an abstain habit,
@@ -22,10 +24,12 @@ card's `trend` is the last seven days. Milestones: every open one already due, a
 from the span's start to `day + 14`; at most 12, the nearest to `day`.
 
 Bounds (I-2): a source text longer than `MAX_SOURCE_TEXT` is cut, on a word boundary when one is
-near, and ends with «…». Over `MAX_SOURCES` sources, sources are dropped kind by kind in
-`DROP_ORDER` (journal first, then mood, focus, breath, milestones, «رسالتي» and «رؤيتي»,
-outcomes, habits last), and within a kind in the order they were added (for the day sources the
-oldest day first, a morning entry before the evening one). Cards exist only for kept sources.
+near, and ends with «…». Over `MAX_SOURCES` sources, the four day kinds go first and together
+(ruling N-1): the oldest day first, and inside a day in `DAY_DROP_ORDER` (journal, mood, focus,
+breath; a morning entry before the evening one), so the provider keeps the latest days of every
+kind. Only then the others, kind by kind in `DROP_ORDER` (milestones, «رسالتي» and «رؤيتي», saved
+notes, outcomes, habits, and the lenses last), each in the order it was added. Cards exist only
+for kept sources.
 
 No health metric (`daily_metrics`) is read, so none reaches a provider. Pure but for the reader:
 no clock.
@@ -38,6 +42,7 @@ from typing import Any, Literal
 
 from yawmi.ai.cards import SourceCard
 from yawmi.ai.consent import Consent
+from yawmi.ai.memory import MemoryItem
 from yawmi.ai.reader import GroundingReader, SessionDay
 from yawmi.ai.schema import InsightKind, Source
 from yawmi.domain.habits import HabitLog, period_progress
@@ -59,17 +64,17 @@ MAX_SOURCES = 60
 MAX_SOURCE_TEXT = 500
 ELLIPSIS = "…"
 WORD_CUT_REACH = 60  # cut at the last space if it lies within this many characters of the cap
+DAY_DROP_ORDER = ("journal", "mood", "focus", "breath")  # dropped first, oldest day first
 DROP_ORDER = (
-    "journal",
-    "mood",
-    "focus",
-    "breath",
     "milestone",
     "mission",
     "vision",
+    "memory_note",
     "outcome",
     "habit",
+    "standing_rule",
 )
+MEMORY_KINDS = {"rule": ("standing_rule", "عدسة"), "note": ("memory_note", "ملاحظة محفوظة")}
 
 
 @dataclass
@@ -137,16 +142,21 @@ class _Builder:
             )
         )
 
+    def _drop_key(self, i: int) -> tuple[int, date, int, int]:
+        """Earlier sorts first, so it is dropped first."""
+        kind, day = self.sources[i].kind, self.cards[i].day
+        if kind in DAY_DROP_ORDER and day is not None:
+            return (0, day, DAY_DROP_ORDER.index(kind), i)
+        rank = DROP_ORDER.index(kind) if kind in DROP_ORDER else len(DROP_ORDER)
+        return (1, date.min, rank, i)
+
     def bounded(self) -> tuple[list[Source], list[SourceCard]]:
-        """At most `MAX_SOURCES`, dropped by `DROP_ORDER`, the rest in their order."""
+        """At most `MAX_SOURCES`: the day sources first by day, then `DROP_ORDER`; the rest keep
+        their order."""
         excess = len(self.sources) - MAX_SOURCES
         if excess <= 0:
             return self.sources, self.cards
-        rank = {kind: n for n, kind in enumerate(DROP_ORDER)}
-        order = sorted(
-            range(len(self.sources)),
-            key=lambda i: (rank.get(self.sources[i].kind, len(DROP_ORDER)), i),
-        )
+        order = sorted(range(len(self.sources)), key=self._drop_key)
         dropped = set(order[:excess])
         keep = [i for i in range(len(self.sources)) if i not in dropped]
         return [self.sources[i] for i in keep], [self.cards[i] for i in keep]
@@ -291,9 +301,12 @@ async def build_grounding(
     prefs: SettingsOut,
     consent: Consent,
     week_start: WeekStart = "sun",
+    memory: Sequence[MemoryItem] = (),
 ) -> Grounding:
-    """The context and the sources of one insight of `kind` for `day` over `span`."""
-    del kind  # every kind reads the same sources for now; task 19 shapes them per kind
+    """The context and the sources of one insight of `kind` for `day` over `span`. Every kind
+    reads the same sources over its span (the routes choose the span); the active `memory` items
+    (lenses and saved notes) go with every kind."""
+    del kind
     first, last = span
     b = _Builder()
 
@@ -316,6 +329,11 @@ async def build_grounding(
             b.add("mission", "mission", "رسالتي", prefs.mission.strip())
         if prefs.vision.strip():
             b.add("vision", "vision", "رؤيتي", prefs.vision.strip())
+
+    for item in memory:
+        if item.active:
+            source_kind, label = MEMORY_KINDS[item.kind]
+            b.add(f"{item.kind}:{item.id}", source_kind, label, item.text)
 
     context: dict[str, Any] = {
         "span": {"first": first.isoformat(), "last": last.isoformat()},

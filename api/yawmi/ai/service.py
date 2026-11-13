@@ -8,6 +8,9 @@ Guarantees, in order of enforcement:
    line break, a question up to 200 characters, priority titles up to 80.
 3. Every cited `source_id` (in `source_ids` and in `priorities`) must be one of the request's
    sources: a fabricated id is rejected.
+4. The rules of a kind (design §10): a `weekly` reply cites at least two different `journal:*`
+   sources in `source_ids` whenever the request holds two or more (the recurring theme and its
+   days), and a `deeper` reply carries its one question.
 A rejected reply gets exactly one repair attempt (the same request plus a corrective note); a
 second rejection raises `InsightInvalid`. Refusals and transport errors are not retried.
 
@@ -49,6 +52,11 @@ _CORRECTIONS = {
     "question_too_long": "السؤال في الرد السابق أطول من 200 حرف.",
     "priority_too_long": "عنوان أولوية في الرد السابق أطول من 80 حرفاً.",
     "unknown_source": "الرد السابق ذكر معرّف مصدر غير موجود في المدخل.",
+    "weekly_theme": (
+        "الرد الأسبوعي السابق لم يستشهد بمصدرين مختلفين من journal:* في source_ids؛"
+        " الموضوع المتكرر يُذكر بأيامه من اليوميات."
+    ),
+    "deeper_question": "الرد السابق بلا سؤال في question؛ نوع deeper سؤال واحد في question.",
     "empty": "الرد السابق كان فارغاً أو ليس كائن JSON.",
 }
 
@@ -126,6 +134,22 @@ def _cap_reasons(response: InsightResponse, max_lines: int) -> list[str]:
     return reasons
 
 
+JOURNAL_PREFIX = "journal:"
+MIN_THEME_JOURNALS = 2
+
+
+def _kind_reasons(response: InsightResponse, kind: str | None, allowed_ids: set[str]) -> list[str]:
+    """The rules of a kind (design §10) a valid, capped and grounded reply breaks."""
+    if kind == "weekly":
+        offered = {i for i in allowed_ids if i.startswith(JOURNAL_PREFIX)}
+        cited = {i for i in response.source_ids if i.startswith(JOURNAL_PREFIX)}
+        if len(offered) >= MIN_THEME_JOURNALS and len(cited) < MIN_THEME_JOURNALS:
+            return ["weekly_theme"]
+    if kind == "deeper" and not (response.question and response.question.strip()):
+        return ["deeper_question"]
+    return []
+
+
 def _is_too_many_lines(error: Any) -> bool:
     return error["type"] == "too_long" and error["loc"][:1] == ("lines",)
 
@@ -156,7 +180,7 @@ class InsightService:
 
     @staticmethod
     def _check(
-        raw: dict, allowed_ids: set[str], max_lines: int = 2
+        raw: dict, allowed_ids: set[str], max_lines: int = 2, kind: str | None = None
     ) -> tuple[InsightResponse | None, list[str]]:
         """Validate a reply; the second item lists reason codes (never any reply content)."""
         try:
@@ -175,6 +199,9 @@ class InsightService:
         cited = set(response.source_ids) | {p.source_id for p in response.priorities}
         if not cited <= allowed_ids:
             return None, ["unknown_source"]
+        rules = _kind_reasons(response, kind, allowed_ids)
+        if rules:
+            return None, rules
         return response, []
 
     @staticmethod
@@ -218,7 +245,7 @@ class InsightService:
                     digest,
                 )
                 raise
-            response, reasons = self._check(raw, allowed_ids, max_lines)
+            response, reasons = self._check(raw, allowed_ids, max_lines, req.kind)
             if response is not None:
                 logger.info(
                     "insight ok kind=%s model=%s attempts=%d request_hash=%s",

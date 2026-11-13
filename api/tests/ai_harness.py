@@ -22,6 +22,7 @@ from pydantic import SecretStr
 
 from yawmi.ai.cards import SourceCard
 from yawmi.ai.consent import AsyncpgConsentStore, Consent, InMemoryConsentStore
+from yawmi.ai.memory import AsyncpgMemoryStore, InMemoryMemoryStore
 from yawmi.ai.reader import InMemorySessionReader, SessionDay
 from yawmi.ai.schema import InsightResponse
 from yawmi.ai.service import InsightService
@@ -53,7 +54,9 @@ class RecordingProvider:
 
     async def complete(self, system: str, user: str, schema: dict, model: str) -> dict:
         payload = json.loads(user.split("\n\n[تصحيح]", 1)[0])
-        self.calls.append({"system": system, "user": user, "payload": payload, "schema": schema})
+        self.calls.append(
+            {"system": system, "user": user, "payload": payload, "schema": schema, "model": model}
+        )
         item = self.script.pop(0) if len(self.script) > 1 else self.script[0]
         if isinstance(item, Exception):
             raise item
@@ -106,9 +109,11 @@ class AiBackend:
         self.consents: Any = InMemoryConsentStore()
         self.insights: Any = InMemoryInsightStore()
         self.prefs = InMemoryPrefsStore()
+        self.memory: Any = InMemoryMemoryStore()
         if self.pool is not None:
             self.consents = AsyncpgConsentStore(self.pool)
             self.insights = AsyncpgInsightStore(self.pool)
+            self.memory = AsyncpgMemoryStore(self.pool)
 
     def install(self, app: FastAPI) -> None:
         self.goals.install(app)
@@ -119,6 +124,7 @@ class AiBackend:
             app.state.ai_consent = self.consents
             app.state.insights_store = self.insights
             app.state.prefs = self.prefs
+            app.state.ai_memory = self.memory
 
     async def setup(self) -> None:
         await self.goals.pause_other_habits()
@@ -141,6 +147,7 @@ class AiBackend:
         )
         await self.pool.execute("DELETE FROM yawmi.ai_insights WHERE day BETWEEN $1 AND $2", *days)
         await self.pool.execute("DELETE FROM yawmi.ai_consents")
+        await self.pool.execute("DELETE FROM yawmi.ai_memory")
         await self.pool.execute("DELETE FROM yawmi.user_settings WHERE key = ANY($1)", SETTING_KEYS)
 
     # --- what grounding reads besides the goals backend -------------------------------------
@@ -213,6 +220,11 @@ class AiBackend:
 
     async def grant(self, provider: str = "anthropic", personal_text: bool = False) -> None:
         await self.consents.grant(provider, personal_text, DEVICE, datetime.now(UTC))
+
+    async def insight_count(self) -> int:
+        if self.pool is None:
+            return len(self.insights.rows)
+        return int(await self.pool.fetchval("SELECT count(*) FROM yawmi.ai_insights"))
 
     async def stored(self, kind: str, day: date) -> list[StoredInsight]:
         rows = await self.insights.list_reviews(kind, 50, None)

@@ -79,9 +79,14 @@ def test_required_and_pending_paths_are_the_final_list(exporter: ModuleType) -> 
         "/v1/notion/changes",
         "/v1/notion/changes/{change_id}/result",
         "/v1/ai/consent",
+        "/v1/insights/morning",
+        "/v1/insights/weekly",
+        "/v1/insights/deeper",
+        "/v1/ai/memory",
+        "/v1/ai/memory/{memory_id}",
     }
     required, pending = exporter.REQUIRED_PATHS, exporter.PENDING_PATHS
-    assert len(final) == 36
+    assert len(final) == 41
     assert set(required).isdisjoint(pending)
     assert len(set(required)) == len(required) and len(set(pending)) == len(pending)
     assert set(required) | set(pending) == final

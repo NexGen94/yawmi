@@ -33,16 +33,17 @@ from yawmi.ai.grounding import (
     build_grounding,
     span_for,
 )
-from yawmi.ai.reader import InMemorySessionReader, StoreGroundingReader
+from yawmi.ai.reader import InMemorySessionReader, SessionDay, StoreGroundingReader
 from yawmi.ai.schema import InsightRequest, InsightResponse, Source, insight_json_schema
 from yawmi.ai.service import InsightInvalid, InsightService
 from yawmi.journal.memory import InMemoryJournalReader
-from yawmi.journal.store import JournalRow
+from yawmi.journal.store import JournalRow, MoodRow
 from yawmi.prefs.models import SettingsOut
 from yawmi.today.memory import InMemoryTodayReader
 from yawmi.today.reader import CycleRow, GoalRow, HabitRow, LogRow, MilestoneRow
 
 WALK = f"habit:{PREFIX}walk"
+WALK_MEMORY = "habit:walk"  # the pure cases below use bare codes
 EVENING = "journal:2026-11-10:evening"
 
 
@@ -723,3 +724,79 @@ async def test_a_long_source_text_is_cut_to_500_with_an_ellipsis() -> None:
     assert spaced.endswith("كلمة…")
     assert by_id[f"journal:{yesterday.isoformat()}:evening"] == "ص" * MAX_SOURCE_TEXT
     assert {c.source_id: c.text for c in grounding.cards} == by_id
+
+
+# --- task 19, ruling N-1: the four day kinds are dropped together, oldest day first -----------
+
+
+async def ground_days(days: int, *, extra_habits: int = 0) -> tuple[Grounding, list[date]]:
+    """`days` days ending on DAY, each with an evening journal, a mood, a focus and a breath
+    day, plus «المشي», one open milestone and one outcome (and `extra_habits` more habits)."""
+    span = (DAY - timedelta(days=days - 1), DAY)
+    every = [DAY - timedelta(days=n) for n in range(days)]
+    reader = StoreGroundingReader(
+        InMemoryTodayReader(
+            habits=[
+                habit_row("walk", "المشي"),
+                *(habit_row(f"h{n}", f"عادة {n}") for n in range(extra_habits)),
+            ],
+            milestone_rows=[milestone_row("m1", DAY + timedelta(days=3))],
+            goal_rows=[GoalRow("O1", "الصحة", date(2031, 12, 31), "active", "المسار")],
+        ),
+        InMemoryJournalReader(
+            entries=[journal_row(d, "evening", f"يومية {d.isoformat()}") for d in every],
+            moods=[MoodRow(d, 3, [], []) for d in every],
+        ),
+        InMemorySessionReader(
+            focus=[SessionDay(d, 1, 25) for d in every],
+            breath=[SessionDay(d, 1, 5) for d in every],
+        ),
+        None,
+    )
+    consent = Consent("anthropic", False, datetime(2026, 11, 1, tzinfo=UTC))
+    grounding = await build_grounding("ask", DAY, span, reader, SettingsOut(), consent)
+    return grounding, every
+
+
+def kept_days(grounding: Grounding, kind: str) -> list[date]:
+    return [c.day for c in grounding.cards if c.kind == kind]  # type: ignore[misc]
+
+
+async def test_a_thirty_day_range_keeps_the_latest_days_of_all_four_day_kinds() -> None:
+    """120 day sources and 3 others: the 3 stay, and the 57 day sources are the 14 newest days
+    whole plus the breath of the 15th (inside a day: journal, mood, focus, then breath go)."""
+    grounding, every = await ground_days(30)
+    kept = ids(grounding)
+    assert len(kept) == MAX_SOURCES
+    assert kept[:3] == [WALK_MEMORY, "ms:m1", "goal:O1"]
+    newest = sorted(every[:14])
+    for kind in ("journal", "mood", "focus"):
+        assert kept_days(grounding, kind) == newest, kind
+    assert kept_days(grounding, "breath") == sorted(every[:15])
+    assert [c.source_id for c in grounding.cards] == kept
+
+
+async def test_the_cap_stays_exact_and_whole_days_are_kept_when_the_count_allows() -> None:
+    """4 others and 56 day sources: exactly 14 whole days of each kind."""
+    grounding, every = await ground_days(30, extra_habits=1)
+    assert len(grounding.sources) == MAX_SOURCES
+    for kind in ("journal", "mood", "focus", "breath"):
+        assert kept_days(grounding, kind) == sorted(every[:14]), kind
+
+
+async def test_current_habits_and_goals_are_never_dropped_before_a_day_source() -> None:
+    """Twenty habits, a milestone and a goal (22) leave 38 places for the day sources: every
+    habit, the milestone and the goal stay, and the day sources are the newest: 9 whole days and
+    the focus and breath of the 10th."""
+    grounding, every = await ground_days(30, extra_habits=19)
+    kept = ids(grounding)
+    assert len(kept) == MAX_SOURCES
+    assert sum(1 for i in kept if i.startswith("habit:")) == 20
+    assert {"ms:m1", "goal:O1"} <= set(kept)
+    for kind in ("journal", "mood"):
+        assert kept_days(grounding, kind) == sorted(every[:9]), kind
+    for kind in ("focus", "breath"):
+        assert kept_days(grounding, kind) == sorted(every[:10]), kind
+    day_sources = [c for c in grounding.cards if c.day is not None]
+    assert len(day_sources) == 38
+    assert min(c.day for c in day_sources) == every[9]  # type: ignore[type-var]

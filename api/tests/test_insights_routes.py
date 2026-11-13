@@ -23,6 +23,7 @@ from pydantic import SecretStr
 
 from yawmi.ai.base import PolicyViolation
 from yawmi.ai.consent import InMemoryConsentStore
+from yawmi.ai.memory import InMemoryMemoryStore
 from yawmi.ai.reader import InMemorySessionReader
 from yawmi.ai.schema import InsightResponse
 from yawmi.ai.service import InsightService
@@ -102,6 +103,7 @@ def build_app(**overrides: Any) -> FastAPI:
     consents = InMemoryConsentStore()
     consents.rows[settings.ai_provider] = consents.granted(settings.ai_provider, when)
     app.state.ai_consent = consents
+    app.state.ai_memory = InMemoryMemoryStore()  # task 19: every request reads the memory
     return app
 
 

@@ -1035,6 +1035,55 @@
         "title": "DayRemindersIO",
         "type": "object"
       },
+      "DeeperOut": {
+        "description": "The go-deeper reply (design §7.1): one question and up to three alternative questions.\nNever stored. The provider returns the alternatives in `priorities`; the route moves them.",
+        "properties": {
+          "options": {
+            "description": "حتى ثلاثة أسئلة بديلة: العنوان حتى 80 حرفاً، ومعه مصدره",
+            "items": {
+              "$ref": "#/components/schemas/Priority"
+            },
+            "maxItems": 3,
+            "title": "Options",
+            "type": "array"
+          },
+          "question": {
+            "description": "سؤال التأمل، حتى 200 حرف",
+            "title": "Question",
+            "type": "string"
+          },
+          "source_ids": {
+            "description": "مصادر السؤال الأول",
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "question",
+          "options",
+          "source_ids"
+        ],
+        "title": "DeeperOut",
+        "type": "object"
+      },
+      "DeeperRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day"
+        ],
+        "title": "DeeperRequest",
+        "type": "object"
+      },
       "ErrorDetail": {
         "properties": {
           "detail": {
@@ -3379,6 +3428,28 @@
         "title": "IndicatorList",
         "type": "object"
       },
+      "InsightDayRequest": {
+        "additionalProperties": false,
+        "description": "The day of a stored morning or weekly insight. No context and no sources (I-7).",
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "regenerate": {
+            "default": false,
+            "description": "إعادة التوليد: يُنادى المزوّد فقط إن تغيّرت المصادر عن المخزَّن",
+            "title": "Regenerate",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "day"
+        ],
+        "title": "InsightDayRequest",
+        "type": "object"
+      },
       "InsightOut": {
         "additionalProperties": false,
         "description": "A stored insight: the grounded reply plus its identity.",
@@ -3704,6 +3775,134 @@
           "ok"
         ],
         "title": "Live",
+        "type": "object"
+      },
+      "MemoryAttached": {
+        "properties": {
+          "mission": {
+            "description": "«رسالتي» تُرفق بالطلبات: لها نص وموافقة النص الشخصي",
+            "title": "Mission",
+            "type": "boolean"
+          },
+          "vision": {
+            "description": "«رؤيتي» تُرفق بالطلبات: لها نص وموافقة النص الشخصي",
+            "title": "Vision",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mission",
+          "vision"
+        ],
+        "title": "MemoryAttached",
+        "type": "object"
+      },
+      "MemoryIn": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "description": "`rule` عدسة، أو `note` ملاحظة",
+            "enum": [
+              "rule",
+              "note"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "description": "من 1 إلى 300 حرف",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "MemoryIn",
+        "type": "object"
+      },
+      "MemoryItem": {
+        "properties": {
+          "active": {
+            "description": "يُرفق بالطلبات ما دام مفعّلاً",
+            "title": "Active",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "description": "`rule` عدسة يكتبها المستخدم، و`note` ملاحظة حفظها",
+            "enum": [
+              "rule",
+              "note"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "description": "النص كما يُرفق بالطلبات",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "active",
+          "created_at"
+        ],
+        "title": "MemoryItem",
+        "type": "object"
+      },
+      "MemoryList": {
+        "properties": {
+          "attached": {
+            "$ref": "#/components/schemas/MemoryAttached"
+          },
+          "items": {
+            "description": "كل البنود بترتيب إنشائها",
+            "items": {
+              "$ref": "#/components/schemas/MemoryItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "attached"
+        ],
+        "title": "MemoryList",
+        "type": "object"
+      },
+      "MemoryPatch": {
+        "additionalProperties": false,
+        "description": "At least one field. `active: false` keeps the item listed but stops sending it.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "text": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "title": "MemoryPatch",
         "type": "object"
       },
       "MilestoneEdit": {
@@ -5601,6 +5800,315 @@
           }
         ],
         "summary": "منح الموافقة أو تجديدها",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/memory": {
+      "delete": {
+        "description": "يحذف كل البنود. تكراره بلا أثر.",
+        "operationId": "reset_memory_v1_ai_memory_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "إعادة ضبط الذاكرة",
+        "tags": [
+          "ai"
+        ]
+      },
+      "get": {
+        "description": "العدسات (`rule`) والملاحظات المحفوظة (`note`) بترتيب إنشائها، المفعّل منها يُرفق بكل طلب. و`attached` يقول هل تُرفق «رسالتي» و«رؤيتي»: لكل منهما نص وموافقة سارية تشمل النص الشخصي.",
+        "operationId": "list_memory_v1_ai_memory_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "الذاكرة الظاهرة: كل ما يُرفق بطلبات الذكاء",
+        "tags": [
+          "ai"
+        ]
+      },
+      "post": {
+        "description": "بند مفعّل يُرفق بكل طلب. النص من 1 إلى 300 حرف. الحد 20 بنداً، مفعّلة أو معطّلة، وبعده 422 `memory_full`.",
+        "operationId": "add_memory_v1_ai_memory_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "إضافة عدسة أو ملاحظة",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/memory/{memory_id}": {
+      "delete": {
+        "description": "حذف فعلي بنقرة. بند غير موجود 404.",
+        "operationId": "delete_memory_v1_ai_memory__memory_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "memory_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Memory Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "البند غير موجود"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "حذف بند",
+        "tags": [
+          "ai"
+        ]
+      },
+      "patch": {
+        "description": "حقل واحد على الأقل. البند المعطّل يبقى في القائمة ولا يُرفق بالطلبات.",
+        "operationId": "patch_memory_v1_ai_memory__memory_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "memory_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Memory Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "البند غير موجود"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "تفعيل بند أو تعطيله أو تعديل نصه",
         "tags": [
           "ai"
         ]
@@ -7667,6 +8175,270 @@
         "summary": "إنشاء أو تحديث مؤشر",
         "tags": [
           "indicators"
+        ]
+      }
+    },
+    "/v1/insights/deeper": {
+      "post": {
+        "description": "يعيد سؤال تأمل واحداً من مصادر الأيام السبعة المنتهية باليوم، وحتى ثلاثة أسئلة بديلة في `options` (عنوان كل منها حتى 80 حرفاً، ومصدره من المصادر المعطاة). لا يُحفظ شيء، فكل طلب يستدعي المزوّد. يُقبل اليوم الحالي والأيام السبعة قبله. يحتاج موافقة سارية للمزوّد الحالي، ورمز الخدمة مرفوض.",
+        "operationId": "deeper_insight_v1_insights_deeper_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeeperRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeeperOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorDetail"
+                    }
+                  ],
+                  "title": "Response 403 Deeper Insight V1 Insights Deeper Post"
+                }
+              }
+            },
+            "description": "غير مسموح (رمز الخدمة)، أو لا موافقة سارية (`ai_consent_required`)"
+          },
+          "422": {
+            "description": "طلب غير صالح، أو امتنع النموذج عن الرد"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "تعذّر الحصول على ردّ صالح من المزوّد"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "مفتاح المزوّد غير مضبوط"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "التعمّق: سؤال واحد وحتى ثلاثة أسئلة بديلة",
+        "tags": [
+          "insights"
+        ]
+      }
+    },
+    "/v1/insights/morning": {
+      "post": {
+        "description": "يبني الخادم المصادر من البيانات المخزّنة (سبعة أيام تنتهي باليوم) مع العدسات والملاحظات المفعّلة، ويعيد `ai_lines` سطراً على الأكثر وحتى ثلاث أولويات مقترحة، كل منها من مصدر معطى، مع بطاقات المصادر المستشهد بها. يُحفظ أول ملخص لليوم ويعرضه `GET /v1/today`، وكل تكرار يعيده دون استدعاء المزوّد. ومع `regenerate` يُستدعى المزوّد فقط إن تغيّرت المصادر. يُقبل اليوم الحالي والأيام السبعة قبله. يحتاج موافقة سارية للمزوّد الحالي، ورمز الخدمة مرفوض.",
+        "operationId": "morning_insight_v1_insights_morning_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InsightDayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorDetail"
+                    }
+                  ],
+                  "title": "Response 403 Morning Insight V1 Insights Morning Post"
+                }
+              }
+            },
+            "description": "غير مسموح (رمز الخدمة)، أو لا موافقة سارية (`ai_consent_required`)"
+          },
+          "422": {
+            "description": "طلب غير صالح، أو امتنع النموذج عن الرد"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "تعذّر الحصول على ردّ صالح من المزوّد"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "مفتاح المزوّد غير مضبوط"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "ملخص الصباح: سطران وحتى ثلاث أولويات (متكرر الأثر)",
+        "tags": [
+          "insights"
+        ]
+      }
+    },
+    "/v1/insights/weekly": {
+      "post": {
+        "description": "مفتاحها أول يوم في الأسبوع الذي يحوي `day`، فأي يوم من الأسبوع يعيد الصف نفسه، و`day` في الرد هو المفتاح. المصادر من أول الأسبوع إلى `day`، والنموذج الأسبوعي. سطر يسمّي موضوعاً يتكرر في اليوميات ويستشهد بمصدرين مختلفين من `journal:*` على الأقل متى وُجدا في المدى، وإلا إصلاح واحد ثم 502. ومع `regenerate` يُستدعى المزوّد فقط إن تغيّرت المصادر. يُقبل اليوم الحالي والأيام السبعة قبله. يقبل رمز الخدمة أيضاً، ويحتاج موافقة سارية للمزوّد الحالي.",
+        "operationId": "weekly_insight_v1_insights_weekly_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InsightDayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorDetail"
+                    }
+                  ],
+                  "title": "Response 403 Weekly Insight V1 Insights Weekly Post"
+                }
+              }
+            },
+            "description": "غير مسموح (رمز الخدمة)، أو لا موافقة سارية (`ai_consent_required`)"
+          },
+          "422": {
+            "description": "طلب غير صالح، أو امتنع النموذج عن الرد"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "تعذّر الحصول على ردّ صالح من المزوّد"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "مفتاح المزوّد غير مضبوط"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "المراجعة الأسبوعية: الموضوع المتكرر وأيامه (متكرر الأثر لكل أسبوع)",
+        "tags": [
+          "insights"
         ]
       }
     },
