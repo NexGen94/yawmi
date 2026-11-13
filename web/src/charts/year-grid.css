@@ -1,0 +1,55 @@
+/* The year grid of the mood (task 21). Colors only through the tokens; logical properties only. The
+   five grades are five lightnesses of the one blue (the fill opacity is set on each cell), so no hue
+   other than the blue of the app is used, and none of them is red. */
+
+.year-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-inline-size: 0;
+}
+
+.year-svg {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+.year-cell {
+  fill: var(--c-blue);
+  stroke: var(--c-blue);
+  stroke-width: 1;
+}
+
+.year-empty {
+  fill: none;
+  stroke: var(--c-blue-light);
+  stroke-width: 1;
+}
+
+.year-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.year-key li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.year-key-swatch {
+  flex: none;
+}
+
+.year-note {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}

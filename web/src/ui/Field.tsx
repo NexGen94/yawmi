@@ -26,6 +26,8 @@ export interface FieldProps {
   max?: number | string;
   step?: number | string;
   autoComplete?: string;
+  /** The keyboard a phone offers; a number field is `decimal` unless this says otherwise. */
+  inputMode?: 'text' | 'numeric' | 'decimal';
   /** The longest text the field takes. It is the control's own `maxlength`, a longer input (a
    *  script, an input method) is cut to it, and a count «n / max» shows once 80% is used. */
   maxLength?: number;
@@ -59,7 +61,7 @@ export function Field(props: FieldProps) {
     ...shared,
     type,
     class: 'field-input',
-    inputMode: type === 'number' ? 'decimal' : undefined,
+    inputMode: rest.inputMode ?? (type === 'number' ? 'decimal' : undefined),
     onInput: (event: Event) => take(event.currentTarget as HTMLInputElement),
   } as InputHTMLAttributes<HTMLInputElement>;
   return (
