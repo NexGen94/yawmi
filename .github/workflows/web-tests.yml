@@ -73,3 +73,7 @@ jobs:
 
       - name: First-load JS budget (80 KB gzip)
         run: node scripts/check-budget.mjs
+
+      # Every test file the tables of design section 2 name exists (web/scripts/check-trace.mjs).
+      - name: Trace files exist
+        run: node scripts/check-trace.mjs
