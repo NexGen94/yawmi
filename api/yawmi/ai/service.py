@@ -8,6 +8,12 @@ Guarantees, in order of enforcement:
    line break, a question up to 200 characters, priority titles up to 80.
 3. Every cited `source_id` (in `source_ids` and in `priorities`) must be one of the request's
    sources: a fabricated id is rejected.
+4. The rules of a kind (design §10): a `weekly` reply cites at least two different `journal:*`
+   sources in `source_ids` whenever the request holds two or more (the recurring theme and its
+   days), and a `deeper` reply carries its one question. The two fixed lines of the prompt
+   (out of scope, rule 9; no data, rule 8) are valid replies of every kind: the line alone,
+   `question` null, nothing cited. Such a reply skips the kind rules, and a `deeper` reply has a
+   null question exactly when it is one of them.
 A rejected reply gets exactly one repair attempt (the same request plus a corrective note); a
 second rejection raises `InsightInvalid`. Refusals and transport errors are not retried.
 
@@ -49,6 +55,15 @@ _CORRECTIONS = {
     "question_too_long": "السؤال في الرد السابق أطول من 200 حرف.",
     "priority_too_long": "عنوان أولوية في الرد السابق أطول من 80 حرفاً.",
     "unknown_source": "الرد السابق ذكر معرّف مصدر غير موجود في المدخل.",
+    "weekly_theme": (
+        "الرد الأسبوعي السابق لم يستشهد بمصدرين مختلفين من journal:* في source_ids؛"
+        " الموضوع المتكرر يُذكر بأيامه من اليوميات."
+    ),
+    "deeper_question": "الرد السابق بلا سؤال في question؛ نوع deeper سؤال واحد في question.",
+    "fixed_line_alone": (
+        "السطر الثابت («خارج النطاق» أو «لا بيانات كافية») يأتي وحده: question بـnull،"
+        " وsource_ids وpriorities فارغتان."
+    ),
     "empty": "الرد السابق كان فارغاً أو ليس كائن JSON.",
 }
 
@@ -126,6 +141,44 @@ def _cap_reasons(response: InsightResponse, max_lines: int) -> list[str]:
     return reasons
 
 
+JOURNAL_PREFIX = "journal:"
+MIN_THEME_JOURNALS = 2
+# The two fixed replies of the prompt, word for word (rules 9 and 8 of `ar_system.md`).
+OUT_OF_SCOPE_LINE = "هذا خارج نطاق المتابعة اليومية، والمختص هو المرجع المناسب."
+NO_DATA_LINE = "لا بيانات كافية."
+FIXED_LINES = (OUT_OF_SCOPE_LINE, NO_DATA_LINE)
+REFUSALS = {OUT_OF_SCOPE_LINE: "out_of_scope", NO_DATA_LINE: "no_data"}
+
+
+def is_fixed_reply(response: InsightResponse) -> bool:
+    """One of the two fixed lines alone: no question, nothing cited, no priority."""
+    return (
+        len(response.lines) == 1
+        and response.lines[0] in FIXED_LINES
+        and response.question is None
+        and not response.source_ids
+        and not response.priorities
+    )
+
+
+def _kind_reasons(response: InsightResponse, kind: str | None, allowed_ids: set[str]) -> list[str]:
+    """The rules of a kind (design §10) a valid, capped and grounded reply breaks. A fixed reply
+    (out of scope or no data) breaks none."""
+    if is_fixed_reply(response):
+        return []
+    if kind == "weekly":
+        offered = {i for i in allowed_ids if i.startswith(JOURNAL_PREFIX)}
+        cited = {i for i in response.source_ids if i.startswith(JOURNAL_PREFIX)}
+        if len(offered) >= MIN_THEME_JOURNALS and len(cited) < MIN_THEME_JOURNALS:
+            return ["weekly_theme"]
+    if kind == "deeper":
+        if any(line in FIXED_LINES for line in response.lines):
+            return ["fixed_line_alone"]
+        if not (response.question and response.question.strip()):
+            return ["deeper_question"]
+    return []
+
+
 def _is_too_many_lines(error: Any) -> bool:
     return error["type"] == "too_long" and error["loc"][:1] == ("lines",)
 
@@ -156,7 +209,7 @@ class InsightService:
 
     @staticmethod
     def _check(
-        raw: dict, allowed_ids: set[str], max_lines: int = 2
+        raw: dict, allowed_ids: set[str], max_lines: int = 2, kind: str | None = None
     ) -> tuple[InsightResponse | None, list[str]]:
         """Validate a reply; the second item lists reason codes (never any reply content)."""
         try:
@@ -175,6 +228,9 @@ class InsightService:
         cited = set(response.source_ids) | {p.source_id for p in response.priorities}
         if not cited <= allowed_ids:
             return None, ["unknown_source"]
+        rules = _kind_reasons(response, kind, allowed_ids)
+        if rules:
+            return None, rules
         return response, []
 
     @staticmethod
@@ -194,7 +250,7 @@ class InsightService:
         payload = self._payload(req)
         digest = request_hash(payload)
         model = self._model_for(req)
-        allowed_ids = {s["id"] for s in payload["sources"]}
+        allowed_ids = {s["id"] for s in [*payload["sources"], *payload.get("memory", [])]}
         system = load_system_prompt()
         schema = insight_json_schema()
         user = canonical_json(payload)
@@ -218,7 +274,7 @@ class InsightService:
                     digest,
                 )
                 raise
-            response, reasons = self._check(raw, allowed_ids, max_lines)
+            response, reasons = self._check(raw, allowed_ids, max_lines, req.kind)
             if response is not None:
                 logger.info(
                     "insight ok kind=%s model=%s attempts=%d request_hash=%s",

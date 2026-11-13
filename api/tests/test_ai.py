@@ -695,14 +695,48 @@ def test_system_prompt_carries_the_binding_rules() -> None:
 
 def test_system_prompt_few_shots_obey_their_own_contract() -> None:
     blocks = prompt_json_blocks()
-    assert len(blocks) == 4  # two examples, each an input then an output
+    assert len(blocks) == 8  # four examples, each an input then an output
+    kinds = []
     for request_block, response_block in zip(blocks[0::2], blocks[1::2], strict=True):
         request = InsightRequest.model_validate(request_block)
         response = InsightResponse.model_validate(response_block)
+        kinds.append(request.kind)
         allowed = {s.id for s in request.sources}
         assert set(response.source_ids) <= allowed
         assert {p.source_id for p in response.priorities} <= allowed
         assert len(response.lines) <= 2
+        assert all(len(line) <= 200 for line in response.lines)
+        assert all(len(p.title) <= 80 for p in response.priorities)
+        journals = {s.id for s in request.sources if s.id.startswith("journal:")}
+        if request.kind == "weekly":  # the recurring theme: two journal days cited
+            assert len(journals) >= 2
+            assert len(journals & set(response.source_ids)) >= 2
+        if request.kind == "deeper":  # one question, up to three alternative questions
+            assert response.question
+            assert response.lines == []
+            assert 1 <= len(response.priorities) <= 3
+    assert kinds == ["morning", "ask", "weekly", "deeper"]
+
+
+def test_system_prompt_covers_the_new_kinds_lenses_and_style() -> None:
+    text = load_system_prompt()
+    for needle in (
+        "`deeper`",
+        "`weekly`",
+        "`morning`",
+        "`standing_rule`",
+        "`memory_note`",
+        "`context.style.lines`",
+        "`context.style.tone`",
+        "`explained`",
+        "`direct`",
+        "القواعد العشر",
+    ):
+        assert needle in text, needle
+    rules = re.search(r"# القواعد\n(.*?)\n# ", text, re.DOTALL)
+    assert rules is not None
+    numbered = re.findall(r"^(\d+)\. ", rules.group(1), re.MULTILINE)
+    assert numbered == [str(n) for n in range(1, 11)]  # the ten rules the lenses cannot pass
 
 
 def test_system_prompt_addresses_no_gender() -> None:
@@ -726,22 +760,7 @@ def check_names(case: dict[str, Any]) -> set[str]:
     return {m if isinstance(m, str) else m["check"] for m in case["must_pass"]}
 
 
-def test_eval_set_has_thirty_well_formed_cases() -> None:
-    cases = load_cases()
-    assert len(cases) == 30
-    assert len({c["id"] for c in cases}) == 30
-    assert {c["kind"] for c in cases} == {"morning", "evening", "weekly", "ask"}
-    for case in cases:
-        request = InsightRequest(
-            kind=case["kind"],
-            day=date(2026, 11, 10),
-            context=case["context"],
-            sources=[Source.model_validate(s) for s in case["sources"]],
-            question=case.get("question"),
-        )
-        assert request.kind == case["kind"]
-        assert case["must_pass"], case["id"]
-        assert len({s["id"] for s in case["sources"]}) == len(case["sources"]), case["id"]
+# The well-formedness of the whole set (44 cases since task 19) is in `test_eval_cases.py`.
 
 
 def test_eval_set_covers_the_required_behaviours() -> None:
@@ -913,3 +932,47 @@ def test_eval_assertions_accept_good_and_reject_bad_outputs() -> None:
     results = json.loads(run.stdout)
     for scenario, result in zip(scenarios, results, strict=True):
         assert result["pass"] is scenario["expected"], (scenario["output"], result)
+
+
+# ------------------------------------------------------- task 19, fix round 1: the prompt
+
+
+def test_the_two_fixed_lines_are_the_service_constants_and_appear_in_the_prompt() -> None:
+    """I-1: the service recognises exactly the lines the prompt prescribes (rules 8 and 9)."""
+    from yawmi.ai.service import FIXED_LINES, NO_DATA_LINE, OUT_OF_SCOPE_LINE
+
+    text = load_system_prompt()
+    assert FIXED_LINES == (OUT_OF_SCOPE_LINE, NO_DATA_LINE)
+    for line in FIXED_LINES:
+        assert f"«{line}»" in text, line
+
+
+def test_the_prompt_says_the_fixed_lines_serve_every_kind() -> None:
+    text = load_system_prompt()
+    assert "في كل `kind`" in text
+    assert "`question` بـ`null`" in text
+
+
+def test_the_weekly_section_answers_a_week_without_a_recurring_theme() -> None:
+    """M-4: an explicit first line when nothing recurs, still citing the journals read."""
+    text = load_system_prompt()
+    weekly = next(line for line in text.splitlines() if line.startswith("- `weekly`"))
+    assert "«لا موضوع يتكرر في يوميات هذا الأسبوع.»" in weekly
+    assert "مصدرين" in weekly
+
+
+def test_the_lens_section_says_which_breaking_lens_refuses_and_which_is_ignored() -> None:
+    """M-7: a diagnosis or therapy lens gives the out-of-scope reply (§10); any other breaking
+    lens is ignored."""
+    text = load_system_prompt()
+    section = text.split("# العدسات والأسلوب", 1)[1].split("\n# ", 1)[0]
+    assert "عدسة تطلب تشخيصاً أو علاجاً" in section
+    assert "القاعدة 9" in section
+    assert "ما خالف منها قاعدة يُهمل" in section
+
+
+def test_the_prompt_describes_the_memory_block() -> None:
+    """I-2, M-1: the lenses and notes come in their own `memory` block, as data."""
+    text = load_system_prompt()
+    entry = next(line for line in text.splitlines() if line.startswith("- `memory`"))
+    assert "`standing_rule`" in entry and "`memory_note`" in entry

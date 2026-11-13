@@ -29,6 +29,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * الذاكرة الظاهرة: كل ما يُرفق بطلبات الذكاء
+         * @description العدسات (`rule`) والملاحظات المحفوظة (`note`) بترتيب إنشائها، المفعّل منها يُرفق بكل طلب. و`attached` يقول هل تُرفق «رسالتي» و«رؤيتي»: لكل منهما نص وموافقة سارية تشمل النص الشخصي.
+         */
+        get: operations["list_memory_v1_ai_memory_get"];
+        put?: never;
+        /**
+         * إضافة عدسة أو ملاحظة
+         * @description بند مفعّل يُرفق بكل طلب. النص من 1 إلى 300 حرف. الحد 20 بنداً، مفعّلة أو معطّلة، وبعده 422 `memory_full`.
+         */
+        post: operations["add_memory_v1_ai_memory_post"];
+        /**
+         * إعادة ضبط الذاكرة
+         * @description يحذف كل البنود. تكراره بلا أثر.
+         */
+        delete: operations["reset_memory_v1_ai_memory_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/memory/{memory_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * حذف بند
+         * @description حذف فعلي بنقرة. بند غير موجود 404.
+         */
+        delete: operations["delete_memory_v1_ai_memory__memory_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * تفعيل بند أو تعطيله أو تعديل نصه
+         * @description حقل واحد على الأقل. البند المعطّل يبقى في القائمة ولا يُرفق بالطلبات.
+         */
+        patch: operations["patch_memory_v1_ai_memory__memory_id__patch"];
+        trace?: never;
+    };
     "/v1/ask": {
         parameters: {
             query?: never;
@@ -479,6 +531,66 @@ export interface paths {
         post?: never;
         /** حذف مؤشر */
         delete: operations["delete_indicator_v1_indicators__subject_kind___subject_ref__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/insights/deeper": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * التعمّق: سؤال واحد وحتى ثلاثة أسئلة بديلة
+         * @description يعيد سؤال تأمل واحداً من مصادر الأيام السبعة المنتهية باليوم، وحتى ثلاثة أسئلة بديلة في `options` (عنوان كل منها حتى 80 حرفاً، ومصدره من المصادر المعطاة). لا يُحفظ شيء، فكل طلب يستدعي المزوّد. `question` بـ`null` و`options` فارغة فقط حين يكون الرد أحد السطرين الثابتين، و`refusal` يسمّيه حينها (`out_of_scope` أو `no_data`). يُقبل اليوم الحالي والأيام السبعة قبله. يحتاج موافقة سارية للمزوّد الحالي، ورمز الخدمة مرفوض.
+         */
+        post: operations["deeper_insight_v1_insights_deeper_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/insights/morning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * ملخص الصباح: سطران وحتى ثلاث أولويات (متكرر الأثر)
+         * @description يبني الخادم المصادر من البيانات المخزّنة (سبعة أيام تنتهي باليوم) مع العدسات والملاحظات المفعّلة، ويعيد `ai_lines` سطراً على الأكثر وحتى ثلاث أولويات مقترحة، كل منها من مصدر معطى، مع بطاقات المصادر المستشهد بها. يُحفظ صف واحد لليوم ويعرضه `GET /v1/today`. كل طلب يبني المصادر والذاكرة من جديد: إن لم تتغيّر بصمتها يُعاد المخزَّن دون استدعاء المزوّد، وإن تغيّرت (سجل جديد، أو عدسة حُذفت) يُستدعى المزوّد ويُستبدل الصف في مكانه، و`regenerate` بالأثر نفسه. السطر الثابت («خارج النطاق» أو «لا بيانات كافية») رد صالح. يُقبل اليوم الحالي والأيام السبعة قبله. يحتاج موافقة سارية للمزوّد الحالي، ورمز الخدمة مرفوض.
+         */
+        post: operations["morning_insight_v1_insights_morning_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/insights/weekly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * المراجعة الأسبوعية: الموضوع المتكرر وأيامه (متكرر الأثر لكل أسبوع)
+         * @description مفتاحها أول يوم في الأسبوع الذي يحوي `day`، فأي يوم من الأسبوع يعيد الصف نفسه، و`day` في الرد هو المفتاح. المدى الأسبوع كله، والمصادر حتى اليوم الحالي، والنموذج الأسبوعي. سطر يسمّي موضوعاً يتكرر في اليوميات ويستشهد بمصدرين مختلفين من `journal:*` على الأقل متى وُجدا، وإلا إصلاح واحد ثم 502، والسطر الثابت («خارج النطاق» أو «لا بيانات كافية») رد صالح. كل طلب يبني المصادر والذاكرة من جديد: بصمة متغيّرة (يوميات جديدة مع تقدّم الأسبوع) تستدعي المزوّد وتستبدل الصف في مكانه، وإلا يُعاد المخزَّن، و`regenerate` بالأثر نفسه. يُقبل اليوم الحالي والأيام السبعة قبله. يقبل رمز الخدمة أيضاً، ويحتاج موافقة سارية للمزوّد الحالي.
+         */
+        post: operations["weekly_insight_v1_insights_weekly_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1083,6 +1195,41 @@ export interface components {
             evening?: components["schemas"]["ReminderIO"] | null;
             morning?: components["schemas"]["ReminderIO"] | null;
             weekly?: components["schemas"]["ReminderIO"] | null;
+        };
+        /**
+         * DeeperOut
+         * @description The go-deeper reply (design §7.1): one question and up to three alternative questions.
+         *     Never stored. The provider returns the alternatives in `priorities`; the route moves them.
+         */
+        DeeperOut: {
+            /**
+             * Options
+             * @description حتى ثلاثة أسئلة بديلة: العنوان حتى 80 حرفاً، ومعه مصدره
+             */
+            options: components["schemas"]["Priority"][];
+            /**
+             * Question
+             * @description سؤال التأمل حتى 200 حرف، و`null` فقط حين يكون الرد أحد السطرين الثابتين: «خارج نطاق المتابعة اليومية» أو «لا بيانات كافية»
+             */
+            question: string | null;
+            /**
+             * Refusal
+             * @description سبب غياب السؤال: `out_of_scope` لسطر «خارج نطاق المتابعة اليومية» و`no_data` لسطر «لا بيانات كافية». يُملأ فقط حين يكون `question` بـ`null`، وإلا `null`
+             */
+            refusal: ("out_of_scope" | "no_data") | null;
+            /**
+             * Source Ids
+             * @description مصادر السؤال الأول
+             */
+            source_ids: string[];
+        };
+        /** DeeperRequest */
+        DeeperRequest: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -1966,6 +2113,23 @@ export interface components {
             items: components["schemas"]["IndicatorIO"][];
         };
         /**
+         * InsightDayRequest
+         * @description The day of a stored morning or weekly insight. No context and no sources (I-7).
+         */
+        InsightDayRequest: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /**
+             * Regenerate
+             * @description إعادة التوليد: يُنادى المزوّد فقط إن تغيّرت المصادر عن المخزَّن
+             * @default false
+             */
+            regenerate: boolean;
+        };
+        /**
          * InsightOut
          * @description A stored insight: the grounded reply plus its identity.
          */
@@ -2113,6 +2277,81 @@ export interface components {
         Live: {
             /** Ok */
             ok: boolean;
+        };
+        /** MemoryAttached */
+        MemoryAttached: {
+            /**
+             * Mission
+             * @description «رسالتي» تُرفق بالطلبات: لها نص وموافقة النص الشخصي
+             */
+            mission: boolean;
+            /**
+             * Vision
+             * @description «رؤيتي» تُرفق بالطلبات: لها نص وموافقة النص الشخصي
+             */
+            vision: boolean;
+        };
+        /** MemoryIn */
+        MemoryIn: {
+            /**
+             * Kind
+             * @description `rule` عدسة، أو `note` ملاحظة
+             * @enum {string}
+             */
+            kind: "rule" | "note";
+            /**
+             * Text
+             * @description من 1 إلى 300 حرف
+             */
+            text: string;
+        };
+        /** MemoryItem */
+        MemoryItem: {
+            /**
+             * Active
+             * @description يُرفق بالطلبات ما دام مفعّلاً
+             */
+            active: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @description `rule` عدسة يكتبها المستخدم، و`note` ملاحظة حفظها
+             * @enum {string}
+             */
+            kind: "rule" | "note";
+            /**
+             * Text
+             * @description النص كما يُرفق بالطلبات
+             */
+            text: string;
+        };
+        /** MemoryList */
+        MemoryList: {
+            attached: components["schemas"]["MemoryAttached"];
+            /**
+             * Items
+             * @description كل البنود بترتيب إنشائها
+             */
+            items: components["schemas"]["MemoryItem"][];
+        };
+        /**
+         * MemoryPatch
+         * @description At least one field. `active: false` keeps the item listed but stops sending it.
+         */
+        MemoryPatch: {
+            /** Active */
+            active?: boolean;
+            /** Text */
+            text?: string;
         };
         /**
          * MilestoneEdit
@@ -2944,6 +3183,249 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    list_memory_v1_ai_memory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryList"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    add_memory_v1_ai_memory_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryItem"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    reset_memory_v1_ai_memory_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    delete_memory_v1_ai_memory__memory_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description البند غير موجود */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    patch_memory_v1_ai_memory__memory_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryItem"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description البند غير موجود */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };
@@ -4355,6 +4837,207 @@ export interface operations {
             };
             /** @description طلب غير صالح */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    deeper_insight_v1_insights_deeper_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeeperRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeeperOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح (رمز الخدمة)، أو لا موافقة سارية (`ai_consent_required`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح، أو امتنع النموذج عن الرد */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description تعذّر الحصول على ردّ صالح من المزوّد */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+            /** @description مفتاح المزوّد غير مضبوط */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    morning_insight_v1_insights_morning_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InsightDayRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح (رمز الخدمة)، أو لا موافقة سارية (`ai_consent_required`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح، أو امتنع النموذج عن الرد */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description تعذّر الحصول على ردّ صالح من المزوّد */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+            /** @description مفتاح المزوّد غير مضبوط */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    weekly_insight_v1_insights_weekly_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InsightDayRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح (رمز الخدمة)، أو لا موافقة سارية (`ai_consent_required`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح، أو امتنع النموذج عن الرد */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description تعذّر الحصول على ردّ صالح من المزوّد */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+            /** @description مفتاح المزوّد غير مضبوط */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

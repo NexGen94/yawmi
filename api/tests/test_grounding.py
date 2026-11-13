@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 import httpx
 import pytest
@@ -33,16 +34,18 @@ from yawmi.ai.grounding import (
     build_grounding,
     span_for,
 )
-from yawmi.ai.reader import InMemorySessionReader, StoreGroundingReader
+from yawmi.ai.memory import MemoryItem
+from yawmi.ai.reader import InMemorySessionReader, SessionDay, StoreGroundingReader
 from yawmi.ai.schema import InsightRequest, InsightResponse, Source, insight_json_schema
 from yawmi.ai.service import InsightInvalid, InsightService
 from yawmi.journal.memory import InMemoryJournalReader
-from yawmi.journal.store import JournalRow
+from yawmi.journal.store import JournalRow, MoodRow
 from yawmi.prefs.models import SettingsOut
 from yawmi.today.memory import InMemoryTodayReader
 from yawmi.today.reader import CycleRow, GoalRow, HabitRow, LogRow, MilestoneRow
 
 WALK = f"habit:{PREFIX}walk"
+WALK_MEMORY = "habit:walk"  # the pure cases below use bare codes
 EVENING = "journal:2026-11-10:evening"
 
 
@@ -723,3 +726,165 @@ async def test_a_long_source_text_is_cut_to_500_with_an_ellipsis() -> None:
     assert spaced.endswith("كلمة…")
     assert by_id[f"journal:{yesterday.isoformat()}:evening"] == "ص" * MAX_SOURCE_TEXT
     assert {c.source_id: c.text for c in grounding.cards} == by_id
+
+
+# --- task 19, ruling N-1: the four day kinds are dropped together, oldest day first -----------
+
+
+async def ground_days(days: int, *, extra_habits: int = 0) -> tuple[Grounding, list[date]]:
+    """`days` days ending on DAY, each with an evening journal, a mood, a focus and a breath
+    day, plus «المشي», one open milestone and one outcome (and `extra_habits` more habits)."""
+    span = (DAY - timedelta(days=days - 1), DAY)
+    every = [DAY - timedelta(days=n) for n in range(days)]
+    reader = StoreGroundingReader(
+        InMemoryTodayReader(
+            habits=[
+                habit_row("walk", "المشي"),
+                *(habit_row(f"h{n}", f"عادة {n}") for n in range(extra_habits)),
+            ],
+            milestone_rows=[milestone_row("m1", DAY + timedelta(days=3))],
+            goal_rows=[GoalRow("O1", "الصحة", date(2031, 12, 31), "active", "المسار")],
+        ),
+        InMemoryJournalReader(
+            entries=[journal_row(d, "evening", f"يومية {d.isoformat()}") for d in every],
+            moods=[MoodRow(d, 3, [], []) for d in every],
+        ),
+        InMemorySessionReader(
+            focus=[SessionDay(d, 1, 25) for d in every],
+            breath=[SessionDay(d, 1, 5) for d in every],
+        ),
+        None,
+    )
+    consent = Consent("anthropic", False, datetime(2026, 11, 1, tzinfo=UTC))
+    grounding = await build_grounding("ask", DAY, span, reader, SettingsOut(), consent)
+    return grounding, every
+
+
+def kept_days(grounding: Grounding, kind: str) -> list[date]:
+    return [c.day for c in grounding.cards if c.kind == kind]  # type: ignore[misc]
+
+
+async def test_a_thirty_day_range_keeps_the_latest_days_of_all_four_day_kinds() -> None:
+    """120 day sources and 3 others: the 3 stay, and the 57 day sources are the 14 newest days
+    whole plus the breath of the 15th (inside a day: journal, mood, focus, then breath go)."""
+    grounding, every = await ground_days(30)
+    kept = ids(grounding)
+    assert len(kept) == MAX_SOURCES
+    assert kept[:3] == [WALK_MEMORY, "ms:m1", "goal:O1"]
+    newest = sorted(every[:14])
+    for kind in ("journal", "mood", "focus"):
+        assert kept_days(grounding, kind) == newest, kind
+    assert kept_days(grounding, "breath") == sorted(every[:15])
+    assert [c.source_id for c in grounding.cards] == kept
+
+
+async def test_the_cap_stays_exact_and_whole_days_are_kept_when_the_count_allows() -> None:
+    """4 others and 56 day sources: exactly 14 whole days of each kind."""
+    grounding, every = await ground_days(30, extra_habits=1)
+    assert len(grounding.sources) == MAX_SOURCES
+    for kind in ("journal", "mood", "focus", "breath"):
+        assert kept_days(grounding, kind) == sorted(every[:14]), kind
+
+
+async def test_current_habits_and_goals_are_never_dropped_before_a_day_source() -> None:
+    """Twenty habits, a milestone and a goal (22) leave 38 places for the day sources: every
+    habit, the milestone and the goal stay, and the day sources are the newest: 9 whole days and
+    the focus and breath of the 10th."""
+    grounding, every = await ground_days(30, extra_habits=19)
+    kept = ids(grounding)
+    assert len(kept) == MAX_SOURCES
+    assert sum(1 for i in kept if i.startswith("habit:")) == 20
+    assert {"ms:m1", "goal:O1"} <= set(kept)
+    for kind in ("journal", "mood"):
+        assert kept_days(grounding, kind) == sorted(every[:9]), kind
+    for kind in ("focus", "breath"):
+        assert kept_days(grounding, kind) == sorted(every[:10]), kind
+    day_sources = [c for c in grounding.cards if c.day is not None]
+    assert len(day_sources) == 38
+    assert min(c.day for c in day_sources) == every[9]  # type: ignore[type-var]
+
+
+# --- task 19 fix round 1 (I-2, M-2): the memory is its own block, outside MAX_SOURCES ----------
+
+
+def memory_items(n: int, text: str = "ع" * 300) -> list[MemoryItem]:
+    when = datetime(2026, 11, 1, tzinfo=UTC)
+    return [
+        MemoryItem(
+            id=UUID(int=k + 1),
+            kind="rule" if k % 2 else "note",
+            text=text,
+            active=True,
+            created_at=when + timedelta(minutes=k),
+        )
+        for k in range(n)
+    ]
+
+
+async def ground_week_with_memory(memory: Sequence[MemoryItem]) -> Grounding:
+    """The review's scenario: 13 habits, 12 open milestones and their outcome, and 7 full days
+    (a morning and an evening entry, a mood, a focus and a breath day): 61 data sources."""
+    every = [DAY - timedelta(days=n) for n in range(7)]
+    reader = StoreGroundingReader(
+        InMemoryTodayReader(
+            habits=[habit_row(f"h{n:02d}", f"عادة {n}") for n in range(13)],
+            milestone_rows=[milestone_row(f"m{n:02d}", DAY + timedelta(days=n)) for n in range(12)],
+            goal_rows=[GoalRow("O1", "الصحة", date(2031, 12, 31), "active", "المسار")],
+        ),
+        InMemoryJournalReader(
+            entries=[
+                journal_row(d, p, f"يومية {d}") for d in every for p in ("morning", "evening")
+            ],
+            moods=[MoodRow(d, 3, [], []) for d in every],
+        ),
+        InMemorySessionReader(
+            focus=[SessionDay(d, 1, 25) for d in every],
+            breath=[SessionDay(d, 1, 5) for d in every],
+        ),
+        None,
+    )
+    consent = Consent("anthropic", False, datetime(2026, 11, 1, tzinfo=UTC))
+    span = (DAY - timedelta(days=6), DAY)
+    return await build_grounding("weekly", DAY, span, reader, SettingsOut(), consent, memory=memory)
+
+
+async def test_memory_items_take_no_place_from_the_week_s_journals() -> None:
+    """I-2: with 0, 10 and 20 memory items the same 60 data sources are kept (the oldest morning
+    entry is the one dropped), and the memory travels whole beside them."""
+    kept: list[list[str]] = []
+    for n in (0, 10, 20):
+        grounding = await ground_week_with_memory(memory_items(n))
+        assert len(grounding.sources) == MAX_SOURCES, n
+        assert len(grounding.memory) == n
+        kept.append(ids(grounding))
+        journal_days = {c.day for c in grounding.cards if c.kind == "journal"}
+        assert len(journal_days) == 7, n
+    assert kept[0] == kept[1] == kept[2]
+    oldest = (DAY - timedelta(days=6)).isoformat()
+    assert f"journal:{oldest}:morning" not in kept[0]
+    assert f"journal:{oldest}:evening" in kept[0]
+
+
+async def test_the_memory_is_a_separate_block_outside_the_drop_order() -> None:
+    """M-2: no lens or note is among the capped sources; the block keeps the creation order,
+    each text is cut at MAX_SOURCE_TEXT, and a card exists for each (a note may be cited)."""
+    long = memory_items(2, text="س" * 900)
+    grounding = await ground_week_with_memory([*memory_items(20)[2:], *long])
+    assert not any(s.kind in ("standing_rule", "memory_note") for s in grounding.sources)
+    assert not any(i.startswith(("rule:", "note:")) for i in ids(grounding))
+    assert len(grounding.memory) == 20
+    assert [m.id for m in grounding.memory][-2:] == [
+        "note:00000000-0000-0000-0000-000000000001",
+        "rule:00000000-0000-0000-0000-000000000002",
+    ]
+    assert all(len(m.text) <= MAX_SOURCE_TEXT for m in grounding.memory)
+    assert grounding.memory[-1].text.endswith("…")
+    card_ids = {c.source_id for c in grounding.cards}
+    assert {m.id for m in grounding.memory} <= card_ids
+
+
+async def test_an_inactive_memory_item_is_not_in_the_block() -> None:
+    items = memory_items(2)
+    items[0] = items[0].model_copy(update={"active": False})
+    grounding = await ground_week_with_memory(items)
+    assert [m.id for m in grounding.memory] == [f"rule:{items[1].id}"]

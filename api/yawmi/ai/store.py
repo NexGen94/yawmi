@@ -5,7 +5,9 @@ validated `InsightResponse` fields are stored, with the request hash and the cit
 (`cards`, migration 0003), never a request body. `days` is never stored: it is derived from the
 cards on every read (R-6). `save_first` is first-writer-wins per kind and day, so a repeated or
 concurrent day close keeps one row; `replace` renews a row in place (regeneration with changed
-sources, design §10).
+sources, design §10). The kinds stored are `evening` and `morning` (one row per day) and `weekly`
+(one row per week, its `day` being the week's first day, `week_key`); `ask` and `deeper` are
+never stored.
 """
 
 import json
@@ -19,8 +21,11 @@ import asyncpg
 
 from yawmi.ai.cards import InsightOut, SourceCard, days_of
 from yawmi.ai.schema import InsightKind, InsightResponse
+from yawmi.domain.periods import WeekStart, period_bounds
 
 CLOSURE_KIND = "evening"
+MORNING_KIND = "morning"
+WEEKLY_KIND = "weekly"
 # two-key advisory lock (the keys spell "YWMI" and 2): serialises first-writer-wins per store
 CLOSURE_LOCK_KEYS = (0x59574D49, 2)
 
@@ -50,6 +55,11 @@ def new_insight(
     return StoredInsight(
         uuid4(), kind, day, provider, model, request_hash, response, _now(), list(cards)
     )
+
+
+def week_key(day: date, week_start: WeekStart) -> date:
+    """The key of a weekly insight: the first day of the week holding `day`."""
+    return period_bounds(day, "week", week_start)[0]
 
 
 def _now() -> datetime:

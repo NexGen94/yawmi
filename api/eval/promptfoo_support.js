@@ -128,8 +128,13 @@ const priorityIdsOf = (v) =>
     .map((p) => (p && typeof p.source_id === 'string' ? p.source_id : ''));
 const visibleText = (v) => [...linesOf(v), questionOf(v), ...priorityTitles(v)].join('\n');
 
+// The server sends lenses and saved notes in their own `memory` block (fix round 1); the cases
+// keep them among their sources, and generate() moves them as the server does.
+const MEMORY_KINDS = new Set(['standing_rule', 'memory_note']);
+const allItems = (request) => [...(request.sources || []), ...(request.memory || [])];
+
 function requestIds(request) {
-  return new Set((request.sources || []).map((s) => s.id));
+  return new Set(allItems(request).map((s) => s.id));
 }
 // Every string and number VALUE of a JSON structure. Key names ("sleep_avg_7d") are
 // identifiers, not data: they must not widen what a reply is allowed to say.
@@ -142,7 +147,7 @@ function scalarValues(value) {
 }
 const stringValues = (value) => scalarValues(value).filter((x) => typeof x === 'string');
 function requestText(request, { withQuestion }) {
-  const parts = [...scalarValues(request.context || {}), ...(request.sources || []).map((s) => s.text)];
+  const parts = [...scalarValues(request.context || {}), ...allItems(request).map((s) => s.text)];
   if (withQuestion) parts.push(request.question || '', request.day || '');
   return parts.join('\n');
 }
@@ -231,7 +236,7 @@ const CHECKS = {
     // Latin words may only be reused when a source or a context *value* already carries them
     // (context keys are English identifiers and must not leak into the reply).
     const given = new Set(
-      [...(request.sources || []).map((s) => s.text), ...stringValues(request.context)]
+      [...allItems(request).map((s) => s.text), ...stringValues(request.context)]
         .join(' ')
         .match(/[A-Za-z]{2,}/g)
         ?.map((w) => w.toLowerCase()) || [],
@@ -256,6 +261,29 @@ const CHECKS = {
     const text = linesOf(v).join('\n');
     const missing = reasons.find((s) => !text.includes(s.text));
     return missing ? 'the deep reason was not quoted verbatim' : null;
+  },
+  // ---- task 19: the reply style, the weekly theme, go deeper, the lenses ----
+  max_one_line(v) {
+    return linesOf(v).length <= 1 ? null : `${linesOf(v).length} lines, the style allows one`;
+  },
+  recurring_theme(v, request) {
+    const offered = (request.sources || []).filter((s) => s.id.startsWith('journal:')).length;
+    if (offered < 2) return null;
+    const cited = new Set(idsOf(v).filter((id) => id.startsWith('journal:')));
+    return cited.size >= 2 ? null : `${cited.size} journal source cited, the theme needs two days`;
+  },
+  deeper_shape(v) {
+    const question = questionOf(v).trim();
+    if (!question) return 'no question';
+    if (question.length > 200) return 'the question is over 200 characters';
+    if ((Array.isArray(v.priorities) ? v.priorities : []).length > 3) return 'more than three options';
+    if (priorityTitles(v).some((t) => t.length > 80)) return 'an option is over 80 characters';
+    return null;
+  },
+  lens_not_cited(v, request) {
+    const lenses = new Set(allItems(request).filter((s) => s.kind === 'standing_rule').map((s) => s.id));
+    const hit = [...idsOf(v), ...priorityIdsOf(v)].find((id) => lenses.has(id));
+    return hit ? `a lens cited as a source: ${hit}` : null;
   },
   contains(v, request, spec) {
     const want = normalizeDigits(String(spec.value));
@@ -304,8 +332,9 @@ function generate() {
       day: c.day || DEFAULT_DAY,
       locale: 'ar',
       context: c.context,
-      sources: c.sources,
+      sources: c.sources.filter((s) => !MEMORY_KINDS.has(s.kind)),
       question: c.question === undefined ? null : c.question,
+      memory: c.sources.filter((s) => MEMORY_KINDS.has(s.kind)),
     };
     return {
       description: `${c.id} (${c.kind})`,

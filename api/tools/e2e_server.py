@@ -42,6 +42,7 @@ from pydantic import BaseModel, SecretStr
 
 from yawmi.admin import issue_pairing_code
 from yawmi.ai.consent import InMemoryConsentStore
+from yawmi.ai.memory import InMemoryMemoryStore
 from yawmi.ai.reader import InMemorySessionReader
 from yawmi.ai.service import InsightService
 from yawmi.ai.store import InMemoryInsightStore
@@ -276,6 +277,7 @@ def seed_memory(app: FastAPI, today: date) -> None:
     app.state.sessions = InMemorySessionReader()
     app.state.prefs = InMemoryPrefsStore()
     app.state.ai_consent = InMemoryConsentStore()
+    app.state.ai_memory = InMemoryMemoryStore()
 
 
 _HABIT_COLUMNS = (
