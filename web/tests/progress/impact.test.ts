@@ -86,6 +86,12 @@ describe('impactSentence: the eight sentences of design 9.2', () => {
     expect(impactSentence(item as LateItem)).toBe('متأخرة يومين عن موعدها 2026-11-08. O1: أُنجز 2 من 3 محطة حان موعدها.');
   });
 
+  it('a milestone one day late, and a milestone three days late', () => {
+    const base = { kind: 'milestone', pageId: 'm', title: 'م', dueDate: '2026-11-09', outcomeCode: 'O1', doneDue: 0, totalDue: 1 } as const;
+    expect(impactSentence({ ...base, overdueDays: 1 })).toBe('متأخرة يوماً واحداً عن موعدها 2026-11-09. O1: أُنجز 0 من 1 محطة حان موعدها.');
+    expect(impactSentence({ ...base, overdueDays: 3 })).toBe('متأخرة 3 أيام عن موعدها 2026-11-09. O1: أُنجز 0 من 1 محطة حان موعدها.');
+  });
+
   it('a numeric goal under its pace', () => {
     const item: LateItem = { kind: 'goal_pace', ref: 'O3', title: 'الكتب', current: 2, expected: 3, projected: 8, target: 12 };
     expect(impactSentence(item)).toBe('القيمة 2 والمتوقع اليوم 3. بالوتيرة الحالية يُبلغ 8 من 12 عند الموعد.');

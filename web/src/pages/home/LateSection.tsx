@@ -29,6 +29,25 @@ const keyOf = (item: LateItem): string => {
   }
 };
 
+/** An ISO day or an outcome code inside an Arabic sentence is isolated left to right, so «2026-11-09»
+ *  is not read backwards. The text itself is unchanged. */
+function Sentence({ text }: { text: string }) {
+  const parts = text.split(/(\d{4}-\d{2}-\d{2}|O\d+)/);
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <bdi key={i} dir="ltr">
+            {part}
+          </bdi>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 const LATE = <Badge tone="signal">متأخر</Badge>;
 
 /** One late item: a habit with a check mark (not an abstain habit, which has nothing to tick), a
@@ -41,7 +60,7 @@ function LateRow({ item, onTick }: { item: LateItem; onTick(code: string): void 
         <CheckRow
           checked={false}
           label={item.title}
-          note={sentence}
+          note={<Sentence text={sentence} />}
           badge={LATE}
           hint="تسجيل العادة لهذا اليوم"
           onToggle={() => onTick(item.code)}
@@ -60,7 +79,9 @@ function LateRow({ item, onTick }: { item: LateItem; onTick(code: string): void 
           <span class="late-title">{item.title}</span>
           {LATE}
         </span>
-        <span class="late-sentence">{sentence}</span>
+        <span class="late-sentence">
+          <Sentence text={sentence} />
+        </span>
       </a>
     </li>
   );

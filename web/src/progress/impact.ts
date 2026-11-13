@@ -71,11 +71,16 @@ function counted(n: number, unit: keyof typeof UNIT_NOUN): string {
   return fmt.count(n, UNIT_NOUN[unit]);
 }
 
-/** A number of days after a preposition («في 5 أيام», «في يومين», «في يوم»): the dual is the oblique one. */
+/** A number of days after a preposition («في 5 أيام», «في يومين», «في يوم واحد»): the dual is the oblique one. */
 function daysAfter(n: number): string {
-  if (n === 1) return 'يوم';
+  if (n === 1) return 'يوم واحد';
   if (n === 2) return 'يومين';
   return fmt.count(n, 'day');
+}
+
+/** How late a milestone is, as the object of «متأخرة»: «يوماً واحداً», «يومين», «3 أيام», «11 يوماً». */
+function lateBy(n: number): string {
+  return n === 1 ? 'يوماً واحداً' : daysAfter(n);
 }
 
 const score = (ratio: number): string => fmt.num(Math.round(ratio * 100));
@@ -103,7 +108,7 @@ export function impactSentence(item: LateItem): string {
     case 'abstain_slip':
       return `انزلاق مسجَّل ${item.when === 'today' ? 'اليوم' : 'أمس'}. درجة القوة ${score(item.strengthNow)}، وبدونه ${score(item.strengthWithout)}.`;
     case 'milestone': {
-      const late = `متأخرة ${daysAfter(item.overdueDays)} عن موعدها ${item.dueDate}.`;
+      const late = `متأخرة ${lateBy(item.overdueDays)} عن موعدها ${item.dueDate}.`;
       if (item.outcomeCode === '') return late;
       return `${late} ${item.outcomeCode}: أُنجز ${fmt.num(item.doneDue)} من ${fmt.num(item.totalDue)} محطة حان موعدها.`;
     }
