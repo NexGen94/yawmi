@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 const web = resolve(import.meta.dirname, '..', '..');
 const src = join(web, 'src');
 
-const FILES = ['breath', 'pages/breath', 'charts/BreathBubble.tsx'];
+const FILES = ['breath', 'pages/breath', 'charts/BreathBubble.tsx', 'pages/settings/TargetsSection.tsx'];
 
 function files(path: string): string[] {
   const full = join(src, path);
@@ -29,11 +29,11 @@ function strings(file: string): string[] {
 
 // Imperative verbs of address (masculine or feminine) that a label or sentence must not start with.
 const IMPERATIVE =
-  /(^|[\s«(])(اكتب|اكتبي|اختر|اختاري|أدخل|ادخل|أدخلي|اضغط|اضغطي|انقر|انقري|تأكد|تأكدي|تحقق|تحققي|جرّب|جرب|جربي|حاول|حاولي|أعد|أعيدي|اترك|اتركي|اقرأ|اقرئي|ارجع|ارجعي|افتح|افتحي|أغلق|أغلقي|انتظر|انتظري|تابع|تابعي|اضف|أضف|أضيفي|احفظ|احفظي|احذف|احذفي|توقف|توقفي|ابدأ|ابدئي|استرح|استريحي)(?=[\s»).,:؟؛،]|$)/;
+  /(^|[\s«(])(اكتب|اكتبي|اختر|اختاري|أدخل|ادخل|أدخلي|اضغط|اضغطي|انقر|انقري|تأكد|تأكدي|تحقق|تحققي|جرّب|جرب|جربي|حاول|حاولي|أعد|أعيدي|اترك|اتركي|اقرأ|اقرئي|ارجع|ارجعي|افتح|افتحي|أغلق|أغلقي|انتظر|انتظري|تابع|تابعي|اضف|أضف|أضيفي|احفظ|احفظي|احذف|احذفي|توقف|توقفي|ابدأ|ابدئي|استرح|استريحي|تنفسي|تنفّسي|ازفر|ازفري|اشهق|اشهقي|احبس|احبسي|خذ|خذي|استنشق|استنشقي|أوقف|أوقفي|استمر|استمري)(?=[\s»).,:؟؛،]|$)|^\s*(?:تنفّس|تنفس)(?=[\s»).,:؟؛،]|$)/;
 // Second-person pronouns and verb endings.
-const ADDRESS = /(^|[\s«(])(أنت|أنتِ|لك|لكِ|عليك|عليكِ|بإمكانك|يمكنك|يمكنكِ|تستطيع|تستطيعين|هل تريد|هل تريدين)(?=[\s»).,:؟؛،]|$)/;
+const ADDRESS = /(^|[\s«(])(أنت|أنتِ|لك|لكِ|عليك|عليكِ|بإمكانك|يمكنك|يمكنكِ|تستطيع|تستطيعين|هل تريد|هل تريدين|نفسك|نفسكِ)(?=[\s»).,:؟؛،]|$)/;
 // A mark, a rating, or a claim about health: the tests give a personal number, nothing more.
-const CLAIM = /درجة|صحي|صحة|تشخيص|علاج|مرضي|طبيعي|غير طبيعي|ممتاز|ضعيف/;
+const CLAIM = /درجة|صحي(?!ح)|صحة|تشخيص|علاج|مرضي|طبيعي|غير طبيعي|ممتاز|ضعيف/;
 
 describe('the strings of the breathing page', () => {
   const all = FILES.flatMap(files).filter((f) => /\.(ts|tsx)$/.test(f));
@@ -45,10 +45,21 @@ describe('the strings of the breathing page', () => {
 
   it('the scan catches what it is for (so a pass means something)', () => {
     expect(IMPERATIVE.test("ابدأ الآن")).toBe(true);
+    // The verbs a breathing page is most likely to use, in both forms.
+    for (const text of ['احبس نفسك', 'ازفر ببطء', 'تنفّس بعمق', 'تنفسي ببطء', 'اشهق ثم ازفر', 'خذي نفساً', 'استنشق الهواء', 'أوقفي التمرين', 'استمر في الزفير']) {
+      expect(IMPERATIVE.test(text) || ADDRESS.test(text), text).toBe(true);
+    }
+    expect(ADDRESS.test('احبس نفسك')).toBe(true);
+    expect(ADDRESS.test('حبس النفس')).toBe(false);
+    // Nouns and impersonal sentences that look alike stay clean.
+    for (const text of ['بدء الحبس', 'اختبار حبس النفس', 'جلسة تنفّس', 'يتوقف القياس وحده عند 60 ث', 'يمكن التوقف في أي لحظة', 'انتهاء الزفير']) {
+      expect(IMPERATIVE.test(text) || ADDRESS.test(text), text).toBe(false);
+    }
     expect(IMPERATIVE.test('بدء')).toBe(false);
     expect(ADDRESS.test('يمكنك التوقف')).toBe(true);
     expect(ADDRESS.test('يمكن التوقف في أي لحظة')).toBe(false);
     expect(CLAIM.test('درجة صحية')).toBe(true);
+    expect(CLAIM.test('عدد صحيح')).toBe(false);
   });
 
   it.each(all.map((f) => [f.slice(src.length + 1).replaceAll('\\', '/'), f] as const))('%s has no gendered address', (_name, file) => {

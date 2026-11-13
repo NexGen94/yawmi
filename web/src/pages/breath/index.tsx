@@ -133,12 +133,29 @@ export default function BreathPage() {
 
   const stageRef = useRef(stage);
   stageRef.current = stage;
+  // Leaving the page (in-app navigation) in the middle of a session records it as one that did not
+  // complete, with the seconds that passed and no feeling: the same as «إنهاء». Under a second it was
+  // nothing. A closed tab cannot be waited for, and may still drop it.
   useEffect(
     () => () => {
       const current = stageRef.current;
-      if (current.kind === 'running') current.cue?.close();
+      if (current.kind !== 'running') return;
+      current.cue?.close();
+      const elapsedMs = Date.now() - current.startedMs;
+      if (elapsedMs < 1000) return;
+      record(
+        {
+          kind: 'checkin',
+          pattern: current.pattern,
+          rate: current.rate,
+          startedMs: current.startedMs,
+          elapsedMs,
+          plannedSeconds: current.minutes * 60,
+        },
+        null,
+      );
     },
-    [],
+    [record],
   );
 
   const saveChoice = (): void => {

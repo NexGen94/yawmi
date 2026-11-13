@@ -27,6 +27,9 @@ export interface TimedTestProps {
 
 const seconds = (n: number): string => fmt.count(n, 'second');
 
+/** Shown instead of a result when the test lasted under a second. */
+export const TOO_SHORT = 'المدة أقصر من ثانية، ولم يُسجَّل قياس';
+
 /** A test measured by two taps: the first starts the clock, the second (or the cap of the test)
  *  stops it. The span is the difference of two timestamps, clamped to the cap before anything is
  *  queued. */
@@ -48,11 +51,16 @@ export function TimedTest({ kind, sessions, disabled, startLabel, stopLabel, tai
     // The mean of the tests before this one: a test is not part of its own comparison.
     const mean = personalAverage(known.current, kind);
     const compared = mean === null ? 'لا متوسط شخصي بعد' : `المتوسط الشخصي ${seconds(Math.round(mean))}`;
-    setResult([seconds(spent), compared, tail].filter(Boolean).join(' · '));
     setStartedMs(null);
     onActive(false);
-    // A span under a second is a tap that did not mean to measure: nothing is recorded.
-    if (spent >= 1) onDone(payload);
+    // A span under a second is a tap that did not mean to measure: it is not recorded, and the line
+    // says so instead of showing a result that does not exist.
+    if (spent < 1) {
+      setResult(TOO_SHORT);
+      return;
+    }
+    setResult([seconds(spent), compared, tail].filter(Boolean).join(' · '));
+    onDone(payload);
   };
 
   useEffect(() => {

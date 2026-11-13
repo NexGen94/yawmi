@@ -124,3 +124,28 @@ test('with reduced motion the phase is words and the bubble stays still', async 
   await page.getByRole('button', { name: 'تجاوز' }).click();
   await expectNoSeriousA11y(page);
 });
+
+test('the weekly target set in the settings brings the ring to the breathing page', async ({ paired: page }) => {
+  // The saved choices arrive after the first paint and recolour a segment: without motion there is no
+  // transition for the contrast check to catch half-way.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/settings');
+  const section = page.getByRole('region', { name: 'الأهداف الرقمية' });
+  await expect(section).toBeVisible();
+  const field = section.getByLabel('هدف دقائق التنفّس الأسبوعي');
+  // The server keeps the last run's number: take one that is different, so that there is a change to save.
+  const target = (await field.inputValue()) === '30' ? '31' : '30';
+  await field.fill(target);
+  await expectNoSeriousA11y(page);
+  await shot(page, 'settings-targets');
+  await section.getByRole('button', { name: 'حفظ الأهداف' }).click();
+  await expect(section.getByText('تم الحفظ')).toBeVisible();
+
+  await page.goto('/breath');
+  await expect(page.getByRole('heading', { level: 1, name: 'التنفّس' })).toBeVisible();
+  await expect(page.getByRole('img', { name: /دقائق التنفّس هذا الأسبوع/ })).toBeVisible();
+  await expect(page.locator('.week-minutes')).toContainText(`من ${target}`);
+  await expectNoSeriousA11y(page);
+  await expectNoHorizontalScroll(page);
+  await shot(page, 'breath-ring');
+});

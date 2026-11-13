@@ -18,6 +18,7 @@ import { MemoryList } from './MemoryList';
 import { NotificationsSection } from './NotificationsSection';
 import { ProfileSection } from './ProfileSection';
 import { SessionSection } from './SessionSection';
+import { TargetsSection } from './TargetsSection';
 import { ShortcutsSection } from './ShortcutsSection';
 import './settings.css';
 
@@ -141,6 +142,7 @@ export default function SettingsPage(props: SettingsPageProps) {
           <>
             <DayRemindersSection settings={settings.data} online={!isOffline} onSave={settings.save} />
             <DisplaySection settings={settings.data} online={!isOffline} onSave={settings.save} />
+            <TargetsSection settings={settings.data} online={!isOffline} onSave={settings.save} />
             <AiSection consent={consent} online={!isOffline} />
             <AiStyleSection settings={settings.data} online={!isOffline} onSave={settings.save} />
             <LensesList memory={memory} online={!isOffline} />

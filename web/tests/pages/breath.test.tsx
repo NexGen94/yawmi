@@ -302,6 +302,52 @@ describe('a session: the bubble, the clock, the check-in', () => {
     expect((await breathEvents())[0]?.payload).toMatchObject({ feeling: null, duration_seconds: 60 });
   });
 
+  it('leaving the page mid-session records it as not completed, like «إنهاء», with no feeling', async () => {
+    serve();
+    const view = await openPage();
+    chooseMinutes(5);
+    start();
+    await screen.findByRole('img', { name: /فقاعة التنفّس/ });
+    at(95_000);
+    await act(async () => {
+      view.unmount();
+    });
+    await waitFor(async () => expect(await breathEvents()).toHaveLength(1));
+    const [event] = await breathEvents();
+    expect(event?.payload).toMatchObject({ pattern: 'focus', duration_seconds: 95, completed: false, feeling: null, breaths_per_min: 6 });
+    expect(event?.payload.ended_at).toBe(new Date(NOW + 95_000).toISOString());
+  });
+
+  it('leaving a session of under a second records nothing', async () => {
+    serve();
+    const view = await openPage();
+    start();
+    await screen.findByRole('img', { name: /فقاعة التنفّس/ });
+    at(400);
+    await act(async () => {
+      view.unmount();
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(await breathEvents()).toHaveLength(0);
+  });
+
+  it('a session that was ended and answered is not recorded again by leaving', async () => {
+    serve();
+    const view = await openPage();
+    await playMinute();
+    fireEvent.click(screen.getByRole('button', { name: 'أهدأ' }));
+    await waitFor(async () => expect(await breathEvents()).toHaveLength(1));
+    await act(async () => {
+      view.unmount();
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(await breathEvents()).toHaveLength(1);
+  });
+
   it('ending early is a session that did not complete, with the seconds that passed', async () => {
     serve();
     await openPage();
@@ -564,6 +610,27 @@ describe('the exhale test', () => {
     expect(await screen.findByText('18 ث · لا متوسط شخصي بعد')).toBeTruthy();
   });
 
+  it('a tap of under a second shows no result and records nothing, and says why', async () => {
+    serve();
+    await openPage();
+    fireEvent.click(screen.getByRole('button', { name: 'بدء الزفير' }));
+    at(400);
+    fireEvent.click(screen.getByRole('button', { name: 'انتهاء الزفير' }));
+    expect(await screen.findByText('المدة أقصر من ثانية، ولم يُسجَّل قياس')).toBeTruthy();
+    expect(screen.queryByText(/^0 ث/)).toBeNull();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(await breathEvents()).toHaveLength(0);
+    // And a real test after it works as usual.
+    at(0);
+    fireEvent.click(screen.getByRole('button', { name: 'بدء الزفير' }));
+    at(18_000);
+    fireEvent.click(screen.getByRole('button', { name: 'انتهاء الزفير' }));
+    expect(await screen.findByText('18 ث · لا متوسط شخصي بعد')).toBeTruthy();
+    expect(screen.queryByText('المدة أقصر من ثانية، ولم يُسجَّل قياس')).toBeNull();
+  });
+
   it('a second test is compared with the first one of this visit too', async () => {
     serve();
     await openPage();
@@ -629,6 +696,21 @@ describe('the hold test', () => {
     fireEvent.click(screen.getByRole('button', { name: 'انتهاء الحبس' }));
     await waitFor(async () => expect(await breathEvents()).toHaveLength(1));
     expect((await breathEvents())[0]?.payload.duration_seconds).toBe(30);
+  });
+
+  it('a hold tap of under a second shows no result and records nothing', async () => {
+    serve();
+    await openPage();
+    fireEvent.click(screen.getByRole('button', { name: 'بدء الحبس' }));
+    at(300);
+    fireEvent.click(screen.getByRole('button', { name: 'انتهاء الحبس' }));
+    expect(await screen.findByText('المدة أقصر من ثانية، ولم يُسجَّل قياس')).toBeTruthy();
+    expect(screen.queryByText(/^0 ث/)).toBeNull();
+    expect(document.body.textContent).not.toContain('رقم شخصي');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(await breathEvents()).toHaveLength(0);
   });
 
   it('no text on the page calls the result a score or a health figure', async () => {
