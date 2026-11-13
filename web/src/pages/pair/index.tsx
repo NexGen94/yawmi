@@ -5,6 +5,7 @@ import { navigate } from '../../lib/navigate';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { Field } from '../../ui/Field';
+import './pair.css';
 
 export default function PairPage() {
   const [code, setCode] = useState('');
@@ -62,7 +63,7 @@ export default function PairPage() {
 
       <Card>
         {isOffline && (
-          <div class="pair-notice" role="alert" style={{ marginBottom: '1rem', color: 'var(--c-signal)' }}>
+          <div class="pair-notice" role="alert">
             يحتاج اتصالاً
           </div>
         )}
@@ -88,15 +89,15 @@ export default function PairPage() {
           />
 
           {isNetworkError && (
-            <div role="alert" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
-              <p style={{ color: 'var(--c-signal)' }}>تعذّر الاتصال</p>
+            <div class="pair-error" role="alert">
+              <p class="pair-error-text">تعذّر الاتصال</p>
               <Button variant="quiet" onClick={() => void submit()} disabled={isOffline}>
                 إعادة المحاولة
               </Button>
             </div>
           )}
 
-          <div style={{ marginTop: '1.25rem' }}>
+          <div class="pair-submit">
             <Button
               type="submit"
               variant="primary"
