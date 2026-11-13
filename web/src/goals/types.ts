@@ -10,6 +10,10 @@ export type CycleOut = Schemas['CycleOut'];
 export type GoalIndicatorValue = Schemas['GoalIndicatorValue'];
 export type GoalColumnsIO = Schemas['GoalColumnsIO'];
 export type SettingsOut = Schemas['SettingsOut'];
+export type PaceOut = Schemas['PaceOut'];
+export type GoalTaskOut = Schemas['GoalTaskOut'];
+export type GoalEditOut = Schemas['GoalEditOut'];
+export type CardHabit = Schemas['CardHabit'];
 
 /** The plan ends here (design 4.1, the «الخطة» line). */
 export const PLAN_END = '2031-12-31';
