@@ -78,9 +78,10 @@ def test_required_and_pending_paths_are_the_final_list(exporter: ModuleType) -> 
         "/v1/goal-edits/{edit_id}/cancel",
         "/v1/notion/changes",
         "/v1/notion/changes/{change_id}/result",
+        "/v1/ai/consent",
     }
     required, pending = exporter.REQUIRED_PATHS, exporter.PENDING_PATHS
-    assert len(final) == 35
+    assert len(final) == 36
     assert set(required).isdisjoint(pending)
     assert len(set(required)) == len(required) and len(set(pending)) == len(pending)
     assert set(required) | set(pending) == final
@@ -180,6 +181,18 @@ def test_insight_response_has_no_ref_and_requires_every_property(exporter: Modul
     priority = schemas["Priority"]
     assert set(priority["required"]) == set(priority["properties"])
     assert _refs(priority) == []
+
+
+def test_insight_response_stays_in_the_spec_without_a_path_using_it(exporter: ModuleType) -> None:
+    """R-2: no path returns `InsightResponse` any more (it is the provider's contract), so it is
+    kept in `components.schemas` on purpose through `EXTRA_SCHEMAS`."""
+    from yawmi.ai.schema import InsightResponse
+    from yawmi.openapi_extra import EXTRA_SCHEMAS
+
+    spec = exporter.build_spec()
+    assert "InsightResponse" in spec["components"]["schemas"]
+    assert EXTRA_SCHEMAS.count(InsightResponse) == 1
+    assert "#/components/schemas/InsightResponse" not in json.dumps(spec["paths"])
 
 
 def _enum(schema: dict[str, Any]) -> list[str]:

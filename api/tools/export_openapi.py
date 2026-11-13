@@ -61,6 +61,7 @@ REQUIRED_PATHS: tuple[str, ...] = (
     "/v1/goal-edits/{edit_id}/cancel",
     "/v1/notion/changes",
     "/v1/notion/changes/{change_id}/result",
+    "/v1/ai/consent",
 )
 
 # Not built yet. The task that adds a route moves its path to REQUIRED_PATHS and regenerates

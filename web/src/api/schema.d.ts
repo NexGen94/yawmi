@@ -4,6 +4,31 @@
  */
 
 export interface paths {
+    "/v1/ai/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** الموافقة على إرسال البيانات إلى مزوّد الذكاء الحالي */
+        get: operations["get_consent_v1_ai_consent_get"];
+        /**
+         * منح الموافقة أو تجديدها
+         * @description يُرسل أرقام العادات والأهداف وكلمات اليومية إلى المزوّد الحالي بعد الموافقة. و`personal_text` يضيف «رسالتي» و«رؤيتي». مزوّد غير الحالي 409 `provider_mismatch`. الموافقة بعد السحب تجدّد الصف نفسه.
+         */
+        put: operations["put_consent_v1_ai_consent_put"];
+        post?: never;
+        /**
+         * سحب الموافقة
+         * @description يملأ `revoked_at` ولا يحذف الصف، فتعيد مسارات الذكاء 403 بعده. تكراره بلا أثر.
+         */
+        delete: operations["delete_consent_v1_ai_consent_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ask": {
         parameters: {
             query?: never;
@@ -15,7 +40,7 @@ export interface paths {
         put?: never;
         /**
          * سؤال واحد بجواب من سطرين
-         * @description الجواب لا يستشهد إلا بمصادر الطلب. لا يُحفظ شيء.
+         * @description يرسل العميل السؤال والمدى وحدهما (`7d` افتراضاً، أو `30d`، أو `cycle` للدورة الجارية). يبني الخادم المصادر لذلك المدى، والجواب لا يستشهد إلا بها، ويعود مع بطاقاتها وأيامها. لا يُحفظ شيء. يحتاج موافقة سارية للمزوّد الحالي.
          */
         post: operations["ask_v1_ask_post"];
         delete?: never;
@@ -89,7 +114,7 @@ export interface paths {
         put?: never;
         /**
          * إغلاق اليوم بملخص من سطرين (متكرر الأثر)
-         * @description يستلم ملخصات اليوم ومصادره، ويعيد ملخصاً من سطرين كحد أقصى لا يستشهد إلا بمصادر الطلب. يُقبل اليوم الحالي والأيام السبعة قبله فقط (`day_out_of_window` لما قبلها). أول إغلاق لليوم يُحفظ، وكل تكرار لليوم نفسه يعيده دون استدعاء المزوّد. الملخصات والمصادر يرسلها العميل حالياً إلى أن يبنيها الخادم (المهمتان 8b و10b).
+         * @description يبني الخادم ملخصات اليوم ومصادره من البيانات المخزّنة (سبعة أيام تنتهي باليوم)، ويعيد ملخصاً لا يتجاوز `ai_lines` سطراً لا يستشهد إلا بتلك المصادر، مع بطاقاتها وأيامها. يُقبل اليوم الحالي والأيام السبعة قبله فقط (`day_out_of_window` لما قبلها). أول إغلاق لليوم يُحفظ، وكل تكرار يعيده دون استدعاء المزوّد. ومع `regenerate` يُستدعى المزوّد فقط إن تغيّرت المصادر، ويُستبدل الصف. يحتاج موافقة سارية للمزوّد الحالي.
          */
         post: operations["close_day_v1_day_close_post"];
         delete?: never;
@@ -687,22 +712,15 @@ export interface components {
     schemas: {
         /** AskRequest */
         AskRequest: {
-            /**
-             * Context
-             * @description ملخصات اليوم المجمّعة
-             */
-            context?: {
-                [key: string]: unknown;
-            };
-            /**
-             * Day
-             * Format: date
-             */
-            day: string;
             /** Question */
             question: string;
-            /** Sources */
-            sources?: components["schemas"]["ClientSource"][];
+            /**
+             * Range
+             * @description المدى: سبعة أيام أو ثلاثون أو الدورة الجارية
+             * @default 7d
+             * @enum {string}
+             */
+            range: "7d" | "30d" | "cycle";
         };
         /** BaselineOut */
         BaselineOut: {
@@ -876,17 +894,44 @@ export interface components {
             /** Ok */
             ok: boolean;
         };
-        /**
-         * ClientSource
-         * @description A citable fact from the client, with bounded field sizes.
-         */
-        ClientSource: {
-            /** Id */
-            id: string;
-            /** Kind */
-            kind: string;
-            /** Text */
-            text: string;
+        /** ConsentIn */
+        ConsentIn: {
+            /**
+             * Personal Text
+             * @description إرسال «رسالتي» و«رؤيتي» أيضاً، ومغلق افتراضاً
+             * @default false
+             */
+            personal_text: boolean;
+            /**
+             * Provider
+             * @description المزوّد الحالي، وغيره 409 `provider_mismatch`
+             * @enum {string}
+             */
+            provider: "anthropic" | "deepseek";
+        };
+        /** ConsentOut */
+        ConsentOut: {
+            /**
+             * Granted
+             * @description موافقة سارية لهذا المزوّد
+             */
+            granted: boolean;
+            /**
+             * Granted At
+             * @description وقت الموافقة السارية، أو `null`
+             */
+            granted_at: string | null;
+            /**
+             * Personal Text
+             * @description «رسالتي» و«رؤيتي» مشمولتان
+             */
+            personal_text: boolean;
+            /**
+             * Provider
+             * @description المزوّد الحالي
+             * @enum {string}
+             */
+            provider: "anthropic" | "deepseek";
         };
         /** CycleOut */
         CycleOut: {
@@ -1022,19 +1067,16 @@ export interface components {
         /** DayCloseRequest */
         DayCloseRequest: {
             /**
-             * Context
-             * @description ملخصات اليوم المجمّعة
-             */
-            context?: {
-                [key: string]: unknown;
-            };
-            /**
              * Day
              * Format: date
              */
             day: string;
-            /** Sources */
-            sources?: components["schemas"]["ClientSource"][];
+            /**
+             * Regenerate
+             * @description إعادة التوليد: يُنادى المزوّد فقط إن تغيّرت المصادر عن المخزَّن
+             * @default false
+             */
+            regenerate: boolean;
         };
         /** DayRemindersIO */
         DayRemindersIO: {
@@ -1434,6 +1476,42 @@ export interface components {
              * @description آخر مزامنة لمرآة Notion، أو null إن كانت فارغة
              */
             synced_at: string | null;
+        };
+        /**
+         * GroundedInsight
+         * @description A validated reply with the cards of the sources it cited and their days.
+         */
+        GroundedInsight: {
+            /**
+             * Cards
+             * @description بطاقات المصادر المستشهد بها، بترتيب الاستشهاد
+             */
+            cards: components["schemas"]["SourceCard"][];
+            /**
+             * Days
+             * @description أيام البطاقات المختلفة غير الفارغة، تصاعدياً
+             */
+            days: string[];
+            /**
+             * Lines
+             * @description سطران كحد أقصى
+             */
+            lines: string[];
+            /**
+             * Priorities
+             * @description ثلاث أولويات كحد أقصى
+             */
+            priorities: components["schemas"]["Priority"][];
+            /**
+             * Question
+             * @description سؤال واحد على الأكثر، أو null
+             */
+            question: string | null;
+            /**
+             * Source Ids
+             * @description معرّفات المصادر المعطاة التي استند إليها الرد
+             */
+            source_ids: string[];
         };
         /**
          * HabitDraft
@@ -1889,9 +1967,14 @@ export interface components {
         };
         /**
          * InsightOut
-         * @description A stored insight: the validated reply plus its identity.
+         * @description A stored insight: the grounded reply plus its identity.
          */
         InsightOut: {
+            /**
+             * Cards
+             * @description بطاقات المصادر المستشهد بها، بترتيب الاستشهاد
+             */
+            cards: components["schemas"]["SourceCard"][];
             /**
              * Created At
              * Format: date-time
@@ -1902,6 +1985,11 @@ export interface components {
              * Format: date
              */
             day: string;
+            /**
+             * Days
+             * @description أيام البطاقات المختلفة غير الفارغة، تصاعدياً
+             */
+            days: string[];
             /**
              * Id
              * Format: uuid
@@ -2496,6 +2584,52 @@ export interface components {
             vision?: string;
         };
         /**
+         * SourceCard
+         * @description One cited source as the screen shows it.
+         */
+        SourceCard: {
+            /**
+             * Day
+             * @description يوم المصدر إن كان ليوم واحد
+             */
+            day: string | null;
+            /**
+             * Kind
+             * @description نوع المصدر: habit أو milestone أو outcome أو journal أو …
+             */
+            kind: string;
+            /**
+             * Label
+             * @description اسم قصير للبطاقة
+             */
+            label: string;
+            /**
+             * Source Id
+             * @description معرّف المصدر كما أُرسل إلى المزوّد
+             */
+            source_id: string;
+            /**
+             * Text
+             * @description نص المصدر كما أُرسل
+             */
+            text: string;
+            /**
+             * Trend
+             * @description قيم الأيام السبعة الأخيرة للعادة، وإلا فارغة
+             */
+            trend: (number | null)[];
+            /**
+             * Unit
+             * @description ما يلي الرقم، مثل «من 7»
+             */
+            unit: string | null;
+            /**
+             * Value
+             * @description الرقم الرئيس إن وُجد
+             */
+            value: number | null;
+        };
+        /**
          * StoredEvent
          * @description An event as stored, with the server-side `received_at` that `GET /v1/events` pages by.
          */
@@ -2595,8 +2729,8 @@ export interface components {
             /** Habits Due */
             habits_due: components["schemas"]["HabitDue"][];
             health: components["schemas"]["TodayHealth"];
-            /** @description رؤية الصباح: سطران وحتى ثلاث أولويات بمعرّفات مصادرها. `null` إلى أن تُبنى خدمة توليدها */
-            insight: components["schemas"]["InsightResponse"] | null;
+            /** @description رؤية الصباح المخزّنة لليوم: سطران وحتى ثلاث أولويات بمصادرها، مع بطاقاتها وأيامها. `null` بلا صف `morning` لليوم. لا يُستدعى المزوّد هنا أبداً */
+            insight: components["schemas"]["InsightOut"] | null;
             plan: components["schemas"]["TodayPlan"];
         };
         /** TodayPlan */
@@ -2678,6 +2812,142 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_consent_v1_ai_consent_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    put_consent_v1_ai_consent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description المزوّد المذكور ليس المزوّد الحالي */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    delete_consent_v1_ai_consent_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
     ask_v1_ask_post: {
         parameters: {
             query?: never;
@@ -2697,7 +2967,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InsightResponse"];
+                    "application/json": components["schemas"]["GroundedInsight"];
                 };
             };
             /** @description غير مصرّح */
@@ -2709,13 +2979,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
-            /** @description غير مسموح (رمز الخدمة) */
+            /** @description غير مسموح (رمز الخدمة)، أو لا موافقة سارية (`ai_consent_required`) */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorDetail"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["ErrorDetail"];
                 };
             };
             /** @description طلب غير صالح، أو امتنع النموذج عن الرد */
@@ -2730,14 +3000,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
             };
             /** @description مفتاح المزوّد غير مضبوط */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
             };
         };
     };
@@ -2911,13 +3185,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
-            /** @description غير مسموح (رمز الخدمة) */
+            /** @description غير مسموح (رمز الخدمة)، أو لا موافقة سارية (`ai_consent_required`) */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorDetail"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["ErrorDetail"];
                 };
             };
             /** @description طلب غير صالح، أو امتنع النموذج عن الرد */
@@ -2932,14 +3206,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
             };
             /** @description مفتاح المزوّد غير مضبوط */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
             };
         };
     };
@@ -4586,7 +4864,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
-            /** @description غير مسموح (رمز الخدمة) */
+            /** @description غير مسموح */
             403: {
                 headers: {
                     [name: string]: unknown;

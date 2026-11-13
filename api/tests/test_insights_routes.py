@@ -1,12 +1,16 @@
 """`/v1/day/close`, `/v1/ask`, `/v1/reviews`: auth, validation, provider-error mapping,
-idempotent closure. Providers are `respx` mocks; no network, no real key."""
+idempotent closure. Providers are `respx` mocks; no network, no real key.
+
+Since task 18 the server builds the grounding (the client sends the day, or the question and the
+range): the app below holds one habit and the day's evening journal, and a standing consent."""
 
 import json
 import logging
 import os
 import re
 from collections.abc import AsyncIterator
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
@@ -17,12 +21,21 @@ from fastapi import FastAPI
 from httpx import ASGITransport
 from pydantic import SecretStr
 
+from yawmi.ai.base import PolicyViolation
+from yawmi.ai.consent import InMemoryConsentStore
+from yawmi.ai.reader import InMemorySessionReader
 from yawmi.ai.schema import InsightResponse
+from yawmi.ai.service import InsightService
 from yawmi.ai.store import InMemoryInsightStore, new_insight
 from yawmi.auth.memory_store import InMemoryDeviceStore
 from yawmi.auth.tokens import issue_access
+from yawmi.journal.memory import InMemoryJournalReader
+from yawmi.journal.store import JournalRow
 from yawmi.main import create_app
+from yawmi.prefs.memory import InMemoryPrefsStore
 from yawmi.settings import Settings
+from yawmi.today.memory import InMemoryTodayReader
+from yawmi.today.reader import HabitRow, LogRow
 
 SECRET = "test-secret-for-unit-tests-only-0123456789"
 FAKE_KEY = "fake-anthropic-key-not-real"
@@ -30,16 +43,29 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 DAY = "2026-11-10"  # "today" in Riyadh under the conftest clock (2026-11-10T12:00Z)
 
-SOURCES = [
-    {"id": "habit:water", "kind": "habit", "text": "شرب الماء: 5 من 8 أكواب اليوم"},
-    {"id": "sleep:last", "kind": "sleep", "text": "نوم الليلة الماضية: 6.5 ساعات"},
-]
+EVENING = f"journal:{DAY}:evening"
+WATER = HabitRow(
+    code="water",
+    title_ar="شرب الماء",
+    kind="boolean",
+    unit=None,
+    target_per_period=Decimal(1),
+    period="day",
+    schedule_kind="every_day",
+    weekday_mask=None,
+    every_n=None,
+    anchor_day=None,
+    start_day=date(2026, 10, 31),
+    end_day=None,
+)
 GOOD: dict[str, Any] = {
-    "lines": ["الماء: 5 من 8 أكواب حتى الآن.", "النوم الليلة الماضية: 6.5 ساعات."],
+    "lines": ["الماء: 5 من 7 أيام هذا الأسبوع.", "يومية المساء: يوم هادئ."],
     "question": None,
-    "source_ids": ["habit:water", "sleep:last"],
+    "source_ids": ["habit:water", EVENING],
     "priorities": [{"title": "إكمال أكواب الماء", "source_id": "habit:water"}],
 }
+# an earlier day's close reads the seven days up to it: the evening journal of DAY is not there
+HABIT_ONLY = {**GOOD, "source_ids": ["habit:water"]}
 LEAK = "provider-private-detail-xyz"  # stands for any text a provider might put in an error
 
 
@@ -61,8 +87,21 @@ def make_settings(**overrides: Any) -> Settings:
 
 
 def build_app(**overrides: Any) -> FastAPI:
-    app = create_app(settings=make_settings(**overrides), devices=InMemoryDeviceStore())
+    """The app with the server-side grounding in memory and a standing consent."""
+    settings = make_settings(**overrides)
+    app = create_app(settings=settings, devices=InMemoryDeviceStore())
     app.state.insights_store = InMemoryInsightStore()
+    logs = [LogRow("water", date(2026, 11, d), None, "done") for d in (4, 5, 6, 8, 9)]
+    app.state.today = InMemoryTodayReader(habits=[WATER], logs=logs)
+    when = datetime(2026, 11, 10, 18, 0, tzinfo=UTC)
+    app.state.journal = InMemoryJournalReader(
+        entries=[JournalRow(date(2026, 11, 10), "evening", {"note": "يوم هادئ"}, when)]
+    )
+    app.state.sessions = InMemorySessionReader()
+    app.state.prefs = InMemoryPrefsStore()
+    consents = InMemoryConsentStore()
+    consents.rows[settings.ai_provider] = consents.granted(settings.ai_provider, when)
+    app.state.ai_consent = consents
     return app
 
 
@@ -96,11 +135,11 @@ def anthropic_reply(payload: Any, stop_reason: str = "end_turn") -> httpx.Respon
 
 
 def close_body(**overrides: Any) -> dict[str, Any]:
-    return {"day": DAY, "context": {"habits_done": 5}, "sources": SOURCES, **overrides}
+    return {"day": DAY, **overrides}
 
 
 def ask_body(**overrides: Any) -> dict[str, Any]:
-    return {"day": DAY, "question": "كم كوب ماء شربت؟", "sources": SOURCES, **overrides}
+    return {"question": "كم يوماً شربت الماء؟", **overrides}
 
 
 @pytest.fixture
@@ -140,7 +179,9 @@ async def test_close_returns_the_two_line_summary_and_stores_it(client, app, ant
     assert body["lines"] == GOOD["lines"]
     assert body["kind"] == "evening"
     assert body["day"] == DAY
-    assert body["source_ids"] == ["habit:water", "sleep:last"]
+    assert body["source_ids"] == ["habit:water", EVENING]
+    assert [c["source_id"] for c in body["cards"]] == ["habit:water", EVENING]
+    assert body["days"] == [DAY]
     assert len(body["lines"]) <= 2
     [row] = app.state.insights_store.rows
     assert row.provider == "anthropic"
@@ -151,14 +192,14 @@ async def test_close_returns_the_two_line_summary_and_stores_it(client, app, ant
 async def test_close_twice_calls_the_provider_once_and_returns_the_same_row(client, anthropic):
     route = anthropic.mock(return_value=anthropic_reply(GOOD))
     first = await client.post("/v1/day/close", json=close_body(), headers=auth())
-    again = await client.post("/v1/day/close", json=close_body(context={"x": 1}), headers=auth())
+    again = await client.post("/v1/day/close", json=close_body(), headers=auth())
     assert first.status_code == again.status_code == 200
     assert first.json() == again.json()
     assert route.call_count == 1
 
 
 async def test_close_for_another_day_is_a_new_closure(client, app, anthropic):
-    anthropic.mock(return_value=anthropic_reply(GOOD))
+    anthropic.mock(side_effect=[anthropic_reply(GOOD), anthropic_reply(HABIT_ONLY)])
     await client.post("/v1/day/close", json=close_body(), headers=auth())
     other = await client.post("/v1/day/close", json=close_body(day="2026-11-09"), headers=auth())
     assert other.status_code == 200
@@ -220,7 +261,7 @@ async def test_close_refuses_a_day_older_than_seven_days_without_calling_the_pro
 
 
 async def test_close_accepts_a_day_exactly_seven_days_back(client, app, anthropic):
-    anthropic.mock(return_value=anthropic_reply(GOOD))
+    anthropic.mock(return_value=anthropic_reply(HABIT_ONLY))
     oldest = (date(2026, 11, 10) - timedelta(days=7)).isoformat()
     response = await client.post("/v1/day/close", json=close_body(day=oldest), headers=auth())
     assert response.status_code == 200
@@ -236,14 +277,19 @@ async def test_close_in_the_future_is_still_refused_without_calling_the_provider
     assert route.call_count == 0
 
 
-async def test_close_strips_raw_samples_before_the_provider(client, anthropic):
-    route = anthropic.mock(return_value=anthropic_reply(GOOD))
-    ctx = {"habits_done": 5, "raw_samples": [{"hr": 61, "t": "2026-11-10T01:00:00Z"}]}
-    response = await client.post("/v1/day/close", json=close_body(context=ctx), headers=auth())
+@pytest.mark.parametrize("route", ["/v1/day/close", "/v1/ask"])
+async def test_the_server_grounding_reaches_the_provider_without_raw_samples(
+    client, anthropic, route
+):
+    """Replaces the client-context stripping tests: the client cannot send a context any more,
+    and the context the server builds holds no raw health sample."""
+    mock = anthropic.mock(return_value=anthropic_reply(GOOD))
+    body = ask_body() if route == "/v1/ask" else close_body()
+    response = await client.post(route, json=body, headers=auth())
     assert response.status_code == 200
-    sent = route.calls.last.request.content.decode()
-    assert "raw_samples" not in sent
-    assert "2026-11-10T01:00:00Z" not in sent
+    sent = json.loads(json.loads(mock.calls.last.request.content)["messages"][0]["content"])
+    assert {s["id"] for s in sent["sources"]} == {"habit:water", EVENING}
+    assert "raw_samples" not in json.dumps(sent)
 
 
 # --- ask -------------------------------------------------------------------------------------
@@ -253,7 +299,10 @@ async def test_ask_answers_and_stores_nothing(client, app, anthropic):
     anthropic.mock(return_value=anthropic_reply(GOOD))
     response = await client.post("/v1/ask", json=ask_body(), headers=auth("web"))
     assert response.status_code == 200
-    assert response.json() == GOOD
+    body = response.json()
+    assert {key: body[key] for key in GOOD} == GOOD
+    assert [c["source_id"] for c in body["cards"]] == ["habit:water", EVENING]
+    assert body["days"] == [DAY]
     assert app.state.insights_store.rows == []
 
 
@@ -264,10 +313,14 @@ async def test_ask_rejects_bad_questions(client, question):
     assert response.json()["detail"] == "طلب غير صالح"
 
 
-async def test_ask_rejects_too_many_sources(client):
-    many = [{"id": f"s{i}", "kind": "k", "text": "t"} for i in range(51)]
-    response = await client.post("/v1/ask", json=ask_body(sources=many), headers=auth())
+@pytest.mark.parametrize(
+    "extra", [{"sources": []}, {"context": {}}, {"day": DAY}, {"range": "90d"}]
+)
+async def test_ask_rejects_client_sources_context_day_and_unknown_ranges(client, anthropic, extra):
+    route = anthropic.mock(return_value=anthropic_reply(GOOD))
+    response = await client.post("/v1/ask", json=ask_body(**extra), headers=auth())
     assert response.status_code == 422
+    assert route.call_count == 0
 
 
 # --- provider errors never become a 500 and never leak ----------------------------------------
@@ -307,6 +360,26 @@ async def test_a_transport_error_is_a_502(client, anthropic):
     assert response.json()["errors"][0]["type"] == "ai_unavailable"
 
 
+class _WithholdingProvider:
+    """Stands for any day a server source could carry raw health (none does yet)."""
+
+    async def complete(self, system: str, user: str, schema: dict, model: str) -> dict:
+        raise PolicyViolation("raw health samples must never be sent to DeepSeek")
+
+
+async def test_a_withheld_raw_health_payload_is_still_a_422_without_a_500():
+    """M-6: the `raw_health_not_allowed` mapping stays reachable and tested."""
+    app = build_app()
+    app.state.insights = InsightService(_WithholdingProvider(), app.state.settings)
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.post("/v1/ask", json=ask_body(), headers=auth())
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "لا تُرسل بيانات صحية خام إلى هذا المزوّد",
+        "errors": [{"loc": ["body"], "type": "raw_health_not_allowed"}],
+    }
+
+
 async def test_a_missing_key_is_a_503():
     app = build_app(anthropic_api_key=None)
     async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -315,21 +388,28 @@ async def test_a_missing_key_is_a_503():
     assert response.json()["errors"][0]["type"] == "ai_not_configured"
 
 
-async def test_raw_health_to_deepseek_is_withheld_with_a_422():
+def deepseek_reply(payload: Any) -> httpx.Response:
+    content = json.dumps(payload, ensure_ascii=False)
+    choice = {"index": 0, "message": {"role": "assistant", "content": content}}
+    return httpx.Response(200, json={"id": "c", "choices": [{**choice, "finish_reason": "stop"}]})
+
+
+async def test_deepseek_receives_the_server_grounding_without_raw_health():
+    """Replaces the client `raw_samples` 422: no client context exists any more, and the
+    grounding the server builds never holds raw health samples, even with `send_raw_health`."""
     app = build_app(
         ai_provider="deepseek",
         deepseek_api_key="fake-deepseek-key-not-real",
         send_raw_health=True,
         model_daily="deepseek-chat",
     )
-    ctx = {"raw_samples": [{"hr": 61}]}
     with respx.mock(assert_all_called=False) as mock:
-        route = mock.post(DEEPSEEK_URL)
+        route = mock.post(DEEPSEEK_URL).mock(return_value=deepseek_reply(GOOD))
         async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            response = await c.post("/v1/ask", json=ask_body(context=ctx), headers=auth())
-    assert response.status_code == 422
-    assert response.json()["errors"] == [{"loc": ["body"], "type": "raw_health_not_allowed"}]
-    assert route.call_count == 0
+            response = await c.post("/v1/ask", json=ask_body(), headers=auth())
+    assert response.status_code == 200, response.text
+    assert route.call_count == 1
+    assert "raw_samples" not in route.calls.last.request.content.decode()
 
 
 # --- reviews ---------------------------------------------------------------------------------
@@ -351,8 +431,11 @@ async def test_reviews_default_to_weekly_newest_first(client, app):
     assert [i["day"] for i in items] == ["2026-11-08", "2026-10-25"]
     assert {i["kind"] for i in items} == {"weekly"}
     assert set(items[0]) == {
-        "id", "kind", "day", "created_at", "lines", "question", "source_ids", "priorities"
+        "id", "kind", "day", "created_at", "lines", "question", "source_ids", "priorities",
+        "cards", "days",
     }  # fmt: skip
+    assert items[0]["cards"] == []
+    assert items[0]["days"] == []
 
 
 async def test_reviews_filter_by_kind_limit_and_before(client, app):
@@ -410,25 +493,16 @@ async def test_postgres_store_first_closure_wins_and_lists():
 BAD_TEXTS = [("lone surrogate", "س\ud800س"), ("NUL", "a\x00b")]
 
 
-def _bad_bodies(route: str, text: str) -> list[tuple[dict[str, Any], str]]:
-    base = ask_body if route == "/v1/ask" else close_body
-    bodies: list[tuple[dict[str, Any], str]] = [
-        (base(context={"k": text}), "context"),
-        (base(context={text: 1}), "context"),
-        (base(sources=[{"id": "a", "kind": "k", "text": text}]), "sources"),
-        (base(sources=[{"id": text, "kind": "k", "text": "t"}]), "sources"),
-        (base(sources=[{"id": "a", "kind": text, "text": "t"}]), "sources"),
-    ]
-    if route == "/v1/ask":
-        bodies.append((ask_body(question=text), "question"))
-    return bodies
+def _bad_bodies(text: str) -> list[tuple[dict[str, Any], str]]:
+    """The question is the only free text a client still sends (task 18)."""
+    return [(ask_body(question=text), "question")]
 
 
-@pytest.mark.parametrize("route", ["/v1/ask", "/v1/day/close"])
 @pytest.mark.parametrize(("label", "text"), BAD_TEXTS)
-async def test_unstorable_text_is_a_422_not_a_500(client, anthropic, route, label, text):
+async def test_unstorable_text_is_a_422_not_a_500(client, anthropic, label, text):
+    route = "/v1/ask"
     route_mock = anthropic.mock(return_value=anthropic_reply(GOOD))
-    for body, field in _bad_bodies(route, text):
+    for body, field in _bad_bodies(text):
         raw = json.dumps(body, ensure_ascii=True).encode()  # ascii escapes carry the surrogate
         response = await client.post(
             route, content=raw, headers={**auth(), "Content-Type": "application/json"}
@@ -440,8 +514,6 @@ async def test_unstorable_text_is_a_422_not_a_500(client, anthropic, route, labe
         assert error["loc"][:2] == ["body", field]
         # pydantic itself rejects a lone surrogate in a plain `str` field (string_unicode)
         assert error["type"] in {"text_invalid", "string_unicode"}
-        if field == "context":
-            assert error["type"] == "text_invalid"
     assert route_mock.call_count == 0
 
 
@@ -524,26 +596,10 @@ async def test_oversized_inputs_are_422(client, anthropic):
     route_mock = anthropic.mock(return_value=anthropic_reply(GOOD))
     cases = [
         ("question", "/v1/ask", ask_body(question="س" * 501), ["body", "question"]),
-        ("context", "/v1/ask", ask_body(context={"k": "x" * 20000}), ["body", "context"]),
-        ("context", "/v1/day/close", close_body(context={"k": "x" * 20000}), ["body", "context"]),
-        (
-            "id",
-            "/v1/ask",
-            ask_body(sources=[{"id": "i" * 65, "kind": "k", "text": "t"}]),
-            ["body", "sources", 0, "id"],
-        ),
-        (
-            "kind",
-            "/v1/ask",
-            ask_body(sources=[{"id": "i", "kind": "k" * 33, "text": "t"}]),
-            ["body", "sources", 0, "kind"],
-        ),
-        (
-            "text",
-            "/v1/day/close",
-            close_body(sources=[{"id": "i", "kind": "k", "text": "ن" * 501}]),
-            ["body", "sources", 0, "text"],
-        ),
+        ("range", "/v1/ask", ask_body(range="1y"), ["body", "range"]),
+        ("context", "/v1/day/close", close_body(context={"k": "x"}), ["body", "context"]),
+        ("sources", "/v1/day/close", close_body(sources=[]), ["body", "sources"]),
+        ("regenerate", "/v1/day/close", close_body(regenerate="yes"), ["body", "regenerate"]),
     ]
     for label, route, body, loc in cases:
         response = await client.post(route, json=body, headers=auth())
@@ -553,21 +609,11 @@ async def test_oversized_inputs_are_422(client, anthropic):
 
 
 async def test_caps_allow_the_limits_exactly(client, anthropic):
-    cited = {**GOOD, "source_ids": ["i" * 64], "priorities": []}
-    anthropic.mock(return_value=anthropic_reply(cited))
-    sources = [{"id": "i" * 64, "kind": "k" * 32, "text": "ن" * 500}] * 50
+    anthropic.mock(return_value=anthropic_reply(GOOD))
     response = await client.post(
-        "/v1/ask", json=ask_body(sources=sources, question="س" * 500), headers=auth()
+        "/v1/ask", json=ask_body(question="س" * 500, range="cycle"), headers=auth()
     )
     assert response.status_code == 200
-
-
-async def test_ask_strips_raw_samples_before_the_provider(client, anthropic):
-    route = anthropic.mock(return_value=anthropic_reply(GOOD))
-    ctx = {"raw_samples": [{"t": "2026-11-10T01:00:00Z"}]}
-    response = await client.post("/v1/ask", json=ask_body(context=ctx), headers=auth())
-    assert response.status_code == 200
-    assert "raw_samples" not in route.calls.last.request.content.decode()
 
 
 async def test_the_question_never_reaches_a_log(client, anthropic, caplog):
