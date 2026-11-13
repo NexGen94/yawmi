@@ -48,7 +48,7 @@ function ListSkeleton() {
   return (
     <div class="habits-skeleton">
       <Skeleton blockSize="var(--hit)" inlineSize="260px" />
-      <Skeleton blockSize="var(--hit)" inlineSize="360px" />
+      <Skeleton blockSize="var(--hit)" inlineSize="min(100%, 360px)" />
       <div class="card">
         <Skeleton blockSize="var(--fs-section)" inlineSize="30%" />
         <Skeleton blockSize="var(--hit)" />

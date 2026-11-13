@@ -38,7 +38,10 @@ test('the ask drawer and the consent dialog fit the window', async ({ paired: pa
   await api.send('DELETE', '/v1/ai/consent');
 });
 
-test('the memory reset dialog fits the window', async ({ paired: page }) => {
+test('the memory reset dialog fits the window', async ({ paired: page, api }) => {
+  // «إعادة ضبط كاملة» is off while the memory is empty: one note first.
+  await api.send('DELETE', '/v1/ai/memory');
+  await api.send('POST', '/v1/ai/memory', { kind: 'note', text: 'ملاحظة للاختبار' });
   await page.goto('/settings');
   await page.getByRole('button', { name: 'إعادة ضبط كاملة' }).click();
   const dialog = page.getByRole('dialog', { name: 'إعادة ضبط الذاكرة' });
@@ -46,4 +49,6 @@ test('the memory reset dialog fits the window', async ({ paired: page }) => {
   await expectLayerFits(page);
   await expectNoSeriousA11y(page);
   await shot(page, 'layer-memory-reset');
+  await page.keyboard.press('Escape');
+  await api.send('DELETE', '/v1/ai/memory');
 });

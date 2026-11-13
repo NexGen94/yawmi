@@ -96,7 +96,7 @@ test('the review: the week with its insight, the journal timeline and the mood, 
   await expect(entries.getByRole('list', { name: 'المشاعر' }).first()).toContainText('هدوء');
   await expect(page.getByRole('list', { name: 'ملخص الأشهر' }).getByText(/للوعي الذاتي$/).first()).toBeVisible();
   // the commitment of the month: the habit days kept, as a percent
-  await expect(page.getByRole('list', { name: 'ملخص الأشهر' }).getByText(/^الالتزام بالعادات اليومية: \d+% \(\d+ من \d+\)$/).first()).toBeVisible();
+  await expect(page.getByRole('list', { name: 'ملخص الأشهر' }).getByText(/^الالتزام بالعادات اليومية: .\d+%. \(\d+ من \d+\)$/).first()).toBeVisible();
   await expectNoSeriousA11y(page);
   await expectNoHorizontalScroll(page);
   await shot(page, 'review-journal');
@@ -126,7 +126,9 @@ test('the review: the week with its insight, the journal timeline and the mood, 
   await shot(page, 'review-journal-offline');
   await tab(page, 'الأسبوع');
   await expect(page.getByText('نسخة محفوظة · بلا اتصال')).toBeVisible();
-  await page.getByRole('button', { name: 'إعادة التوليد' }).click();
+  // Offline the button is off and says why: there is nothing to press (Task 24; it used to be pressed
+  // to find out), and no second retry button.
+  await expect(page.getByRole('button', { name: 'إعادة التوليد' })).toBeDisabled();
   await expect(page.getByText('يحتاج اتصالاً')).toBeVisible();
   await expectNoHorizontalScroll(page);
   await shot(page, 'review-week-offline');

@@ -78,6 +78,12 @@ test('pairing, a tick, the evening journal and a question, with the keyboard alo
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/day\/evening$/);
   await expect(page.getByRole('heading', { name: 'يومية المساء' })).toBeVisible();
+  // A day that is already closed opens as a summary: «تعديل الإغلاق» opens the form, by keyboard too.
+  const reopen = page.getByRole('button', { name: 'تعديل الإغلاق' });
+  if (await reopen.isVisible()) {
+    await tabTo(page, reopen);
+    await page.keyboard.press('Enter');
+  }
 
   // The mood group is one tab stop (the chosen step, or the first when none is); the arrows move
   // inside it.

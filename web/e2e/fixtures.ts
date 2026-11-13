@@ -67,6 +67,15 @@ async function pairedApi(request: APIRequestContext): Promise<Api> {
   };
 }
 
+/** The evening form open for writing. A day that is already closed (an earlier test closed it: the two
+ *  projects share one user) opens as a read-only summary with «تعديل الإغلاق»; this opens the form. */
+export async function openEveningForm(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { name: 'يومية المساء' })).toBeVisible();
+  const reopen = page.getByRole('button', { name: 'تعديل الإغلاق' });
+  if (await reopen.isVisible()) await reopen.click();
+  await expect(page.getByRole('button', { name: 'إغلاق اليوم' })).toBeVisible();
+}
+
 /** Today's date in Riyadh, `YYYY-MM-DD`: the plan's day, whatever the machine's zone. */
 export function riyadhToday(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' }).format(new Date());

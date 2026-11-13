@@ -71,6 +71,24 @@ async function failServer(page: Page): Promise<void> {
   });
 }
 
+/** The server answers nothing until `release()` is called (the session's own calls pass): the page
+ *  shows its loading state meanwhile. */
+async function holdServer(page: Page): Promise<() => void> {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/v1/**', async (route: Route) => {
+    const { pathname } = new URL(route.request().url());
+    if (pathname.startsWith('/v1/auth/') || pathname.startsWith('/v1/devices/')) return route.fallback();
+    await gate;
+    return route.fallback();
+  });
+  return () => {
+    release();
+  };
+}
+
 /** The page is controlled by the service worker, so a navigation while offline is served from it. */
 async function waitForServiceWorker(page: Page): Promise<void> {
   await page.evaluate(async () => {
@@ -86,6 +104,16 @@ async function waitForServiceWorker(page: Page): Promise<void> {
 for (const c of CASES) {
   test(`${c.slug}: loaded, server failing, and offline`, async ({ paired: page, context, projectName }) => {
     const path = typeof c.path === 'string' ? c.path : c.path(PROJECT_DATA[projectName].tickCode);
+
+    // Loading: the server holds its answers, the page shows what it shows meanwhile (skeletons).
+    const release = await holdServer(page);
+    await page.goto(path, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+    await expectNoSeriousA11y(page);
+    await expectNoHorizontalScroll(page);
+    await shot(page, `${c.slug}-loading`);
+    release();
+    await page.unroute('**/v1/**');
 
     // As loaded.
     await page.goto(path);

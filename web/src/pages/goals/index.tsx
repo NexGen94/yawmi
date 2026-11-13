@@ -42,7 +42,7 @@ function GoalsSkeleton() {
         <Skeleton blockSize="180px" />
         <Skeleton blockSize="180px" />
       </div>
-      <Skeleton blockSize="var(--hit)" inlineSize="420px" />
+      <Skeleton blockSize="var(--hit)" inlineSize="min(100%, 420px)" />
       <Skeleton blockSize="240px" />
     </div>
   );
