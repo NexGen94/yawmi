@@ -1,3 +1,4 @@
+import { SourceCards } from '../../ai/SourceCards';
 import type { components } from '../../api/schema';
 import { openCountText } from '../../lib/counts';
 import { fmt } from '../../lib/format';
@@ -5,13 +6,16 @@ import { Card } from '../../ui/Card';
 
 type JournalEntryOut = components['schemas']['JournalEntryOut'];
 
-/** The two lines of the AI, with the number of sources they stand on (the source cards come with
- *  the ask page). Always an estimate. */
+/** The two lines of the AI, with the number of sources they stand on and the cards of those
+ *  sources. Always an estimate. */
 export interface SummaryInsight {
   kicker: string;
   lines: string[];
   question: string | null;
   sourceCount: number;
+  /** The cards of the sources and the days they come from (a row older than task 18 has none). */
+  cards?: components['schemas']['SourceCard'][];
+  days?: string[];
 }
 
 export interface DaySummaryProps {
@@ -89,6 +93,7 @@ export function DaySummary({ morning, evening, insight }: DaySummaryProps) {
           ))}
           {insight.question && <p class="summary-line">{insight.question}</p>}
           {insight.sourceCount > 0 && <p class="summary-note">{sourcesText(insight.sourceCount)}</p>}
+          <SourceCards cards={insight.cards ?? []} days={insight.days ?? []} />
         </div>
       )}
     </Card>

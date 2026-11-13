@@ -121,6 +121,13 @@ export const fmt = {
     return dateFormat('gregory', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(date);
   },
 
+  /** An ISO day as a short Gregorian date, without the weekday and the year: "9 نوفمبر". */
+  dayShort(iso: string): string {
+    const date = isoDayToDate(iso);
+    if (!date) return MISSING;
+    return dateFormat('gregory', { day: 'numeric', month: 'long' }).format(date);
+  },
+
   /** An ISO day as an Umm al-Qura date, display only: "16 رمضان 1453 هـ". */
   hijri(iso: string): string {
     const date = isoDayToDate(iso);

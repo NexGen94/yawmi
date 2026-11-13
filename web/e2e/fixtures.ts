@@ -39,6 +39,8 @@ export async function newPairCode(request: APIRequestContext): Promise<string> {
 /** Reads from the API as a device of its own, so a test can check what reached the server. */
 export interface Api {
   get<T>(path: string): Promise<T>;
+  /** A write as the same device (a consent, a deletion): the status is checked, the body returned. */
+  send<T = unknown>(method: 'PUT' | 'POST' | 'DELETE', path: string, data?: unknown): Promise<T>;
 }
 
 async function pairedApi(request: APIRequestContext): Promise<Api> {
@@ -53,6 +55,11 @@ async function pairedApi(request: APIRequestContext): Promise<Api> {
       const read = await request.get(`${API_URL}${path}`, { headers: { Authorization: `Bearer ${token}` } });
       expect(read.ok(), `GET ${path}`).toBe(true);
       return (await read.json()) as T;
+    },
+    async send<T>(method: 'PUT' | 'POST' | 'DELETE', path: string, data?: unknown): Promise<T> {
+      const res = await request.fetch(`${API_URL}${path}`, { method, data, headers: { Authorization: `Bearer ${token}` } });
+      expect(res.ok(), `${method} ${path}`).toBe(true);
+      return (res.status() === 204 ? undefined : await res.json()) as T;
     },
   };
 }
