@@ -18,7 +18,7 @@ from typing import Literal, cast
 
 from pydantic import BaseModel, Field
 
-from yawmi.ai.schema import InsightResponse
+from yawmi.ai.cards import InsightOut
 from yawmi.domain.habits import HabitKind, HabitLog, HabitSpec, adherence, period_progress
 from yawmi.domain.periods import Period, WeekStart, is_scheduled, period_bounds
 from yawmi.domain.scores import DataQuality
@@ -88,9 +88,10 @@ class TodayPlan(BaseModel):
 class TodayOut(BaseModel):
     day: date
     habits_due: list[HabitDue]
-    insight: InsightResponse | None = Field(
+    insight: InsightOut | None = Field(
         description=(
-            "رؤية الصباح: سطران وحتى ثلاث أولويات بمعرّفات مصادرها. `null` إلى أن تُبنى خدمة توليدها"
+            "رؤية الصباح المخزّنة لليوم: سطران وحتى ثلاث أولويات بمصادرها، مع بطاقاتها وأيامها. "
+            "`null` بلا صف `morning` لليوم. لا يُستدعى المزوّد هنا أبداً"
         )
     )
     health: TodayHealth
@@ -120,7 +121,7 @@ def logs_window(day: date, week_start: WeekStart) -> tuple[date, date]:
     return min(week_first, day.replace(day=1)), day
 
 
-def _logs_by_habit(logs: Iterable[LogRow]) -> dict[str, list[HabitLog]]:
+def logs_by_habit(logs: Iterable[LogRow]) -> dict[str, list[HabitLog]]:
     rows: dict[str, list[LogRow]] = defaultdict(list)
     for log in logs:
         rows[log.habit_code].append(log)
@@ -145,7 +146,7 @@ def build_habits_due(
     """
     logs = list(logs)
     today_log = {log.habit_code: log for log in logs if log.day == day}
-    by_habit = _logs_by_habit(logs)
+    by_habit = logs_by_habit(logs)
     due: list[HabitDue] = []
     for row in sorted(habits, key=lambda h: h.code):
         spec = habit_spec(row)
@@ -319,7 +320,7 @@ def build_outcomes(
 
     Completion counts milestones as Notion does (done ÷ all); the habits never change it.
     """
-    by_habit = _logs_by_habit(logs)
+    by_habit = logs_by_habit(logs)
     ref_day = today
     by_outcome: dict[str, list[CardHabit]] = defaultdict(list)
     for row in sorted(habits, key=lambda h: h.code):
@@ -375,7 +376,7 @@ def build_cards(
     `habits` are the linked habits to consider (the route passes the active ones) and `logs`
     their logs up to `today`. The average leaves out habits without a finished period yet.
     """
-    by_habit = _logs_by_habit(logs)
+    by_habit = logs_by_habit(logs)
     milestone_cards: dict[str, tuple[str, ...]] = {
         m.page_id: m.card_page_ids for m in milestones if m.card_page_ids
     }

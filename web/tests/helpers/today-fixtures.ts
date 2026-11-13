@@ -98,6 +98,23 @@ export function todayOut(habits: HabitOut[] = STORY_HABITS, over: Partial<TodayO
   };
 }
 
+/** The stored morning insight of `GET /v1/today` (since task 18 an `InsightOut`: cards and days). */
+export function morningInsight(over: Partial<InsightOut> = {}): InsightOut {
+  return {
+    cards: [],
+    created_at: '2026-11-10T03:00:00Z',
+    day: DAY,
+    days: [],
+    id: '00000000-0000-7000-8000-000000000018',
+    kind: 'morning',
+    lines: [],
+    priorities: [],
+    question: null,
+    source_ids: [],
+    ...over,
+  };
+}
+
 export function morningEntry(over: Record<string, unknown> = {}): JournalEntryOut {
   return {
     day: DAY,

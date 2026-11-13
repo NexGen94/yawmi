@@ -20,6 +20,7 @@ import {
   FREE_1,
   habit,
   morningEntry,
+  morningInsight,
   NOON_RIYADH,
   routeFetch,
   SLEEP_1,
@@ -245,12 +246,12 @@ describe('home: the day summary', () => {
   it('draws the morning insight lines with the number of sources, and says it is an estimate', async () => {
     routeFetch(fetchMock, {
       today: todayOut(STORY_HABITS, {
-        insight: {
+        insight: morningInsight({
           lines: ['إنجاز العادات أعلى في أيام المشي.', 'المحطة O1 متأخرة يومين.'],
           priorities: [],
           question: null,
           source_ids: ['a', 'b'],
-        },
+        }),
       }),
     });
     render(<HomePage />);
@@ -571,7 +572,7 @@ describe('home: details', () => {
     setDigits('arab');
     routeFetch(fetchMock, {
       today: todayOut(STORY_HABITS, {
-        insight: { lines: ['سطر'], priorities: [], question: null, source_ids: ['a', 'b', 'c'] },
+        insight: morningInsight({ lines: ['سطر'], priorities: [], question: null, source_ids: ['a', 'b', 'c'] }),
       }),
       journal: [
         morningEntry({

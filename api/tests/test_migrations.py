@@ -1360,6 +1360,8 @@ STORE_MODULES = (
     "yawmi.goals.reader",
     "yawmi.goals.tasks_store",
     "yawmi.goals.edits_store",
+    "yawmi.ai.consent",
+    "yawmi.ai.reader",
 )
 _SQL_START = re.compile(r"\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b", re.IGNORECASE)
 

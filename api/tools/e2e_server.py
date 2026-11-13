@@ -41,13 +41,17 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from pydantic import BaseModel, SecretStr
 
 from yawmi.admin import issue_pairing_code
+from yawmi.ai.consent import InMemoryConsentStore
+from yawmi.ai.reader import InMemorySessionReader
 from yawmi.ai.service import InsightService
 from yawmi.ai.store import InMemoryInsightStore
 from yawmi.auth.deps import DevicesDep, DeviceStore
 from yawmi.db.migrate import migrate
 from yawmi.db.seed import load_habits, seed_habits
 from yawmi.domain.days import DEFAULT_TZ, day_key
+from yawmi.journal.memory import InMemoryJournalReader
 from yawmi.main import create_app
+from yawmi.prefs.memory import InMemoryPrefsStore
 from yawmi.settings import Settings
 from yawmi.today.memory import InMemoryTodayReader
 from yawmi.today.reader import CardRow, CycleRow, GoalRow, HabitRow, MilestoneRow
@@ -253,7 +257,8 @@ def build_app(settings: Settings, devices: DeviceStore | None = None) -> FastAPI
 
 
 def seed_memory(app: FastAPI, today: date) -> None:
-    """Fill an in-memory app: the habits and the mirror behind `/v1/today` and `/v1/overview`."""
+    """Fill an in-memory app: the habits and the mirror behind `/v1/today` and `/v1/overview`,
+    and the empty stores the server-built AI grounding and the consent read (task 18)."""
     data = mirror(today)
     habits = [*load_habits(), *e2e_habits()]
     app.state.today = InMemoryTodayReader(
@@ -267,6 +272,10 @@ def seed_memory(app: FastAPI, today: date) -> None:
         card_rows=list(data.cards),
     )
     app.state.insights_store = InMemoryInsightStore()
+    app.state.journal = InMemoryJournalReader()
+    app.state.sessions = InMemorySessionReader()
+    app.state.prefs = InMemoryPrefsStore()
+    app.state.ai_consent = InMemoryConsentStore()
 
 
 _HABIT_COLUMNS = (
