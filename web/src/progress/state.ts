@@ -30,7 +30,7 @@ export type HabitStateInput = Pick<
 >;
 
 /** The last scheduled day before `today`, no earlier than the start; null when there is none. */
-function lastScheduledBefore(spec: HabitSpec, today: Day): Day | null {
+export function lastScheduledBefore(spec: HabitSpec, today: Day): Day | null {
   const first = toOrdinal(spec.startDay);
   for (let ord = toOrdinal(today) - 1; ord >= first; ord -= 1) {
     const day = fromOrdinal(ord);
