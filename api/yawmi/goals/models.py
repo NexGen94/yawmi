@@ -2,9 +2,9 @@
 
 `GoalsOut` is the whole picture of the plan: outcomes, cycles, milestones and cards, read from
 the Notion mirror (`raqib.*`) with the habits, tasks and indicators of this service laid over
-them. The mirror is empty until the Notion sync is deployed: every list is then empty and
-`synced_at` is `null`. In this version nothing is pending (`pending == []`, `pending_edits == 0`);
-the layer of pending edits arrives with the edit routes.
+them, and the goal edits over the mirror's values (design §11): `pending` names the fields of a
+page whose shown value is a pending edit, and `pending_edits` counts the pending edits. The mirror
+is empty until the Notion sync is deployed: every list is then empty and `synced_at` is `null`.
 """
 
 from datetime import date, datetime
@@ -74,7 +74,7 @@ class MilestoneFull(BaseModel):
     evidence: str | None
     notion_edited_at: datetime | None
     overdue_days: int | None = Field(description="أيام التأخر عن الموعد لمحطة مفتوحة فات موعدها")
-    pending: list[str] = Field(description="التعديلات المعلّقة (فارغة في هذا الإصدار)")
+    pending: list[str] = Field(description="الحقول التي قيمتها المعروضة تعديل معلّق")
 
 
 class CardFull(BaseModel):
@@ -92,7 +92,7 @@ class CardFull(BaseModel):
     tasks_total: int
     tasks_done: int
     indicator: GoalIndicatorValue
-    pending: list[str]
+    pending: list[str] = Field(description="الحقول التي قيمتها المعروضة تعديل معلّق")
 
 
 class GoalOutcome(BaseModel):
@@ -118,7 +118,7 @@ class GoalsOut(BaseModel):
     milestones: list[MilestoneFull]
     cards: list[CardFull]
     synced_at: datetime | None = Field(description="آخر مزامنة لمرآة Notion، أو null إن كانت فارغة")
-    pending_edits: int
+    pending_edits: int = Field(description="عدد التعديلات المعلّقة التي لم تصل Notion")
 
 
 class PaceReading(BaseModel):

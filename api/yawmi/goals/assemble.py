@@ -9,10 +9,14 @@ The indicator of an outcome or a card is the stored one for that goal if the use
 (`custom`), else the default of design §9.3: milestones if it has any, else linked habits, else
 tasks. A linked habit counts through its completion for the current period, and only while its
 window holds today.
+
+The goal edits are laid over the mirror first (`overlay`, design §11 and ruling 7), so every count,
+completion and overdue day is the one of the values shown, not of the lagging mirror.
 """
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import fields, replace
 from datetime import date, datetime
 
 from yawmi.domain.habits import HabitLog, HabitSpec, period_progress
@@ -40,10 +44,54 @@ from yawmi.goals.tasks_store import TaskCounts
 from yawmi.habits.models import domain_logs
 from yawmi.indicators.compute import default_source, indicator_value
 from yawmi.indicators.models import IndicatorIO
+from yawmi.notion.changes import EDITABLE, GoalEditOut, from_json, shown_value
 from yawmi.today.assemble import build_cards, build_outcomes, habit_spec
 from yawmi.today.reader import CardRow, GoalRow, HabitRow, LogRow, MilestoneRow
 
 NO_TASKS = TaskCounts(0, 0)
+
+
+def overlay[MirrorRow: (MilestoneFullRow, CardFullRow, MilestoneRow, CardRow)](
+    mirror_rows: Sequence[MirrorRow], edits: Sequence[GoalEditOut]
+) -> tuple[list[MirrorRow], dict[str, list[str]]]:
+    """The mirror rows with the edits laid over them, and the pending fields of each page.
+
+    For each edited field, the first rule that holds (ruling 7): a pending edit shows its new
+    value and the field is pending; else the latest applied edit shows while the mirror row's
+    `notion_edited_at` is empty or not after `applied_at`; else the mirror's value. Only the
+    edits of the rows' kind count, and an edit of a field outside `EDITABLE` is ignored.
+
+    Every reader of milestones and cards goes through here (the goals, the pace, the late notice,
+    `/v1/today` and `/v1/overview`), so no screen counts a value another one does not show.
+    A reader whose row type does not carry an edited field (the today reader's milestones have no
+    `evidence`) gets the fields it carries overlaid and the others left out, never an error.
+    """
+    if not mirror_rows:
+        return [], {}
+    kind = "milestone" if hasattr(mirror_rows[0], "done") else "card"
+    carried = {f.name for f in fields(mirror_rows[0])}
+    by_key: dict[tuple[str, str], list[GoalEditOut]] = defaultdict(list)
+    for e in edits:
+        if e.target_kind == kind and e.field in EDITABLE[kind] and e.field in carried:
+            by_key[(e.page_id, e.field)].append(e)
+    fields_of: dict[str, set[str]] = defaultdict(set)
+    for page_id, field in by_key:
+        fields_of[page_id].add(field)
+    rows: list[MirrorRow] = []
+    pending: dict[str, list[str]] = {}
+    for row in mirror_rows:
+        changes: dict[str, object] = {}
+        mine: list[str] = []
+        for field in sorted(fields_of.get(row.page_id, ())):
+            value, is_pending = shown_value(
+                getattr(row, field), row.notion_edited_at, by_key[(row.page_id, field)]
+            )
+            changes[field] = from_json(field, value)
+            if is_pending:
+                mine.append(field)
+        rows.append(replace(row, **changes) if changes else row)  # type: ignore[arg-type]
+        pending[row.page_id] = mine
+    return rows, pending
 
 
 def _milestone_key(m: MilestoneFullRow) -> tuple[bool, date, int, str, str]:
@@ -57,7 +105,7 @@ def overdue_days(m: MilestoneFullRow, today: date) -> int | None:
     return (today - m.due_date).days
 
 
-def _milestone_full(m: MilestoneFullRow, today: date) -> MilestoneFull:
+def _milestone_full(m: MilestoneFullRow, today: date, pending: list[str]) -> MilestoneFull:
     return MilestoneFull(
         page_id=m.page_id,
         title=m.title,
@@ -70,7 +118,7 @@ def _milestone_full(m: MilestoneFullRow, today: date) -> MilestoneFull:
         evidence=m.evidence,
         notion_edited_at=m.notion_edited_at,
         overdue_days=overdue_days(m, today),
-        pending=[],
+        pending=pending,
     )
 
 
@@ -151,8 +199,15 @@ def build_goals(
     stored: Mapping[str, IndicatorIO],
     today: date,
     week_start: WeekStart,
+    edits: Sequence[GoalEditOut] = (),
 ) -> GoalsOut:
-    """The whole read model. `stored` maps a goal reference to the user's indicator for it."""
+    """The whole read model. `stored` maps a goal reference to the user's indicator for it;
+    `edits` are the pending edits and the latest applied one of each field (`EditStore.current`).
+    """
+    milestones, milestone_pending = overlay(
+        milestones, [e for e in edits if e.target_kind == "milestone"]
+    )
+    cards, card_pending = overlay(cards, [e for e in edits if e.target_kind == "card"])
     old_milestones = [
         MilestoneRow(
             m.page_id, m.title, m.outcome_code, m.cycle_no, m.due_date, m.done, m.card_page_ids
@@ -245,15 +300,18 @@ def build_goals(
                     tasks=tasks,
                     stored=stored,
                 ),
-                pending=[],
+                pending=card_pending.get(card.page_id, []),
             )
         )
 
     return GoalsOut(
         outcomes=out_outcomes,
         cycles=[CycleOut(**vars(c)) for c in cycles],
-        milestones=[_milestone_full(m, today) for m in sorted(milestones, key=_milestone_key)],
+        milestones=[
+            _milestone_full(m, today, milestone_pending.get(m.page_id, []))
+            for m in sorted(milestones, key=_milestone_key)
+        ],
         cards=out_cards,
         synced_at=synced_at,
-        pending_edits=0,
+        pending_edits=sum(1 for e in edits if e.status == "pending"),
     )

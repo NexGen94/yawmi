@@ -35,6 +35,7 @@ from zoneinfo import ZoneInfo
 from yawmi.domain.days import is_valid_tz
 from yawmi.domain.habits import HabitLog, HabitSpec, period_progress
 from yawmi.domain.periods import WeekStart, is_scheduled, period_bounds
+from yawmi.goals.edits_store import AsyncpgEditStore
 from yawmi.goals.reader import AsyncpgGoalsReader
 from yawmi.goals.service import GoalSources
 from yawmi.goals.tasks_store import AsyncpgGoalTaskStore
@@ -341,6 +342,7 @@ def start_reminders(pool: Any, config: Any) -> ReminderLoop:
         today=AsyncpgTodayReader(pool),
         tasks=AsyncpgGoalTaskStore(pool),
         indicators=AsyncpgIndicatorStore(pool),
+        edits=AsyncpgEditStore(pool),
     )
 
     async def tick_once(now: datetime) -> int:

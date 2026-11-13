@@ -33,7 +33,7 @@ configs:
       until pg_isready -q; do n=$$((n+1)); [ $$n -lt 60 ] || { echo "yawmi-loader: database not ready"; exit 1; }; sleep 2; done
       PSQL="psql -v ON_ERROR_STOP=1 -v VERBOSITY=terse --no-psqlrc -q"
       base64 -d /yawmi/in/0003.b64 | gunzip -c > /tmp/0003.sql
-      printf '%s  %s\n' 92ae793074edce615d07f259c35e01545944baf229a67495bacdcbc4cb77ed15 /tmp/0003.sql | sha256sum -c -
+      printf '%s  %s\n' ae23f34ef8e6aac1fd1bbd1a68ff3e55283c5d14f405f625a1a837307fbe262a /tmp/0003.sql | sha256sum -c -
       sha256sum /tmp/0003.sql
       sed -i -e '/^[[:space:]]*BEGIN;[[:space:]]*$$/d' -e '/^[[:space:]]*COMMIT;[[:space:]]*$$/d' /tmp/0003.sql
       sed -n '/^REVOKE ALL ON ALL TABLES IN SCHEMA yawmi_ro/,$$p' /tmp/0003.sql > /tmp/grants.sql
@@ -101,19 +101,19 @@ configs:
       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
-      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
+      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
 volumes:
   raqib_secrets:
     name: raqib_secrets
