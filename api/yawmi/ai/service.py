@@ -10,7 +10,10 @@ Guarantees, in order of enforcement:
    sources: a fabricated id is rejected.
 4. The rules of a kind (design §10): a `weekly` reply cites at least two different `journal:*`
    sources in `source_ids` whenever the request holds two or more (the recurring theme and its
-   days), and a `deeper` reply carries its one question.
+   days), and a `deeper` reply carries its one question. The two fixed lines of the prompt
+   (out of scope, rule 9; no data, rule 8) are valid replies of every kind: the line alone,
+   `question` null, nothing cited. Such a reply skips the kind rules, and a `deeper` reply has a
+   null question exactly when it is one of them.
 A rejected reply gets exactly one repair attempt (the same request plus a corrective note); a
 second rejection raises `InsightInvalid`. Refusals and transport errors are not retried.
 
@@ -57,6 +60,10 @@ _CORRECTIONS = {
         " الموضوع المتكرر يُذكر بأيامه من اليوميات."
     ),
     "deeper_question": "الرد السابق بلا سؤال في question؛ نوع deeper سؤال واحد في question.",
+    "fixed_line_alone": (
+        "السطر الثابت («خارج النطاق» أو «لا بيانات كافية») يأتي وحده: question بـnull،"
+        " وsource_ids وpriorities فارغتان."
+    ),
     "empty": "الرد السابق كان فارغاً أو ليس كائن JSON.",
 }
 
@@ -136,17 +143,38 @@ def _cap_reasons(response: InsightResponse, max_lines: int) -> list[str]:
 
 JOURNAL_PREFIX = "journal:"
 MIN_THEME_JOURNALS = 2
+# The two fixed replies of the prompt, word for word (rules 9 and 8 of `ar_system.md`).
+OUT_OF_SCOPE_LINE = "هذا خارج نطاق المتابعة اليومية، والمختص هو المرجع المناسب."
+NO_DATA_LINE = "لا بيانات كافية."
+FIXED_LINES = (OUT_OF_SCOPE_LINE, NO_DATA_LINE)
+
+
+def is_fixed_reply(response: InsightResponse) -> bool:
+    """One of the two fixed lines alone: no question, nothing cited, no priority."""
+    return (
+        len(response.lines) == 1
+        and response.lines[0] in FIXED_LINES
+        and response.question is None
+        and not response.source_ids
+        and not response.priorities
+    )
 
 
 def _kind_reasons(response: InsightResponse, kind: str | None, allowed_ids: set[str]) -> list[str]:
-    """The rules of a kind (design §10) a valid, capped and grounded reply breaks."""
+    """The rules of a kind (design §10) a valid, capped and grounded reply breaks. A fixed reply
+    (out of scope or no data) breaks none."""
+    if is_fixed_reply(response):
+        return []
     if kind == "weekly":
         offered = {i for i in allowed_ids if i.startswith(JOURNAL_PREFIX)}
         cited = {i for i in response.source_ids if i.startswith(JOURNAL_PREFIX)}
         if len(offered) >= MIN_THEME_JOURNALS and len(cited) < MIN_THEME_JOURNALS:
             return ["weekly_theme"]
-    if kind == "deeper" and not (response.question and response.question.strip()):
-        return ["deeper_question"]
+    if kind == "deeper":
+        if any(line in FIXED_LINES for line in response.lines):
+            return ["fixed_line_alone"]
+        if not (response.question and response.question.strip()):
+            return ["deeper_question"]
     return []
 
 
@@ -221,7 +249,7 @@ class InsightService:
         payload = self._payload(req)
         digest = request_hash(payload)
         model = self._model_for(req)
-        allowed_ids = {s["id"] for s in payload["sources"]}
+        allowed_ids = {s["id"] for s in [*payload["sources"], *payload.get("memory", [])]}
         system = load_system_prompt()
         schema = insight_json_schema()
         user = canonical_json(payload)

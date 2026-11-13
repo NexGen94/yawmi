@@ -53,7 +53,12 @@ class DeeperOut(BaseModel):
     """The go-deeper reply (design §7.1): one question and up to three alternative questions.
     Never stored. The provider returns the alternatives in `priorities`; the route moves them."""
 
-    question: str = Field(description="سؤال التأمل، حتى 200 حرف")
+    question: str | None = Field(
+        description=(
+            "سؤال التأمل حتى 200 حرف، و`null` فقط حين يكون الرد أحد السطرين الثابتين: "
+            "«خارج نطاق المتابعة اليومية» أو «لا بيانات كافية»"
+        )
+    )
     options: list[Priority] = Field(
         max_length=3, description="حتى ثلاثة أسئلة بديلة: العنوان حتى 80 حرفاً، ومعه مصدره"
     )

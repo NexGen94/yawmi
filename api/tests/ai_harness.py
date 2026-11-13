@@ -69,6 +69,10 @@ class RecordingProvider:
     def sources(self) -> dict[str, dict[str, Any]]:
         return {s["id"]: s for s in self.payload["sources"]}
 
+    def memory(self) -> dict[str, dict[str, Any]]:
+        """The memory block of the last request (lenses and saved notes), by id."""
+        return {m["id"]: m for m in self.payload.get("memory", [])}
+
 
 def empty_reply(lines: list[str] | None = None) -> dict[str, Any]:
     return {"lines": lines or ["سطر."], "question": None, "source_ids": [], "priorities": []}

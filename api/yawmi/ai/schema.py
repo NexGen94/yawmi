@@ -51,6 +51,8 @@ class InsightRequest(BaseModel):
     context: dict[str, Any] = Field(default_factory=dict)
     sources: list[Source] = Field(default_factory=list)
     question: str | None = None
+    # the visible memory (lenses and saved notes): its own block, outside the source cap
+    memory: list[Source] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _ask_needs_a_question(self) -> Self:

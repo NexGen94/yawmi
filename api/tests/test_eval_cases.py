@@ -295,3 +295,31 @@ def test_the_theme_check_does_not_apply_with_one_journal_in_the_request() -> Non
     }
     result = run_checks(case, reply(["يوم هادئ."], ["journal:2026-11-09:evening"]))
     assert result["pass"], result["reason"]
+
+
+def test_the_manual_pass_mark_allows_at_most_two_misses() -> None:
+    """M-3: 42 of 44, as 28 of 30 allowed two misses."""
+    config = (EVAL_DIR / "promptfooconfig.yaml").read_text(encoding="utf-8")
+    assert "لا أقل من 42 حالة من 44" in config
+
+
+@NEEDS_NODE
+def test_the_eval_run_sends_lenses_and_notes_in_the_memory_block_as_production_does() -> None:
+    """Fix round 1 (I-2): the cases keep their fixed format, and `generate()` moves the
+    `standing_rule` and `memory_note` items into the request's `memory`, as the server does."""
+    tests = node("console.log(JSON.stringify(require(process.argv[1]).generate()))", None)
+    by_case = {t["metadata"]["id"]: json.loads(t["vars"]["request_json"]) for t in tests}
+    assert len(by_case) == 44
+    for request in by_case.values():
+        assert not any(s["kind"] in ("standing_rule", "memory_note") for s in request["sources"])
+        assert all(m["kind"] in ("standing_rule", "memory_note") for m in request["memory"])
+    assert [m["id"] for m in by_case["L01"]["memory"]] == ["rule:numbers"]
+    assert [m["id"] for m in by_case["M11"]["memory"]] == ["note:n1", "rule:lens1"]
+    assert by_case["M01"]["memory"] == []
+    config = next(t for t in tests if t["metadata"]["id"] == "M11")["assert"][0]["config"]
+    assert config["request"]["memory"] == by_case["M11"]["memory"]
+    good = {**GOOD["M11"], "source_ids": ["ms:portfolio", "note:n1"]}  # a note may be cited
+    result = node(
+        RUN, [{"output": json.dumps(good, ensure_ascii=False), "context": {"config": config}}]
+    )
+    assert result[0]["pass"], result[0]["reason"]

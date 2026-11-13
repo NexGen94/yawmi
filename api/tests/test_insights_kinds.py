@@ -198,14 +198,6 @@ async def test_every_day_of_the_week_returns_the_same_weekly_row(
     assert [r["id"] for r in reviews.json()["items"]] == [first.json()["id"]]
 
 
-async def test_the_weekly_range_runs_from_the_week_key_to_the_day(
-    ai: AiBackend, client: httpx.AsyncClient
-) -> None:
-    await consent(client)
-    assert (await post(client, WEEKLY)).status_code == 200
-    assert ai.provider.payload["context"]["span"] == {"first": "2026-11-08", "last": "2026-11-10"}
-
-
 async def test_a_service_token_may_ask_for_the_weekly_insight_only(
     ai: AiBackend, client: httpx.AsyncClient
 ) -> None:
@@ -384,3 +376,161 @@ async def test_a_client_context_or_sources_is_a_422(
     assert resp.status_code == 422
     assert resp.json()["errors"] == [{"loc": ["body", field], "type": "extra_forbidden"}]
     assert ai.provider.calls == []
+
+
+# --- fix round 1, I-1: the out-of-scope and no-data lines are valid replies of every kind -----
+
+OUT_OF_SCOPE = "هذا خارج نطاق المتابعة اليومية، والمختص هو المرجع المناسب."
+NO_DATA = "لا بيانات كافية."
+CLOSE = "/v1/day/close"
+DIAGNOSIS_LENS = "تشخيص حالتي النفسية من اليوميات"
+
+
+def fixed(line: str) -> dict[str, Any]:
+    return {"lines": [line], "question": None, "source_ids": [], "priorities": []}
+
+
+@pytest.mark.parametrize("line", [OUT_OF_SCOPE, NO_DATA])
+@pytest.mark.parametrize("path", [MORNING, CLOSE, WEEKLY])
+async def test_a_fixed_line_is_a_valid_stored_reply_of_every_kind(
+    ai: AiBackend, client: httpx.AsyncClient, path: str, line: str
+) -> None:
+    """Two journals in the week would otherwise call for the theme rule on `weekly`."""
+    await seed_journals(ai, J08, J09)
+    ai.provider.script = [fixed(line)]
+    await consent(client)
+    resp = await post(client, path)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["lines"] == [line]
+    assert resp.json()["source_ids"] == [] and resp.json()["cards"] == []
+    assert len(ai.provider.calls) == 1
+
+
+@pytest.mark.parametrize("line", [OUT_OF_SCOPE, NO_DATA])
+async def test_go_deeper_answers_a_fixed_line_with_a_null_question(
+    ai: AiBackend, client: httpx.AsyncClient, line: str
+) -> None:
+    await seed_day(ai)
+    ai.provider.script = [fixed(line)]
+    await consent(client)
+    resp = await post(client, DEEPER)
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"question": None, "options": [], "source_ids": []}
+    assert len(ai.provider.calls) == 1
+
+
+@pytest.mark.parametrize("path", [WEEKLY, DEEPER])
+async def test_a_diagnosis_lens_is_one_call_and_a_200_never_a_502(
+    ai: AiBackend, client: httpx.AsyncClient, path: str
+) -> None:
+    """The review's probe: a diagnosis lens, two journals in the week, the rule 9 reply."""
+    created = await client.post(
+        "/v1/ai/memory", json={"kind": "rule", "text": DIAGNOSIS_LENS}, headers=auth()
+    )
+    assert created.status_code == 201, created.text
+    await seed_journals(ai, J08, J09)
+    ai.provider.script = [fixed(OUT_OF_SCOPE)]
+    await consent(client)
+    resp = await post(client, path)
+    assert resp.status_code == 200, resp.text
+    assert len(ai.provider.calls) == 1
+
+
+async def test_a_fixed_line_does_not_excuse_a_reply_that_cites_sources(
+    ai: AiBackend, client: httpx.AsyncClient
+) -> None:
+    """Only the exact shape (the line alone, no question, nothing cited) skips the theme rule."""
+    await seed_journals(ai, J08, J09)
+    dodge = {**fixed(OUT_OF_SCOPE), "source_ids": [J08]}
+    ai.provider.script = [dodge, dodge]
+    await consent(client)
+    resp = await post(client, WEEKLY)
+    assert resp.status_code == 502
+    assert len(ai.provider.calls) == 2
+
+
+async def test_go_deeper_with_a_fixed_line_and_a_question_is_repaired(
+    ai: AiBackend, client: httpx.AsyncClient
+) -> None:
+    """The question is null exactly when the reply is one of the two fixed lines."""
+    await seed_day(ai)
+    mixed = {**fixed(NO_DATA), "question": "ما الذي يستحق التأمل؟"}
+    ai.provider.script = [mixed, deeper_reply]
+    await consent(client)
+    resp = await post(client, DEEPER)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["question"]
+    assert len(ai.provider.calls) == 2
+
+
+# --- fix round 1, M-5 and M-6: a changed fingerprint renews a stored morning or weekly row ----
+
+
+async def test_an_early_weekly_row_is_renewed_once_the_week_moves_on(
+    ai: AiBackend, client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "yawmi.events.models.server_now", lambda: datetime(2026, 11, 8, 12, 0, tzinfo=UTC)
+    )
+    await seed_journals(ai, J08)
+    await consent(client)
+    first = await post(client, WEEKLY, day=WEEK_FIRST)
+    assert first.status_code == 200, first.text
+    monkeypatch.setattr(
+        "yawmi.events.models.server_now", lambda: datetime(2026, 11, 10, 12, 0, tzinfo=UTC)
+    )
+    await seed_journals(ai, J09, J10)
+    ai.provider.script = [citing_journals(J09, J10)]
+    later = await post(client, WEEKLY, day=DAY, kind="service")
+    assert later.status_code == 200, later.text
+    assert later.json()["id"] == first.json()["id"]  # renewed in place
+    assert later.json()["source_ids"] == [J09, J10]
+    assert len(ai.provider.calls) == 2
+    [row] = await ai.stored("weekly", WEEK_FIRST)
+    assert row.response.source_ids == [J09, J10]
+    again = await post(client, WEEKLY, day=DAY)
+    assert again.json()["id"] == first.json()["id"]
+    assert len(ai.provider.calls) == 2  # same fingerprint: the stored row
+
+
+async def test_the_weekly_fingerprint_does_not_depend_on_the_day_asked(
+    ai: AiBackend, client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The week's span and its key are fixed, so asking for another day of the same week with
+    the same data is the same request."""
+    monkeypatch.setattr(
+        "yawmi.events.models.server_now", lambda: datetime(2026, 11, 12, 12, 0, tzinfo=UTC)
+    )
+    await seed_journals(ai, J08, J09)
+    ai.provider.script = [citing_journals(J08, J09)]
+    await consent(client)
+    assert (await post(client, WEEKLY, day=WEEK_FIRST)).status_code == 200
+    assert (await post(client, WEEKLY, day=date(2026, 11, 12))).status_code == 200
+    assert len(ai.provider.calls) == 1
+    span = ai.provider.payload["context"]["span"]
+    assert span == {"first": "2026-11-08", "last": "2026-11-14"}
+    assert ai.provider.payload["day"] == "2026-11-08"
+
+
+async def test_a_stored_morning_refusal_is_renewed_after_its_lens_is_removed(
+    ai: AiBackend, client: httpx.AsyncClient
+) -> None:
+    lens = await client.post(
+        "/v1/ai/memory", json={"kind": "rule", "text": DIAGNOSIS_LENS}, headers=auth()
+    )
+    await seed_day(ai)
+    ai.provider.script = [fixed(OUT_OF_SCOPE), three_priorities]
+    await consent(client)
+    refused = await post(client, MORNING)
+    assert refused.json()["lines"] == [OUT_OF_SCOPE]
+    assert (await post(client, MORNING)).json()["lines"] == [OUT_OF_SCOPE]
+    assert len(ai.provider.calls) == 1  # unchanged: the stored row
+    deleted = await client.delete(f"/v1/ai/memory/{lens.json()['id']}", headers=auth())
+    assert deleted.status_code == 204
+    renewed = await post(client, MORNING)
+    assert renewed.status_code == 200, renewed.text
+    assert renewed.json()["id"] == refused.json()["id"]
+    assert renewed.json()["lines"] != [OUT_OF_SCOPE]
+    assert len(ai.provider.calls) == 2
+    today = await client.get("/v1/today", headers=auth())
+    assert today.json()["insight"]["lines"] == renewed.json()["lines"]

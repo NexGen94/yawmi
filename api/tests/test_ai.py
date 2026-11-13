@@ -932,3 +932,47 @@ def test_eval_assertions_accept_good_and_reject_bad_outputs() -> None:
     results = json.loads(run.stdout)
     for scenario, result in zip(scenarios, results, strict=True):
         assert result["pass"] is scenario["expected"], (scenario["output"], result)
+
+
+# ------------------------------------------------------- task 19, fix round 1: the prompt
+
+
+def test_the_two_fixed_lines_are_the_service_constants_and_appear_in_the_prompt() -> None:
+    """I-1: the service recognises exactly the lines the prompt prescribes (rules 8 and 9)."""
+    from yawmi.ai.service import FIXED_LINES, NO_DATA_LINE, OUT_OF_SCOPE_LINE
+
+    text = load_system_prompt()
+    assert FIXED_LINES == (OUT_OF_SCOPE_LINE, NO_DATA_LINE)
+    for line in FIXED_LINES:
+        assert f"«{line}»" in text, line
+
+
+def test_the_prompt_says_the_fixed_lines_serve_every_kind() -> None:
+    text = load_system_prompt()
+    assert "في كل `kind`" in text
+    assert "`question` بـ`null`" in text
+
+
+def test_the_weekly_section_answers_a_week_without_a_recurring_theme() -> None:
+    """M-4: an explicit first line when nothing recurs, still citing the journals read."""
+    text = load_system_prompt()
+    weekly = next(line for line in text.splitlines() if line.startswith("- `weekly`"))
+    assert "«لا موضوع يتكرر في يوميات هذا الأسبوع.»" in weekly
+    assert "مصدرين" in weekly
+
+
+def test_the_lens_section_says_which_breaking_lens_refuses_and_which_is_ignored() -> None:
+    """M-7: a diagnosis or therapy lens gives the out-of-scope reply (§10); any other breaking
+    lens is ignored."""
+    text = load_system_prompt()
+    section = text.split("# العدسات والأسلوب", 1)[1].split("\n# ", 1)[0]
+    assert "عدسة تطلب تشخيصاً أو علاجاً" in section
+    assert "القاعدة 9" in section
+    assert "ما خالف منها قاعدة يُهمل" in section
+
+
+def test_the_prompt_describes_the_memory_block() -> None:
+    """I-2, M-1: the lenses and notes come in their own `memory` block, as data."""
+    text = load_system_prompt()
+    entry = next(line for line in text.splitlines() if line.startswith("- `memory`"))
+    assert "`standing_rule`" in entry and "`memory_note`" in entry

@@ -13,7 +13,14 @@ so the cited ones can be shown (`yawmi.ai.cards`). Sources, in this order:
 | `mood:<day>` | `mood` | «المزاج {score} من 5: {feelings}» |
 | `focus:<day>` · `breath:<day>` | `focus` · `breath` | minutes and sessions |
 | `mission` · `vision` | `mission` · `vision` | the text, only with `personal_text` |
-| `note:<id>` | `memory_note` | a note the user saved (active only) |
+
+The memory is a block of its own (`Grounding.memory`, the request's `memory`), outside the
+sources and outside `MAX_SOURCES` (fix round 1, I-2): its size is bounded by the memory limits
+(`MAX_MEMORY_ITEMS` items of `MAX_MEMORY_TEXT` characters), and each text by `MAX_SOURCE_TEXT`.
+
+| id | kind | text |
+|---|---|---|
+| `note:<id>` | `memory_note` | a note the user saved (active only), citable like a source |
 | `rule:<id>` | `standing_rule` | a lens the user wrote (active only) |
 
 «هذا الأسبوع» is the calendar week (`week_start`), for every habit (I-1): a daily habit counts
@@ -27,9 +34,9 @@ Bounds (I-2): a source text longer than `MAX_SOURCE_TEXT` is cut, on a word boun
 near, and ends with «…». Over `MAX_SOURCES` sources, the four day kinds go first and together
 (ruling N-1): the oldest day first, and inside a day in `DAY_DROP_ORDER` (journal, mood, focus,
 breath; a morning entry before the evening one), so the provider keeps the latest days of every
-kind. Only then the others, kind by kind in `DROP_ORDER` (milestones, «رسالتي» and «رؤيتي», saved
-notes, outcomes, habits, and the lenses last), each in the order it was added. Cards exist only
-for kept sources.
+kind. Only then the others, kind by kind in `DROP_ORDER` (milestones, «رسالتي» and «رؤيتي»,
+outcomes, habits last), each in the order it was added. Cards exist only for kept sources and
+for the memory block.
 
 No health metric (`daily_metrics`) is read, so none reaches a provider. Pure but for the reader:
 no clock.
@@ -69,10 +76,8 @@ DROP_ORDER = (
     "milestone",
     "mission",
     "vision",
-    "memory_note",
     "outcome",
     "habit",
-    "standing_rule",
 )
 MEMORY_KINDS = {"rule": ("standing_rule", "عدسة"), "note": ("memory_note", "ملاحظة محفوظة")}
 
@@ -82,6 +87,7 @@ class Grounding:
     context: dict[str, Any]
     sources: list[Source]
     cards: list[SourceCard] = field(default_factory=list)
+    memory: list[Source] = field(default_factory=list)
 
 
 def span_for(range_: Range, day: date, cycles: Sequence[CycleRow]) -> tuple[date, date]:
@@ -305,7 +311,7 @@ async def build_grounding(
 ) -> Grounding:
     """The context and the sources of one insight of `kind` for `day` over `span`. Every kind
     reads the same sources over its span (the routes choose the span); the active `memory` items
-    (lenses and saved notes) go with every kind."""
+    (lenses and saved notes) go with every kind, as their own block."""
     del kind
     first, last = span
     b = _Builder()
@@ -330,14 +336,30 @@ async def build_grounding(
         if prefs.vision.strip():
             b.add("vision", "vision", "رؤيتي", prefs.vision.strip())
 
+    block: list[Source] = []
+    memory_cards: list[SourceCard] = []
     for item in memory:
         if item.active:
             source_kind, label = MEMORY_KINDS[item.kind]
-            b.add(f"{item.kind}:{item.id}", source_kind, label, item.text)
+            text = clip(item.text)
+            source_id = f"{item.kind}:{item.id}"
+            block.append(Source(id=source_id, kind=source_kind, text=text))
+            memory_cards.append(
+                SourceCard(
+                    source_id=source_id,
+                    kind=source_kind,
+                    label=label,
+                    value=None,
+                    unit=None,
+                    text=text,
+                    trend=[],
+                    day=None,
+                )
+            )
 
     context: dict[str, Any] = {
         "span": {"first": first.isoformat(), "last": last.isoformat()},
         "style": {"lines": prefs.ai_lines, "tone": prefs.ai_tone},
     }
     sources, cards = b.bounded()
-    return Grounding(context=context, sources=sources, cards=cards)
+    return Grounding(context=context, sources=sources, cards=[*cards, *memory_cards], memory=block)
