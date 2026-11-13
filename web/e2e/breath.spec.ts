@@ -141,6 +141,14 @@ test('the weekly target set in the settings brings the ring to the breathing pag
   await section.getByRole('button', { name: 'حفظ الأهداف' }).click();
   await expect(section.getByText('تم الحفظ')).toBeVisible();
 
+  // «1e» is half a number: a number input would hand the page an empty value (read as «no target»,
+  // which would delete the saved one). The field keeps the text, refuses it and holds Save back.
+  await field.fill('1e');
+  await expect(section.getByText('الهدف عدد صحيح من 5 إلى 600 دقيقة')).toBeVisible();
+  await expect(section.getByRole('button', { name: 'حفظ الأهداف' })).toBeDisabled();
+  await page.reload();
+  await expect(section.getByLabel('هدف دقائق التنفّس الأسبوعي')).toHaveValue(target);
+
   await page.goto('/breath');
   await expect(page.getByRole('heading', { level: 1, name: 'التنفّس' })).toBeVisible();
   await expect(page.getByRole('img', { name: /دقائق التنفّس هذا الأسبوع/ })).toBeVisible();

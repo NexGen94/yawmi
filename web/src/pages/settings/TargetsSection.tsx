@@ -66,11 +66,11 @@ export function TargetsSection({ settings, online, onSave }: TargetsSectionProps
         <Field
           key={key}
           label={label}
-          type="number"
+          // A text field, not a number field: a browser gives a number field an empty value for «1e»,
+          // which would read as «no target» and delete the saved one. The raw text is what is checked.
+          type="text"
+          inputMode="numeric"
           value={texts[key]}
-          min={MIN_TARGET}
-          max={MAX_TARGET}
-          step={1}
           hint={`من ${MIN_TARGET} إلى ${MAX_TARGET} دقيقة`}
           error={refused.has(key) ? TARGET_ERROR : undefined}
           disabled={!online}

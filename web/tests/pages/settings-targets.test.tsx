@@ -109,11 +109,31 @@ describe('settings: الأهداف الرقمية', () => {
     expect(patches()).toEqual([{ focus_daily_target_min: 5, breath_weekly_target_min: 600 }]);
   });
 
-  it.each(['4', '601', '0', '-10', '5.5', '12abc', '1e3'])('«%s» is refused before anything is sent, with the reason', async (bad) => {
+  it.each(['4', '601', '0', '-10', '5.5', '12abc', '1e3', '1e', '1.', '-', '٤٥', '٠٥'])('«%s» is refused before anything is sent, with the reason', async (bad) => {
     const section = await open();
     type(section, BREATH, bad);
     expect(within(section).getByText('الهدف عدد صحيح من 5 إلى 600 دقيقة')).toBeTruthy();
     expect(within(section).getByLabelText(BREATH).getAttribute('aria-invalid')).toBe('true');
+    expect(saveButton(section).disabled).toBe(true);
+    save(section);
+    expect(patches()).toEqual([]);
+  });
+
+  it('both fields are text fields with the numeric keyboard, so that a browser keeps what was typed', async () => {
+    // A number input hands the page an empty value for «1e», which would read as «no target» and
+    // delete the saved one. A text field gives the raw text, which is checked as it is.
+    const section = await open();
+    for (const label of [FOCUS, BREATH]) {
+      const field = within(section).getByLabelText(label);
+      expect(field.getAttribute('type')).toBe('text');
+      expect(field.getAttribute('inputmode')).toBe('numeric');
+    }
+  });
+
+  it('«1e» over a saved target is an error and does not clear it', async () => {
+    const section = await open({ breath_weekly_target_min: 45 });
+    type(section, BREATH, '1e');
+    expect(within(section).getByText('الهدف عدد صحيح من 5 إلى 600 دقيقة')).toBeTruthy();
     expect(saveButton(section).disabled).toBe(true);
     save(section);
     expect(patches()).toEqual([]);
