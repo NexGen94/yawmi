@@ -1,0 +1,99 @@
+/* The plant and the hour bars of the focus page. Colors only through the tokens; logical
+   properties only. The plant is drawn for the ink surface of the session card. */
+
+/* ---------- Plant ---------- */
+
+.plant {
+  flex: none;
+  inline-size: 120px;
+  block-size: 120px;
+}
+
+.plant-pot {
+  fill: var(--c-blue);
+}
+
+.plant-seed {
+  fill: var(--c-blue-light);
+}
+
+.plant-stem {
+  fill: none;
+  stroke: var(--c-blue-light);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.plant-leaf {
+  fill: var(--c-blue-light);
+}
+
+.plant-bud {
+  fill: var(--c-bg);
+}
+
+.plant-bud-core {
+  fill: var(--c-ink-2);
+}
+
+/* A part grows from its base when its stage is reached. */
+.plant-part {
+  opacity: 0;
+  transform: scale(0.5);
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transition:
+    opacity 600ms ease-out,
+    transform 600ms ease-out;
+}
+
+.plant-part[data-on='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Less motion, by the page's own reading of the preference (the hook) ... */
+.plant-still .plant-part {
+  transition: none;
+}
+
+/* ... and by the system's (before any script runs). */
+@media (prefers-reduced-motion: reduce) {
+  .plant-part {
+    transition: none;
+  }
+}
+
+/* ---------- Hour bars ---------- */
+
+.hour-bars {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+.hour-base {
+  stroke: var(--c-blue-light);
+  stroke-width: 1;
+}
+
+.hour-bar {
+  fill: var(--c-blue-light);
+}
+
+.hour-bar-top {
+  fill: var(--c-ink);
+}
+
+.hour-value {
+  fill: var(--c-ink);
+  font-size: var(--fs-note);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.hour-tick {
+  fill: var(--c-ink-2);
+  font-size: var(--fs-min);
+  font-variant-numeric: tabular-nums;
+}

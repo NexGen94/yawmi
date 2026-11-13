@@ -292,3 +292,45 @@ describe('logout and the unsent journal drafts', () => {
     expect(await isPaired()).toBe(false);
   });
 });
+
+describe('logout and the running focus session', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    closeDb();
+    Object.assign(globalThis, { indexedDB: new IDBFactory() });
+    clearAccessToken();
+    window.confirm = vi.fn();
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { kvSet } = await import('../../src/data/cache');
+    await kvSet('focus_session', { startedAt: '2026-11-10T09:00:00.000Z', plannedMinutes: 25, goalRef: 'O7', habitCode: 'english' });
+    await kvSet('focus_ending', '2026-11-10T09:12:00.000Z');
+  });
+
+  afterEach(() => {
+    closeDb();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('removes the session and its frozen end after the server confirmed the logout', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await logout();
+    expect(await kvGet('focus_session')).toBeUndefined();
+    expect(await kvGet('focus_ending')).toBeUndefined();
+  });
+
+  it('keeps both when the server refuses the logout', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('Server Error', { status: 500 }));
+    await expect(logout()).rejects.toBeInstanceOf(LogoutError);
+    expect(await kvGet('focus_session')).toBeDefined();
+    expect(await kvGet('focus_ending')).toBeDefined();
+  });
+
+  it('keeps both while offline', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    await expect(logout()).rejects.toBeInstanceOf(LogoutError);
+    expect(await kvGet('focus_session')).toBeDefined();
+  });
+});

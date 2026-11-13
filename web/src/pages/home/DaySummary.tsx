@@ -1,6 +1,7 @@
 import { SourceCards } from '../../ai/SourceCards';
 import type { components } from '../../api/schema';
 import { openCountText } from '../../lib/counts';
+import { focusScore, NO_TARGET, scoreLine } from '../../focus/today';
 import { fmt } from '../../lib/format';
 import { Card } from '../../ui/Card';
 
@@ -22,6 +23,8 @@ export interface DaySummaryProps {
   morning: JournalEntryOut | undefined;
   evening: JournalEntryOut | undefined;
   insight: SummaryInsight | null;
+  /** The minutes of focus today and the target they are measured against (design 9.5). */
+  focus?: { minutes: number; target: number | null };
 }
 
 interface Priority {
@@ -61,9 +64,19 @@ function sourcesText(n: number): string {
   return `استناداً إلى ${fmt.num(n)} مصادر`;
 }
 
-/** The works of the day: the three priorities of the morning, and the AI's two lines with their
- *  sources. The focus score joins them with the focus page. */
-export function DaySummary({ morning, evening, insight }: DaySummaryProps) {
+/** The focus line of the day: «50 · 45 من 90 دقيقة · للوعي الذاتي», or the minutes and what is
+ *  missing when there is no target. Nothing at all when there is neither. */
+function focusLine(focus: DaySummaryProps['focus']): string | null {
+  if (focus === undefined || (focus.minutes <= 0 && focus.target === null)) return null;
+  const score = focusScore(focus.minutes, focus.target);
+  if (score !== null && focus.target !== null) return `درجة التركيز: ${scoreLine(score, focus.minutes, focus.target)}`;
+  return `التركيز: ${fmt.count(focus.minutes, 'minute')} · ${NO_TARGET}`;
+}
+
+/** The works of the day: the three priorities of the morning, the focus score, and the AI's two
+ *  lines with their sources. */
+export function DaySummary({ morning, evening, insight, focus }: DaySummaryProps) {
+  const focusText = focusLine(focus);
   const priorities = prioritiesOf(morning, evening);
   const open = priorities.filter((p) => p.state === 'open').length;
   return (
@@ -83,6 +96,7 @@ export function DaySummary({ morning, evening, insight }: DaySummaryProps) {
           <p class="summary-open">{openCountText(open)}</p>
         </>
       )}
+      {focusText && <p class="summary-line">{focusText}</p>}
       {insight && (
         <div class="summary-insight">
           <p class="summary-kicker">{insight.kicker} · تقدير</p>

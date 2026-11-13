@@ -1,0 +1,250 @@
+/* The focus page (task 23a). Colors only through the tokens; logical properties only. The session
+   card is the ink surface (.hero-card), so its text is --c-bg; two columns on the desktop and one
+   under 900px, in the same order. */
+
+.focus-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.focus-page h1 {
+  margin-block-end: 0;
+}
+
+.focus-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  min-inline-size: 0;
+}
+
+.focus-note {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+/* ---------- The session (ink) ---------- */
+
+.focus-hero .focus-note,
+.focus-hero .focus-sub {
+  color: var(--c-blue-light);
+}
+
+.focus-idle,
+.focus-active,
+.focus-wrapup {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: var(--sp-4);
+}
+
+.focus-saved:empty {
+  display: none;
+}
+
+.focus-saved p,
+.focus-line,
+.focus-sub,
+.focus-name {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+.focus-saved p + p {
+  margin-block-start: var(--sp-1);
+  color: var(--c-blue-light);
+}
+
+.focus-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.focus-link {
+  min-block-size: var(--hit);
+  padding-inline: var(--sp-2);
+  border: 0;
+  background: transparent;
+  color: var(--c-blue-light);
+  font: inherit;
+  font-size: var(--fs-note);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.focus-presets {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: var(--sp-3);
+}
+
+.focus-favorites,
+.focus-templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.focus-visual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-6);
+}
+
+.focus-visual .ring {
+  flex: none;
+}
+
+.focus-figures {
+  min-inline-size: 0;
+}
+
+.focus-name {
+  font-weight: 600;
+}
+
+.focus-clock {
+  margin: var(--sp-1) 0;
+  font-size: var(--fs-num-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  direction: ltr;
+  text-align: start;
+}
+
+.focus-result {
+  font-size: var(--fs-num);
+  font-weight: 600;
+  color: var(--c-bg);
+}
+
+.focus-plant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.focus-wrapup .field,
+.focus-wrapup .segmented {
+  inline-size: min(100%, 420px);
+}
+
+/* ---------- Plans, blocks, score and hours ---------- */
+
+.focus-plan-list,
+.focus-block-list,
+.focus-hours-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-3);
+  padding: 0;
+  list-style: none;
+}
+
+.focus-plan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.focus-plan-text {
+  min-inline-size: 0;
+}
+
+.focus-plan-title {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.focus-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.focus-plan .btn[aria-pressed='true'] {
+  background: var(--c-ink);
+  color: var(--c-surface);
+}
+
+.focus-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-block-start: var(--sp-3);
+}
+
+.focus-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.focus-score-num {
+  margin: 0;
+  font-size: var(--fs-num-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.focus-score-line {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-body);
+  color: var(--c-ink-2);
+}
+
+.focus-score-note {
+  margin: var(--sp-2) 0 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.focus-hours .hour-bars {
+  margin-block-end: var(--sp-2);
+}
+
+.focus-hours-list {
+  font-size: var(--fs-body);
+}
+
+@media (width < 900px) {
+  .focus-col {
+    gap: var(--sp-5);
+  }
+
+  .focus-page {
+    gap: var(--sp-5);
+  }
+
+  .focus-clock {
+    font-size: 44px;
+  }
+
+  .focus-visual {
+    gap: var(--sp-4);
+  }
+}
