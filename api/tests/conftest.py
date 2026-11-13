@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 from ai_harness import ai, ai_client  # noqa: F401  (the fixtures of the AI tests)
+from focus_harness import focus_app, focus_backend, focus_client  # noqa: F401  (focus tests)
 from goals_harness import goals_backend  # noqa: F401  (the fixture of the goals tests)
 
 # The server's "now" for event validation. Fixed so that tests which date events in November

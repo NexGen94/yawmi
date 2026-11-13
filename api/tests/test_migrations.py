@@ -1363,6 +1363,7 @@ STORE_MODULES = (
     "yawmi.ai.consent",
     "yawmi.ai.reader",
     "yawmi.ai.memory",
+    "yawmi.focus.store",
 )
 _SQL_START = re.compile(r"\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b", re.IGNORECASE)
 

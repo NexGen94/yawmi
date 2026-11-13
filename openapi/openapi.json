@@ -117,6 +117,23 @@
             "default": null,
             "title": "Ended At"
           },
+          "feeling": {
+            "anyOf": [
+              {
+                "enum": [
+                  "calmer",
+                  "same",
+                  "tense"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Feeling"
+          },
           "pattern": {
             "maxLength": 64,
             "minLength": 1,
@@ -180,6 +197,112 @@
           "sound"
         ],
         "title": "BreathPrefsIO",
+        "type": "object"
+      },
+      "BreathSessionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BreathSessionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BreathSessionList",
+        "type": "object"
+      },
+      "BreathSessionOut": {
+        "properties": {
+          "breaths_per_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breaths Per Min"
+          },
+          "completed": {
+            "title": "Completed",
+            "type": "boolean"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "feeling": {
+            "anyOf": [
+              {
+                "enum": [
+                  "calmer",
+                  "same",
+                  "tense"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feeling"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "pattern": {
+            "title": "Pattern",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "day",
+          "started_at",
+          "ended_at",
+          "pattern",
+          "breaths_per_min",
+          "duration_seconds",
+          "completed",
+          "feeling"
+        ],
+        "title": "BreathSessionOut",
         "type": "object"
       },
       "CardEdit": {
@@ -1489,6 +1612,442 @@
           }
         },
         "title": "FocusEndedPayload",
+        "type": "object"
+      },
+      "FocusPlanIO": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "favorite": {
+            "default": false,
+            "title": "Favorite",
+            "type": "boolean"
+          },
+          "goal_ref": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Ref"
+          },
+          "habit_code": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Habit Code"
+          },
+          "minutes": {
+            "description": "من 5 إلى 240 دقيقة",
+            "maximum": 240.0,
+            "minimum": 5.0,
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "description": "HH:mm محلياً",
+                "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          },
+          "title_ar": {
+            "maxLength": 80,
+            "title": "Title Ar",
+            "type": "string"
+          },
+          "weekday_mask": {
+            "anyOf": [
+              {
+                "description": "بتّ 0 = الأحد … 6 = السبت",
+                "maximum": 127.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday Mask"
+          }
+        },
+        "required": [
+          "title_ar",
+          "minutes"
+        ],
+        "title": "FocusPlanIO",
+        "type": "object"
+      },
+      "FocusPlanList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FocusPlanOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "FocusPlanList",
+        "type": "object"
+      },
+      "FocusPlanOut": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "favorite": {
+            "default": false,
+            "title": "Favorite",
+            "type": "boolean"
+          },
+          "goal_ref": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Ref"
+          },
+          "habit_code": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Habit Code"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "minutes": {
+            "description": "من 5 إلى 240 دقيقة",
+            "maximum": 240.0,
+            "minimum": 5.0,
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "description": "HH:mm محلياً",
+                "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          },
+          "title_ar": {
+            "maxLength": 80,
+            "title": "Title Ar",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "weekday_mask": {
+            "anyOf": [
+              {
+                "description": "بتّ 0 = الأحد … 6 = السبت",
+                "maximum": 127.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday Mask"
+          }
+        },
+        "required": [
+          "title_ar",
+          "minutes",
+          "id",
+          "updated_at"
+        ],
+        "title": "FocusPlanOut",
+        "type": "object"
+      },
+      "FocusPlanPatch": {
+        "additionalProperties": false,
+        "description": "Any of the fields of `FocusPlanIO`; only the sent ones change. `goal_ref`, `habit_code`\nand the two schedule parts may be sent as `null` (the schedule parts together).",
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "favorite": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Favorite"
+          },
+          "goal_ref": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Ref"
+          },
+          "habit_code": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Habit Code"
+          },
+          "minutes": {
+            "anyOf": [
+              {
+                "description": "من 5 إلى 240 دقيقة",
+                "maximum": 240.0,
+                "minimum": 5.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "description": "HH:mm محلياً",
+                "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          },
+          "title_ar": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Ar"
+          },
+          "weekday_mask": {
+            "anyOf": [
+              {
+                "description": "بتّ 0 = الأحد … 6 = السبت",
+                "maximum": 127.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday Mask"
+          }
+        },
+        "title": "FocusPlanPatch",
+        "type": "object"
+      },
+      "FocusSessionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FocusSessionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "FocusSessionList",
+        "type": "object"
+      },
+      "FocusSessionOut": {
+        "properties": {
+          "actual_minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Minutes"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "focus_rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus Rating"
+          },
+          "goal_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Ref"
+          },
+          "habit_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Habit Code"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Step"
+          },
+          "planned_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Minutes"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "day",
+          "started_at",
+          "ended_at",
+          "planned_minutes",
+          "actual_minutes",
+          "goal_ref",
+          "habit_code",
+          "focus_rating",
+          "next_step"
+        ],
+        "title": "FocusSessionOut",
         "type": "object"
       },
       "FocusStartedPayload": {
@@ -6361,6 +6920,89 @@
         ]
       }
     },
+    "/v1/breath/sessions": {
+      "get": {
+        "description": "الصفوف المسقطة من أحداث `breath_ended` بين `from` و`to` (400 يوم على الأكثر).",
+        "operationId": "list_breath_sessions_v1_breath_sessions_get",
+        "parameters": [
+          {
+            "description": "أول يوم في المدى",
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "description": "أول يوم في المدى",
+              "format": "date",
+              "title": "From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "آخر يوم في المدى",
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "description": "آخر يوم في المدى",
+              "format": "date",
+              "title": "To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreathSessionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "جلسات التنفّس في مدى زمني",
+        "tags": [
+          "breath"
+        ]
+      }
+    },
     "/v1/cards/{page_id}": {
       "patch": {
         "description": "`status` إحدى الحالات الموجودة في بطاقات المرآة، وإلا 422 `status_unknown`: لا حالة جديدة ولا تغيير في المخطط. أي حقل آخر 422 `field_not_editable`. يُكتب تعديلاً معلّقاً بملاحظة مؤرخة. الإغلاق بالحالة، لا حذف.",
@@ -6801,6 +7443,314 @@
         "summary": "استقبال دفعة أحداث (متكررة الأثر)",
         "tags": [
           "events"
+        ]
+      }
+    },
+    "/v1/focus/plans": {
+      "get": {
+        "description": "الفعّالة وحدها افتراضياً، و`all=true` تضيف المعطّلة.",
+        "operationId": "list_plans_v1_focus_plans_get",
+        "parameters": [
+          {
+            "description": "تشمل الخطط المعطّلة",
+            "in": "query",
+            "name": "all",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "تشمل الخطط المعطّلة",
+              "title": "All",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FocusPlanList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "خطط التركيز، المفضلة أولاً",
+        "tags": [
+          "focus"
+        ]
+      },
+      "post": {
+        "description": "`minutes` من 5 إلى 240. `weekday_mask` و`start_time` معاً أو لا شيء. `habit_code` عادة قائمة، وإلا 422 `unknown_habit`.",
+        "operationId": "create_plan_v1_focus_plans_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FocusPlanIO"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FocusPlanOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "إنشاء خطة تركيز",
+        "tags": [
+          "focus"
+        ]
+      }
+    },
+    "/v1/focus/plans/{plan_id}": {
+      "patch": {
+        "description": "تتغيّر الحقول المرسَلة وحدها. لا حذف: `active = false` يخفيها.",
+        "operationId": "patch_plan_v1_focus_plans__plan_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FocusPlanPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FocusPlanOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "الخطة غير موجودة"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "تعديل خطة تركيز أو تعطيلها",
+        "tags": [
+          "focus"
+        ]
+      }
+    },
+    "/v1/focus/sessions": {
+      "get": {
+        "description": "الصفوف المسقطة من أحداث `focus_ended` بين `from` و`to` (400 يوم على الأكثر).",
+        "operationId": "list_sessions_v1_focus_sessions_get",
+        "parameters": [
+          {
+            "description": "أول يوم في المدى",
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "description": "أول يوم في المدى",
+              "format": "date",
+              "title": "From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "آخر يوم في المدى",
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "description": "آخر يوم في المدى",
+              "format": "date",
+              "title": "To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FocusSessionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مصرّح"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "غير مسموح"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorBody"
+                }
+              }
+            },
+            "description": "طلب غير صالح"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "جلسات التركيز في مدى زمني",
+        "tags": [
+          "focus"
         ]
       }
     },

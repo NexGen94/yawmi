@@ -67,6 +67,10 @@ REQUIRED_PATHS: tuple[str, ...] = (
     "/v1/insights/deeper",
     "/v1/ai/memory",
     "/v1/ai/memory/{memory_id}",
+    "/v1/focus/plans",
+    "/v1/focus/plans/{plan_id}",
+    "/v1/focus/sessions",
+    "/v1/breath/sessions",
 )
 
 # Not built yet. The task that adds a route moves its path to REQUIRED_PATHS and regenerates

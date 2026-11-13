@@ -35,6 +35,7 @@ from zoneinfo import ZoneInfo
 from yawmi.domain.days import is_valid_tz
 from yawmi.domain.habits import HabitLog, HabitSpec, period_progress
 from yawmi.domain.periods import WeekStart, is_scheduled, period_bounds
+from yawmi.focus.store import AsyncpgFocusStore
 from yawmi.goals.edits_store import AsyncpgEditStore
 from yawmi.goals.reader import AsyncpgGoalsReader
 from yawmi.goals.service import GoalSources
@@ -178,6 +179,7 @@ async def tick(
     prefs: Any = None,
     journal: Any = None,
     goal_sources: GoalSources | None = None,
+    focus: Any = None,
 ) -> int:
     """Send the reminders due at `now`; returns how many messages the push services accepted."""
     if now.tzinfo is None or now.utcoffset() is None:
@@ -201,6 +203,7 @@ async def tick(
             journal=journal,
             week_start=week_start,
             goal_sources=goal_sources,
+            focus=focus,
         )
         for provider in notices.PROVIDERS:
             try:
@@ -337,6 +340,7 @@ def start_reminders(pool: Any, config: Any) -> ReminderLoop:
 
     prefs = AsyncpgPrefsStore(pool)
     journal = AsyncpgJournalReader(pool)
+    focus = AsyncpgFocusStore(pool)
     goal_sources = GoalSources(
         goals=AsyncpgGoalsReader(pool),
         today=AsyncpgTodayReader(pool),
@@ -356,6 +360,7 @@ def start_reminders(pool: Any, config: Any) -> ReminderLoop:
             prefs=prefs,
             journal=journal,
             goal_sources=goal_sources,
+            focus=focus,
         )
 
     loop = ReminderLoop(tick_once, on_stop=sender.close)

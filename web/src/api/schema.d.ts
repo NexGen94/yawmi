@@ -135,6 +135,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/breath/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * جلسات التنفّس في مدى زمني
+         * @description الصفوف المسقطة من أحداث `breath_ended` بين `from` و`to` (400 يوم على الأكثر).
+         */
+        get: operations["list_breath_sessions_v1_breath_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cards/{page_id}": {
         parameters: {
             query?: never;
@@ -227,6 +247,70 @@ export interface paths {
          * @description حتى 500 حدثاً في الدفعة. معرّف الحدث هو مفتاح التكرار: إعادة إرسال الدفعة نفسها لا تضاعف شيئاً ولا تُرفض. `habit_logged` و`habit_skipped` و`habit_vacation` و`focus_ended` و`breath_ended` تُسقَط أيضاً إلى جداولها؛ بقية الأنواع تُحفظ في الأحداث فقط. للعادة سجل واحد في اليوم أياً كان الجهاز: الحدث الأحدث (`occurred_at`) يحلّ محل قيمة اليوم ولا تُجمع قيم الأجهزة، والحدث الأقدم الواصل متأخراً لا يغيّر شيئاً.
          */
         post: operations["post_events_v1_events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/focus/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * خطط التركيز، المفضلة أولاً
+         * @description الفعّالة وحدها افتراضياً، و`all=true` تضيف المعطّلة.
+         */
+        get: operations["list_plans_v1_focus_plans_get"];
+        put?: never;
+        /**
+         * إنشاء خطة تركيز
+         * @description `minutes` من 5 إلى 240. `weekday_mask` و`start_time` معاً أو لا شيء. `habit_code` عادة قائمة، وإلا 422 `unknown_habit`.
+         */
+        post: operations["create_plan_v1_focus_plans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/focus/plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * تعديل خطة تركيز أو تعطيلها
+         * @description تتغيّر الحقول المرسَلة وحدها. لا حذف: `active = false` يخفيها.
+         */
+        patch: operations["patch_plan_v1_focus_plans__plan_id__patch"];
+        trace?: never;
+    };
+    "/v1/focus/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * جلسات التركيز في مدى زمني
+         * @description الصفوف المسقطة من أحداث `focus_ended` بين `from` و`to` (400 يوم على الأكثر).
+         */
+        get: operations["list_sessions_v1_focus_sessions_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -876,6 +960,11 @@ export interface components {
              * @default null
              */
             ended_at: string | null;
+            /**
+             * Feeling
+             * @default null
+             */
+            feeling: ("calmer" | "same" | "tense") | null;
             /** Pattern */
             pattern: string;
             /**
@@ -897,6 +986,41 @@ export interface components {
             rate: number;
             /** Sound */
             sound: boolean;
+        };
+        /** BreathSessionList */
+        BreathSessionList: {
+            /** Items */
+            items: components["schemas"]["BreathSessionOut"][];
+        };
+        /** BreathSessionOut */
+        BreathSessionOut: {
+            /** Breaths Per Min */
+            breaths_per_min: number | null;
+            /** Completed */
+            completed: boolean;
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Duration Seconds */
+            duration_seconds: number | null;
+            /** Ended At */
+            ended_at: string | null;
+            /** Feeling */
+            feeling: ("calmer" | "same" | "tense") | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Pattern */
+            pattern: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
         };
         /**
          * CardEdit
@@ -1386,6 +1510,137 @@ export interface components {
              * @default null
              */
             started_at: string | null;
+        };
+        /** FocusPlanIO */
+        FocusPlanIO: {
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+            /**
+             * Favorite
+             * @default false
+             */
+            favorite: boolean;
+            /** Goal Ref */
+            goal_ref?: string | null;
+            /** Habit Code */
+            habit_code?: string | null;
+            /**
+             * Minutes
+             * @description من 5 إلى 240 دقيقة
+             */
+            minutes: number;
+            /** Start Time */
+            start_time?: string | null;
+            /** Title Ar */
+            title_ar: string;
+            /** Weekday Mask */
+            weekday_mask?: number | null;
+        };
+        /** FocusPlanList */
+        FocusPlanList: {
+            /** Items */
+            items: components["schemas"]["FocusPlanOut"][];
+        };
+        /** FocusPlanOut */
+        FocusPlanOut: {
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+            /**
+             * Favorite
+             * @default false
+             */
+            favorite: boolean;
+            /** Goal Ref */
+            goal_ref?: string | null;
+            /** Habit Code */
+            habit_code?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Minutes
+             * @description من 5 إلى 240 دقيقة
+             */
+            minutes: number;
+            /** Start Time */
+            start_time?: string | null;
+            /** Title Ar */
+            title_ar: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Weekday Mask */
+            weekday_mask?: number | null;
+        };
+        /**
+         * FocusPlanPatch
+         * @description Any of the fields of `FocusPlanIO`; only the sent ones change. `goal_ref`, `habit_code`
+         *     and the two schedule parts may be sent as `null` (the schedule parts together).
+         */
+        FocusPlanPatch: {
+            /** Active */
+            active?: boolean | null;
+            /** Favorite */
+            favorite?: boolean | null;
+            /** Goal Ref */
+            goal_ref?: string | null;
+            /** Habit Code */
+            habit_code?: string | null;
+            /** Minutes */
+            minutes?: number | null;
+            /** Start Time */
+            start_time?: string | null;
+            /** Title Ar */
+            title_ar?: string | null;
+            /** Weekday Mask */
+            weekday_mask?: number | null;
+        };
+        /** FocusSessionList */
+        FocusSessionList: {
+            /** Items */
+            items: components["schemas"]["FocusSessionOut"][];
+        };
+        /** FocusSessionOut */
+        FocusSessionOut: {
+            /** Actual Minutes */
+            actual_minutes: number | null;
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Focus Rating */
+            focus_rating: number | null;
+            /** Goal Ref */
+            goal_ref: string | null;
+            /** Habit Code */
+            habit_code: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Next Step */
+            next_step: string | null;
+            /** Planned Minutes */
+            planned_minutes: number | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
         };
         /** FocusStartedPayload */
         FocusStartedPayload: {
@@ -3574,6 +3829,58 @@ export interface operations {
             };
         };
     };
+    list_breath_sessions_v1_breath_sessions_get: {
+        parameters: {
+            query: {
+                /** @description أول يوم في المدى */
+                from: string;
+                /** @description آخر يوم في المدى */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreathSessionList"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
     edit_card_v1_cards__page_id__patch: {
         parameters: {
             query?: never;
@@ -3884,6 +4191,221 @@ export interface operations {
                 };
             };
             /** @description طلب غير صالح: الدفعة تُرفض كاملة */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    list_plans_v1_focus_plans_get: {
+        parameters: {
+            query?: {
+                /** @description تشمل الخطط المعطّلة */
+                all?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FocusPlanList"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    create_plan_v1_focus_plans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FocusPlanIO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FocusPlanOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    patch_plan_v1_focus_plans__plan_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FocusPlanPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FocusPlanOut"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description الخطة غير موجودة */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorBody"];
+                };
+            };
+        };
+    };
+    list_sessions_v1_focus_sessions_get: {
+        parameters: {
+            query: {
+                /** @description أول يوم في المدى */
+                from: string;
+                /** @description آخر يوم في المدى */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FocusSessionList"];
+                };
+            };
+            /** @description غير مصرّح */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description غير مسموح */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description طلب غير صالح */
             422: {
                 headers: {
                     [name: string]: unknown;
