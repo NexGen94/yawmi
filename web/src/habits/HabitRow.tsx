@@ -23,7 +23,7 @@ export interface HabitRowProps {
 }
 
 /** The quick increment of a count or duration habit, and how it is read aloud. */
-const STEP: Record<HabitUnit, { step: number; noun: string }> = {
+export const STEP: Record<HabitUnit, { step: number; noun: string }> = {
   min: { step: 5, noun: 'دقائق' },
   hour: { step: 0.5, noun: 'ساعة' },
   session: { step: 1, noun: 'جلسة' },
