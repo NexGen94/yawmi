@@ -85,9 +85,9 @@ test('the indicator card is on the page of a goal, with its dialog', async ({ pa
   await expect(dialog).toBeHidden();
 });
 
-// The milestone of the card «بطاقة النظام» is due in 30 days: the test brings it a day or two into
+// The milestone «اختبار تحديد المستوى» (O7) is due in 20 days: the test brings it a day or two into
 // the past, and the home page lists it as late with its sentence.
-const MILESTONE = 'e2e-ms-5';
+const MILESTONE = 'e2e-ms-3';
 const DAYS_LATE = { desktop: 1, mobile: 2 } as const;
 
 test('a milestone past its day is listed as late on the home page with its impact sentence', async ({
@@ -97,7 +97,7 @@ test('a milestone past its day is listed as late on the home page with its impac
   const late = DAYS_LATE[projectName];
   const day = plusDays(riyadhToday(), -late);
 
-  await page.goto('/goals/O3');
+  await page.goto('/goals/O7');
   const row = page.locator(`[data-milestone="${MILESTONE}"]`);
   await expect(row).toBeVisible();
   await row.getByRole('button', { name: /^تعديل الموعد/ }).click();
@@ -107,7 +107,7 @@ test('a milestone past its day is listed as late on the home page with its impac
 
   await page.goto('/');
   const section = page.getByRole('region', { name: 'المتأخر وغير المنجز' });
-  const item = section.getByRole('listitem').filter({ hasText: 'نسخة احتياطية أولى' });
+  const item = section.getByRole('listitem').filter({ hasText: 'اختبار تحديد المستوى' });
   await expect(item).toBeVisible();
   await expect(item).toContainText('متأخر');
   await expect(item).toContainText(`${late === 1 ? 'يوماً واحداً' : 'يومين'} عن موعدها ${day}`);
