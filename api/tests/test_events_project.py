@@ -583,6 +583,26 @@ def test_breath_ended_defaults() -> None:
     assert intent.duration_seconds is None
 
 
+@pytest.mark.parametrize("feeling", ["calmer", "same", "tense"])
+def test_breath_ended_carries_the_feeling_of_the_closed_set(feeling: str) -> None:
+    intent = project_event(ev("breath_ended", {"pattern": "calm", "feeling": feeling}), "web")
+    assert isinstance(intent, BreathSession)
+    assert intent.feeling == feeling
+
+
+def test_breath_ended_feeling_defaults_to_none() -> None:
+    intent = project_event(ev("breath_ended", {"pattern": "box"}), "web")
+    assert isinstance(intent, BreathSession)
+    assert intent.feeling is None
+
+
+@pytest.mark.parametrize("feeling", ["great", "", "CALMER", 1])
+def test_breath_ended_refuses_a_feeling_outside_the_set(feeling: object) -> None:
+    with pytest.raises(ValidationError) as exc:
+        ev("breath_ended", {"pattern": "calm", "feeling": feeling})
+    assert "invalid_payload" in error_types(exc)
+
+
 def test_breath_started_at_is_derived_from_the_duration() -> None:
     intent = project_event(ev("breath_ended", {"pattern": "box", "duration_seconds": 90}), "watch")
     assert isinstance(intent, BreathSession)
@@ -713,3 +733,46 @@ def test_goal_task_set_projects_task_mark() -> None:
         done=True,
         logged_at=OCCURRED_AT,
     )
+
+
+# --- breath safety limits (design §7.5 and §9.5, ruling م5) ------------------------------------
+
+
+def breath_limit_refused(payload: dict[str, Any]) -> bool:
+    try:
+        ev("breath_ended", payload)
+    except ValidationError as exc:
+        assert "breath_limit" in str(exc), exc
+        return True
+    return False
+
+
+@pytest.mark.parametrize(("pattern", "cap"), [("hold_test", 30), ("exhale_test", 60)])
+def test_the_tests_stop_at_their_cap(pattern: str, cap: int) -> None:
+    assert not breath_limit_refused({"pattern": pattern, "duration_seconds": cap})
+    assert breath_limit_refused({"pattern": pattern, "duration_seconds": cap + 1})
+
+
+def test_the_reviewers_probes_are_refused() -> None:
+    assert breath_limit_refused({"pattern": "hold_test", "duration_seconds": 600})
+    assert breath_limit_refused({"pattern": "calm", "breaths_per_min": 20})
+
+
+@pytest.mark.parametrize("pattern", ["calm", "focus", "sleep", "energize", "unwind", "prepare"])
+def test_a_named_pattern_breathes_between_5_and_6_5_a_minute(pattern: str) -> None:
+    for ok in (5, 5.5, 6, 6.5):
+        assert not breath_limit_refused({"pattern": pattern, "breaths_per_min": ok})
+    for bad in (4.999, 6.501, 7, 20):
+        assert breath_limit_refused({"pattern": pattern, "breaths_per_min": bad})
+
+
+@pytest.mark.parametrize("pattern", ["box", "4-7-8", "my_custom"])
+def test_free_text_patterns_keep_their_old_freedom(pattern: str) -> None:
+    for rate in (1, 20, 60):
+        assert not breath_limit_refused({"pattern": pattern, "breaths_per_min": rate})
+    assert not breath_limit_refused({"pattern": pattern, "duration_seconds": 3600})
+
+
+def test_a_limited_pattern_without_the_measure_is_accepted() -> None:
+    assert not breath_limit_refused({"pattern": "hold_test"})
+    assert not breath_limit_refused({"pattern": "calm"})

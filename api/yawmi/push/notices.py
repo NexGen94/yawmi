@@ -4,7 +4,7 @@ A provider is `async (ctx, now) -> list[Notice]`. Each `tick` calls every provid
 `PROVIDERS`; a notice is sent once per `(kind, ref, day)`, `day` being the day it belongs to (a
 reminder at 23:55 still due at 00:02 belongs to the day before), claimed in `notice_sends`.
 This module holds the day reminders (morning, evening, weekly review), the goal indicator
-reminders and the daily late summary.
+reminders, the daily late summary and the focus plan reminders.
 
 The last two need the goals: `NoticeContext.goal_sources` (a `GoalSources`) carries the mirror,
 the habits and logs, the tasks and the stored indicators; without it they say nothing.
@@ -54,6 +54,7 @@ class NoticeContext:
     journal: Any  # JournalReader
     week_start: WeekStart
     goal_sources: GoalSources | None = None
+    focus: Any = None  # FocusStore
 
 
 NoticeProvider = Callable[[NoticeContext, datetime], Awaitable[list[Notice]]]
@@ -234,8 +235,41 @@ async def late_summary_notices(ctx: NoticeContext, now: datetime) -> list[Notice
     return [Notice("late_summary", "daily", days[0], body, "/")]
 
 
+# a focus session that began this close to a plan's start time is the plan being kept
+FOCUS_STARTED_NEAR = timedelta(minutes=30)
+
+
+async def _focus_began_near(focus: Any, day: date, at: time, local: datetime) -> bool:
+    start = datetime.combine(day, at, local.tzinfo)
+    return await focus.started_between(start - FOCUS_STARTED_NEAR, start + FOCUS_STARTED_NEAR)
+
+
+async def focus_plan_notices(ctx: NoticeContext, now: datetime) -> list[Notice]:
+    """One notice for each active scheduled focus plan whose start time has just come.
+
+    The body is «كتلة تركيز: {العنوان}» and it opens `/focus?plan=<id>`. Nothing is said when a
+    focus session already began within half an hour of the start (before or after it): the block
+    is being kept.
+    """
+    if ctx.focus is None:
+        return []
+    found: list[Notice] = []
+    for plan in await ctx.focus.plans():
+        if plan.weekday_mask is None or plan.start_time is None:
+            continue
+        hour, minute = map(int, plan.start_time.split(":"))
+        at = time(hour, minute)
+        for day in due_days(at, plan.weekday_mask, ctx.local):
+            if await _focus_began_near(ctx.focus, day, at, ctx.local):
+                continue
+            body = f"كتلة تركيز: {plan.title_ar}"
+            found.append(Notice("focus_plan", str(plan.id), day, body, f"/focus?plan={plan.id}"))
+    return found
+
+
 PROVIDERS: list[NoticeProvider] = [
     day_reminder_notices,
     goal_indicator_notices,
     late_summary_notices,
+    focus_plan_notices,
 ]

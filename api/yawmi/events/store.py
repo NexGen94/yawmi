@@ -148,9 +148,9 @@ ON CONFLICT (id) DO NOTHING
 _INSERT_BREATH = """
 INSERT INTO yawmi.breath_sessions (
   id, device_id, day, started_at, ended_at, pattern,
-  breaths_per_min, duration_seconds, completed, event_id
+  breaths_per_min, duration_seconds, completed, feeling, event_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $1)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $1)
 ON CONFLICT (id) DO NOTHING
 """
 
@@ -242,6 +242,7 @@ def breath_args(intent: BreathSession, device_id: UUID) -> tuple[object, ...]:
         intent.breaths_per_min,
         intent.duration_seconds,
         intent.completed,
+        intent.feeling,
     )
 
 

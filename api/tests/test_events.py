@@ -1459,7 +1459,9 @@ def test_the_sql_parameters_match_the_arguments_built_for_them() -> None:
     breath = BreathSession(event_id, date(2026, 11, 10), at, at, "box", None, None, True)
     assert placeholders(_UPSERT_HABIT_LOG) == len(habit_log_args(log)) == 8
     assert placeholders(_INSERT_FOCUS) == len(focus_args(focus, device_id)) == 11
-    assert placeholders(_INSERT_BREATH) == len(breath_args(breath, device_id)) == 9
+    assert (
+        placeholders(_INSERT_BREATH) == len(breath_args(breath, device_id)) == 10
+    )  # +feeling (task 22)
 
 
 def test_upsert_habit_log_sql_is_one_row_per_day_and_newest_wins() -> None:

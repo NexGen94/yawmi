@@ -184,6 +184,7 @@ describe('event helpers', () => {
       pattern: 'box',
       started_at: null,
       breaths_per_min: 6,
+      feeling: null,
     });
     expect(scheduleSpy).toHaveBeenCalledTimes(7);
   });

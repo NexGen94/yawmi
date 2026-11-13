@@ -4,7 +4,7 @@ import json
 from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Protocol
-from uuid import uuid4
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import asyncpg
@@ -12,6 +12,10 @@ import pytest
 from api_harness import open_pool
 from goals_harness import GoalsBackend, MemoryGoals, PostgresGoals, ensure_schema
 
+from yawmi.events.memory_store import InMemoryEventStore
+from yawmi.focus.memory import InMemoryFocusStore
+from yawmi.focus.models import FocusPlanIO
+from yawmi.focus.store import AsyncpgFocusStore
 from yawmi.journal.memory import InMemoryJournalReader
 from yawmi.journal.store import AsyncpgJournalReader
 from yawmi.prefs.memory import InMemoryPrefsStore
@@ -45,6 +49,7 @@ class Backend(Protocol):
     store: Any
     prefs: Any
     journal: Any
+    focus: Any
     goals: GoalsBackend
 
     async def setup(self) -> None: ...
@@ -60,6 +65,7 @@ class MemoryBackend:
         self.store = InMemoryPushStore()
         self.prefs = InMemoryPrefsStore()
         self.journal = InMemoryJournalReader()
+        self.focus = InMemoryFocusStore(events=InMemoryEventStore())
         self.goals = MemoryGoals()
 
     async def setup(self) -> None:
@@ -69,6 +75,7 @@ class MemoryBackend:
         self.store = InMemoryPushStore()
         self.prefs = InMemoryPrefsStore()
         self.journal = InMemoryJournalReader()
+        self.focus = InMemoryFocusStore(events=InMemoryEventStore())
         self.goals = MemoryGoals()
 
     async def plant(self, key: str, value: Any) -> None:
@@ -94,6 +101,7 @@ class PostgresBackend:
         self.store = AsyncpgPushStore(pool)
         self.prefs = AsyncpgPrefsStore(pool)
         self.journal = AsyncpgJournalReader(pool)
+        self.focus = AsyncpgFocusStore(pool)
         self.goals = PostgresGoals(pool)
 
     async def setup(self) -> None:
@@ -115,6 +123,9 @@ class PostgresBackend:
     async def cleanup(self) -> None:
         await self.goals.cleanup()  # its own rows, and the habits it paused are put back
         await self.pool.execute("DELETE FROM yawmi.notice_sends")
+        await self.pool.execute("DELETE FROM yawmi.focus_plans")
+        await self.pool.execute("DELETE FROM yawmi.focus_sessions WHERE id::text LIKE 'aaaa%'")
+        await self.pool.execute("DELETE FROM yawmi.events WHERE id::text LIKE 'bbbb%'")
         await self.pool.execute("DELETE FROM yawmi.journal_entries")
         await self.pool.execute("DELETE FROM yawmi.user_settings")
         await self.pool.execute("DELETE FROM yawmi.push_subscriptions")
@@ -313,6 +324,7 @@ async def _tick(backend: Backend, sender: FakeSender, now: datetime) -> int:
         prefs=backend.prefs,
         journal=backend.journal,
         goal_sources=backend.goals.sources(),
+        focus=backend.focus,
     )
 
 
@@ -661,3 +673,140 @@ async def test_a_goal_reminder_after_midnight_quotes_the_value_of_its_own_day(
     await remind(backend, at="23:55", source="linked_habits")
     assert await _tick(backend, sender, _riyadh(11, 0, 2)) == 1  # the 10th: 0 of 100
     assert sender.sent[0][1]["notification"]["body"] == "الصحة البدنية: 0 من 100"
+
+
+# --- focus plans (task 22) ---------------------------------------------------------------------
+
+MONDAY = 9  # 2026-11-09 is a Monday; the weekday mask counts Sunday as bit 0
+MONDAY_BIT = 2
+
+
+async def plan_for_monday(backend: Backend, **over: Any) -> Any:
+    fields: dict[str, Any] = {
+        "title_ar": "كتابة الفصل",
+        "minutes": 25,
+        "favorite": False,
+        "weekday_mask": MONDAY_BIT,
+        "start_time": "09:00",
+        "active": True,
+        **over,
+    }
+    return await backend.focus.add_plan(FocusPlanIO(**fields))
+
+
+async def plant_focus_session(backend: Backend, started: datetime) -> None:
+    """A focus session that began at `started` (Riyadh wall clock), as an ended event would."""
+    day = started.date()
+    sid = UUID(f"aaaaaaaa-0000-4000-8000-{started.hour:02d}{started.minute:02d}00000000")
+    if hasattr(backend, "pool"):
+        await backend.pool.execute(
+            "INSERT INTO yawmi.focus_sessions (id, day, started_at, ended_at, planned_minutes,"
+            " actual_minutes) VALUES ($1, $2, $3, $3, 25, 25)",
+            sid,
+            day,
+            started,
+        )
+    else:
+        backend.focus.add_session(sid, day, started)
+
+
+async def test_a_focus_plan_notice_is_sent_once_with_the_plan_link(
+    backend: Backend, sender: FakeSender
+) -> None:
+    saved = await plan_for_monday(backend)
+    assert await _tick(backend, sender, _riyadh(MONDAY, 9, 3)) == 1
+    _sub, payload = sender.sent[0]
+    assert payload["notification"]["body"] == "كتلة تركيز: كتابة الفصل"
+    assert payload["notification"]["navigate"] == f"/focus?plan={saved.id}"
+    assert await _tick(backend, sender, _riyadh(MONDAY, 9, 4)) == 0  # once per plan and day
+    assert len(sender.sent) == 1
+
+
+async def test_a_focus_plan_notice_waits_for_its_time_and_its_weekday(
+    backend: Backend, sender: FakeSender
+) -> None:
+    await plan_for_monday(backend)
+    assert await _tick(backend, sender, _riyadh(MONDAY, 8, 55)) == 0  # before 09:00
+    assert await _tick(backend, sender, _riyadh(MONDAY, 9, 12)) == 0  # window of 10 minutes passed
+    assert await _tick(backend, sender, _riyadh(MONDAY + 1, 9, 3)) == 0  # Tuesday
+
+
+@pytest.mark.parametrize(("hour", "minute"), [(8, 30), (8, 45), (9, 0), (9, 30)])
+async def test_no_focus_plan_notice_when_a_session_began_within_half_an_hour(
+    backend: Backend, sender: FakeSender, hour: int, minute: int
+) -> None:
+    await plan_for_monday(backend)
+    await plant_focus_session(backend, datetime(2026, 11, MONDAY, hour, minute, tzinfo=RIYADH))
+    assert await _tick(backend, sender, _riyadh(MONDAY, 9, 3)) == 0
+    assert sender.sent == []
+
+
+async def test_a_session_outside_the_half_hour_does_not_silence_the_notice(
+    backend: Backend, sender: FakeSender
+) -> None:
+    await plan_for_monday(backend)
+    await plant_focus_session(backend, datetime(2026, 11, MONDAY, 8, 29, tzinfo=RIYADH))
+    assert await _tick(backend, sender, _riyadh(MONDAY, 9, 3)) == 1
+
+
+async def test_a_deactivated_focus_plan_sends_nothing(backend: Backend, sender: FakeSender) -> None:
+    saved = await plan_for_monday(backend)
+    await backend.focus.patch_plan(saved.id, {"active": False})
+    assert await _tick(backend, sender, _riyadh(MONDAY, 9, 3)) == 0
+
+
+async def test_a_focus_plan_without_a_schedule_sends_nothing(
+    backend: Backend, sender: FakeSender
+) -> None:
+    await plan_for_monday(backend, weekday_mask=None, start_time=None)
+    assert await _tick(backend, sender, _riyadh(MONDAY, 9, 3)) == 0
+
+
+async def plant_focus_started(backend: Backend, at: datetime) -> None:
+    """A `focus_started` event only (the session is still running: no `focus_ended` yet)."""
+    eid = UUID(f"bbbbbbbb-0000-4000-8000-{at.hour:02d}{at.minute:02d}00000000")
+    if hasattr(backend, "pool"):
+        await backend.pool.execute(
+            "INSERT INTO yawmi.events (id, type, payload, occurred_at)"
+            " VALUES ($1, 'focus_started', '{\"planned_minutes\": 25}'::jsonb, $2)",
+            eid,
+            at,
+        )
+    else:
+        backend.focus.add_started_event(eid, at)
+
+
+async def test_a_running_session_holds_back_the_plan_notice(
+    backend: Backend, sender: FakeSender
+) -> None:
+    """I-1: only `focus_started` reached the server so far, at 08:50, and the tick is 09:03."""
+    await plan_for_monday(backend)
+    await plant_focus_started(backend, datetime(2026, 11, MONDAY, 8, 50, tzinfo=RIYADH))
+    assert await _tick(backend, sender, _riyadh(MONDAY, 9, 3)) == 0
+    assert sender.sent == []
+
+
+async def test_a_started_event_outside_the_half_hour_does_not_silence_the_notice(
+    backend: Backend, sender: FakeSender
+) -> None:
+    await plan_for_monday(backend)
+    await plant_focus_started(backend, datetime(2026, 11, MONDAY, 8, 29, tzinfo=RIYADH))
+    assert await _tick(backend, sender, _riyadh(MONDAY, 9, 3)) == 1
+
+
+async def test_a_session_begun_late_the_day_before_holds_back_a_plan_just_after_midnight(
+    backend: Backend, sender: FakeSender
+) -> None:
+    """M-3: a Tuesday 00:00 plan, a session that began on Monday at 23:50, the tick at 00:05."""
+    await plan_for_monday(backend, weekday_mask=4, start_time="00:00")  # Tuesday
+    await plant_focus_session(backend, datetime(2026, 11, MONDAY, 23, 50, tzinfo=RIYADH))
+    assert await _tick(backend, sender, _riyadh(MONDAY + 1, 0, 5)) == 0
+    assert sender.sent == []
+
+
+async def test_a_session_far_before_midnight_does_not_hold_back_the_plan(
+    backend: Backend, sender: FakeSender
+) -> None:
+    await plan_for_monday(backend, weekday_mask=4, start_time="00:00")
+    await plant_focus_session(backend, datetime(2026, 11, MONDAY, 23, 20, tzinfo=RIYADH))
+    assert await _tick(backend, sender, _riyadh(MONDAY + 1, 0, 5)) == 1

@@ -13,7 +13,8 @@ Guarantees, in order of enforcement:
    days), and a `deeper` reply carries its one question. The two fixed lines of the prompt
    (out of scope, rule 9; no data, rule 8) are valid replies of every kind: the line alone,
    `question` null, nothing cited. Such a reply skips the kind rules, and a `deeper` reply has a
-   null question exactly when it is one of them.
+   null question exactly when it is one of them. A near miss of such a line (extra whitespace, or
+   no final full stop) is made exact before any check (`normalize_fixed_line`, ruling N-1).
 A rejected reply gets exactly one repair attempt (the same request plus a corrective note); a
 second rejection raises `InsightInvalid`. Refusals and transport errors are not retried.
 
@@ -150,6 +151,28 @@ FIXED_LINES = (OUT_OF_SCOPE_LINE, NO_DATA_LINE)
 REFUSALS = {OUT_OF_SCOPE_LINE: "out_of_scope", NO_DATA_LINE: "no_data"}
 
 
+def normalize_fixed_line(line: str) -> str:
+    """The exact fixed line a near miss stands for, else `line` itself (ruling N-1).
+
+    A near miss is a fixed line with extra whitespace (around it or between its words) or without
+    its final full stop. Nothing else is forgiven: another wording stays what it is.
+    """
+    squeezed = " ".join(line.split())
+    for fixed in FIXED_LINES:
+        if squeezed in (fixed, fixed.removesuffix(".")):
+            return fixed
+    return line
+
+
+def _normalized(raw: dict) -> dict:
+    """`raw` with each near miss of a fixed line in `lines` made exact (a copy when it changes)."""
+    lines = raw.get("lines")
+    if not isinstance(lines, list) or not all(isinstance(x, str) for x in lines):
+        return raw
+    fixed = [normalize_fixed_line(x) for x in lines]
+    return raw if fixed == lines else {**raw, "lines": fixed}
+
+
 def is_fixed_reply(response: InsightResponse) -> bool:
     """One of the two fixed lines alone: no question, nothing cited, no priority."""
     return (
@@ -213,7 +236,7 @@ class InsightService:
     ) -> tuple[InsightResponse | None, list[str]]:
         """Validate a reply; the second item lists reason codes (never any reply content)."""
         try:
-            response = InsightResponse.model_validate(raw)
+            response = InsightResponse.model_validate(_normalized(raw))
         except ValidationError as exc:
             errors = exc.errors()
             reasons = []

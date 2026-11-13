@@ -84,9 +84,13 @@ def test_required_and_pending_paths_are_the_final_list(exporter: ModuleType) -> 
         "/v1/insights/deeper",
         "/v1/ai/memory",
         "/v1/ai/memory/{memory_id}",
+        "/v1/focus/plans",
+        "/v1/focus/plans/{plan_id}",
+        "/v1/focus/sessions",
+        "/v1/breath/sessions",
     }
     required, pending = exporter.REQUIRED_PATHS, exporter.PENDING_PATHS
-    assert len(final) == 41
+    assert len(final) == 45
     assert set(required).isdisjoint(pending)
     assert len(set(required)) == len(required) and len(set(pending)) == len(pending)
     assert set(required) | set(pending) == final
