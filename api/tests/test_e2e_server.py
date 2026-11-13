@@ -152,6 +152,37 @@ async def test_fake_provider_without_sources_cites_nothing_and_ignores_a_repair_
     InsightResponse.model_validate(reply)
 
 
+async def test_fake_provider_answers_go_deeper_with_a_question_and_three_options() -> None:
+    """Task 19: a `deeper` reply needs its question (else a repair, then a 502)."""
+    provider = fake_provider.FakeProvider()
+    user = json.dumps({"kind": "deeper", "sources": [{"id": "a", "kind": "k", "text": "t"}]})
+    reply = await provider.complete("system", user, {}, "model")
+    assert reply["question"] == fake_provider.DEEPER_QUESTION
+    assert reply["lines"] == []
+    assert [p["title"] for p in reply["priorities"]] == list(fake_provider.DEEPER_OPTIONS)
+    assert {p["source_id"] for p in reply["priorities"]} == {"a"}
+    assert all(len(t) <= 80 for t in fake_provider.DEEPER_OPTIONS)
+    InsightResponse.model_validate(reply)
+
+
+async def test_fake_provider_cites_two_journals_in_a_weekly_reply() -> None:
+    """Task 19: a `weekly` reply cites two different `journal:*` sources when there are two."""
+    provider = fake_provider.FakeProvider()
+    sources = [
+        {"id": "habit:x", "kind": "habit", "text": "t"},
+        {"id": "journal:2026-11-08:evening", "kind": "journal", "text": "t"},
+        {"id": "journal:2026-11-09:evening", "kind": "journal", "text": "t"},
+        {"id": "journal:2026-11-10:morning", "kind": "journal", "text": "t"},
+    ]
+    user = json.dumps({"kind": "weekly", "sources": sources})
+    reply = await provider.complete("system", user, {}, "model")
+    assert reply["source_ids"] == [
+        "habit:x",
+        "journal:2026-11-08:evening",
+        "journal:2026-11-09:evening",
+    ]
+
+
 def test_fake_provider_has_the_provider_signature() -> None:
     params = list(inspect.signature(fake_provider.FakeProvider.complete).parameters)
     assert params == ["self", "system", "user", "schema", "model"]
