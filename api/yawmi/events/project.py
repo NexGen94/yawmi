@@ -14,7 +14,7 @@ keep working; the original payload is stored in `events` untouched):
 * `focus_ended`   `{habit_code?, goal_ref?, started_at?, ended_at?, planned_minutes?,
   actual_minutes?, focus_rating?, next_step?}`
 * `breath_ended`  `{pattern, started_at?, ended_at?, breaths_per_min?, duration_seconds?,
-  completed?}`
+  completed?, feeling?: calmer|same|tense}`
 * `journal_saved` `{day?, part: morning|evening, answers: MorningAnswers|EveningAnswers}`
 * `mood_logged`   `{day?, score: 1..5, feelings?: str[<=6], activities?: str[<=12]}`
 * `goal_task_set` `{task_id: UUID, done: bool}`
@@ -173,6 +173,8 @@ class BreathEndedPayload(BaseModel):
     breaths_per_min: PositiveRate | None = None
     duration_seconds: Annotated[StrictInt, Field(ge=0, le=10_000_000)] | None = None
     completed: StrictBool = True  # the column default
+    # how the session felt, asked once after it; a closed set (the column's CHECK)
+    feeling: Literal["calmer", "same", "tense"] | None = None
 
 
 class MorningPriority(BaseModel):
@@ -309,6 +311,7 @@ class BreathSession:
     breaths_per_min: Decimal | None
     duration_seconds: int | None
     completed: bool
+    feeling: str | None = None
 
 
 @dataclass(frozen=True)
@@ -458,6 +461,7 @@ def project_event(event: "EventIn", source: str) -> Intent | None:
                 breaths_per_min=breath.breaths_per_min,
                 duration_seconds=breath.duration_seconds,
                 completed=breath.completed,
+                feeling=breath.feeling,
             )
         case "journal_saved":
             journal = _parse(JournalSavedPayload, event.payload)

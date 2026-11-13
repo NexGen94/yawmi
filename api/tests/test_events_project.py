@@ -583,6 +583,26 @@ def test_breath_ended_defaults() -> None:
     assert intent.duration_seconds is None
 
 
+@pytest.mark.parametrize("feeling", ["calmer", "same", "tense"])
+def test_breath_ended_carries_the_feeling_of_the_closed_set(feeling: str) -> None:
+    intent = project_event(ev("breath_ended", {"pattern": "calm", "feeling": feeling}), "web")
+    assert isinstance(intent, BreathSession)
+    assert intent.feeling == feeling
+
+
+def test_breath_ended_feeling_defaults_to_none() -> None:
+    intent = project_event(ev("breath_ended", {"pattern": "box"}), "web")
+    assert isinstance(intent, BreathSession)
+    assert intent.feeling is None
+
+
+@pytest.mark.parametrize("feeling", ["great", "", "CALMER", 1])
+def test_breath_ended_refuses_a_feeling_outside_the_set(feeling: object) -> None:
+    with pytest.raises(ValidationError) as exc:
+        ev("breath_ended", {"pattern": "calm", "feeling": feeling})
+    assert "invalid_payload" in error_types(exc)
+
+
 def test_breath_started_at_is_derived_from_the_duration() -> None:
     intent = project_event(ev("breath_ended", {"pattern": "box", "duration_seconds": 90}), "watch")
     assert isinstance(intent, BreathSession)
