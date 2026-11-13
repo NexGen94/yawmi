@@ -20,6 +20,9 @@ export interface StateFrameProps {
   children: ComponentChildren;
   /** Placeholders with the size of the page's content (default: three lines). */
   skeleton?: ComponentChildren;
+  /** The words of the badge on a saved copy, for a page whose copy is not a saved reply of the
+   *  server (default «نسخة محفوظة · بلا اتصال»). */
+  staleLabel?: string;
 }
 
 const TEXT = {
@@ -43,7 +46,7 @@ function DefaultSkeleton() {
 /** The four states every page draws (design section 4). The outer element stays the same in
  *  every state, so moving from loading to ready changes only what is inside it. */
 export function StateFrame(props: StateFrameProps) {
-  const { state, empty, emptyText, emptyAction, stale, onRetry, children, skeleton } = props;
+  const { state, empty, emptyText, emptyAction, stale, onRetry, children, skeleton, staleLabel } = props;
 
   const emptyBlock = (
     <div class="state-message">
@@ -76,7 +79,7 @@ export function StateFrame(props: StateFrameProps) {
       body = stale ? (
         <>
           <div class="state-stale">
-            <Badge>{TEXT.stale}</Badge>
+            <Badge>{staleLabel ?? TEXT.stale}</Badge>
           </div>
           {empty ? emptyBlock : children}
         </>

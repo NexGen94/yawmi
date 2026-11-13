@@ -87,11 +87,13 @@ export function ConsentDialog({ open, provider, busy = false, error = null, onCo
 }
 
 /** What a card says while there is no consent, with the way to give it. */
-export function ConsentNotice({ onEnable }: { onEnable(): void }) {
+export function ConsentNotice({ onEnable, disabled }: { onEnable(): void; disabled?: boolean }) {
   return (
     <div class="state-message ai-paused">
       <p class="state-text">الذكاء الاصطناعي متوقف حتى الموافقة</p>
-      <Button onClick={onEnable}>تفعيل الذكاء الاصطناعي</Button>
+      <Button disabled={disabled} onClick={onEnable}>
+        تفعيل الذكاء الاصطناعي
+      </Button>
     </div>
   );
 }

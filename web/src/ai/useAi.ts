@@ -45,13 +45,18 @@ interface Reply<T> {
   response: Response;
 }
 
-/** The data of an openapi-fetch result, or a thrown `AiHttpError` that keeps what the server said. */
-export function unwrapAi<T>(result: Reply<T>): T {
-  if (result.response.ok && result.data !== undefined) return result.data;
+/** The error of a call that was refused: the status, and the words and code of the server's body. */
+export function aiError(result: { error?: unknown; response: Response }): AiHttpError {
   const body = result.error as { detail?: unknown; errors?: { type?: unknown }[] } | undefined;
   const detail = typeof body?.detail === 'string' && body.detail !== '' ? body.detail : undefined;
   const code = typeof body?.errors?.[0]?.type === 'string' ? body.errors[0].type : undefined;
-  throw new AiHttpError(result.response.status, detail, code);
+  return new AiHttpError(result.response.status, detail, code);
+}
+
+/** The data of an openapi-fetch result, or a thrown `AiHttpError` that keeps what the server said. */
+export function unwrapAi<T>(result: Reply<T>): T {
+  if (result.response.ok && result.data !== undefined) return result.data;
+  throw aiError(result);
 }
 
 const online = (): boolean => typeof navigator === 'undefined' || navigator.onLine !== false;

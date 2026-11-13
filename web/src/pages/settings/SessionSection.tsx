@@ -7,15 +7,17 @@ import { Card } from '../../ui/Card';
 export interface SessionSectionProps {
   deviceName?: string;
   disabled?: boolean;
+  /** This device has a session. Without one there is nothing to sign out of. */
+  paired?: boolean;
   onLogout?(): void | Promise<void>;
 }
 
-export function SessionSection({ deviceName, disabled, onLogout }: SessionSectionProps) {
+export function SessionSection({ deviceName, disabled, paired = true, onLogout }: SessionSectionProps) {
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const handleLogout = async () => {
-    if (disabled || loggingOut) return;
+    if (disabled || !paired || loggingOut) return;
     setLogoutError(null);
     setLoggingOut(true);
     try {
@@ -45,7 +47,7 @@ export function SessionSection({ deviceName, disabled, onLogout }: SessionSectio
             <Button
               variant="quiet"
               onClick={() => void handleLogout()}
-              disabled={disabled || loggingOut}
+              disabled={disabled || !paired || loggingOut}
               title={disabled ? 'يحتاج اتصالاً' : undefined}
             >
               خروج
@@ -54,6 +56,9 @@ export function SessionSection({ deviceName, disabled, onLogout }: SessionSectio
               <span style={{ fontSize: 'var(--fs-note)', color: 'var(--c-muted)' }}>
                 يحتاج اتصالاً
               </span>
+            )}
+            {!paired && !disabled && (
+              <span style={{ fontSize: 'var(--fs-note)', color: 'var(--c-muted)' }}>هذا الجهاز غير مقترن</span>
             )}
           </div>
         </div>

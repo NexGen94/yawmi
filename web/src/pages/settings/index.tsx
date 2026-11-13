@@ -2,14 +2,19 @@ import { useEffect, useState } from 'preact/hooks';
 
 import { kvGet } from '../../data/cache';
 import type { QueryState } from '../../data/query';
+import { useConsent, useMemory } from '../../settings/aiData';
 import { useDigits } from '../../settings/digits';
 import { useSettings } from '../../settings/data';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { Skeleton } from '../../ui/Skeleton';
 import { StateFrame } from '../../ui/StateFrame';
+import { AiSection } from './AiSection';
+import { AiStyleSection } from './AiStyleSection';
 import { DayRemindersSection } from './DayRemindersSection';
 import { DisplaySection } from './DisplaySection';
+import { LensesList } from './LensesList';
+import { MemoryList } from './MemoryList';
 import { NotificationsSection } from './NotificationsSection';
 import { ProfileSection } from './ProfileSection';
 import { SessionSection } from './SessionSection';
@@ -27,6 +32,8 @@ export default function SettingsPage(props: SettingsPageProps) {
   // The numbers on this page are drawn again when the digits setting changes.
   useDigits();
   const settings = useSettings();
+  const consent = useConsent();
+  const memory = useMemory();
   const [loading, setLoading] = useState<boolean>(props.state === undefined);
   const [error, setError] = useState<boolean>(false);
   const [deviceInfo, setDeviceInfo] = useState<{ id?: string; name?: string } | null>(null);
@@ -90,6 +97,11 @@ export default function SettingsPage(props: SettingsPageProps) {
   const isOffline = computedState === 'offline';
   const stale = props.stale ?? (isOffline && !loading && !error);
   const deviceName = props.deviceName ?? deviceInfo?.name;
+  // A device without a session (no device record) has nothing to sign out of.
+  const paired = props.deviceName !== undefined || deviceInfo !== null;
+  // The badge says «نسخة محفوظة» only when the page shows a reply of the server. With the device
+  // record alone (read from this device, not from the server) it says «بلا اتصال».
+  const staleLabel = props.stale === undefined && settings.data === undefined ? 'بلا اتصال' : undefined;
 
   const handleRetry = () => {
     if (props.onRetry) {
@@ -113,6 +125,7 @@ export default function SettingsPage(props: SettingsPageProps) {
       <StateFrame
         state={computedState}
         stale={stale}
+        staleLabel={staleLabel}
         emptyText=""
         empty={false}
         onRetry={handleRetry}
@@ -128,9 +141,13 @@ export default function SettingsPage(props: SettingsPageProps) {
           <>
             <DayRemindersSection settings={settings.data} online={!isOffline} onSave={settings.save} />
             <DisplaySection settings={settings.data} online={!isOffline} onSave={settings.save} />
+            <AiSection consent={consent} online={!isOffline} />
+            <AiStyleSection settings={settings.data} online={!isOffline} onSave={settings.save} />
+            <LensesList memory={memory} online={!isOffline} />
+            <MemoryList memory={memory} online={!isOffline} mission={settings.data.mission} vision={settings.data.vision} />
           </>
         )}
-        <SessionSection deviceName={deviceName} disabled={isOffline} />
+        <SessionSection deviceName={deviceName} paired={paired} disabled={isOffline} />
         <ShortcutsSection />
       </StateFrame>
     </div>
