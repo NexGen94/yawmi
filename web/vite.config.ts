@@ -2,6 +2,7 @@ import preact from '@preact/preset-vite';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+import { PORTS } from './e2e/ports.ts';
 import { pwaOptions } from './pwa.config.ts';
 
 /** src/pages/<name>/index.tsx -> page-<name>, src/pages/<name>/<file>.tsx -> page-<name>-<file>. */
@@ -61,16 +62,16 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // The API serves everything under /v1; in dev it runs on localhost:8000.
-      '/v1': 'http://localhost:8000',
+      // The API serves everything under /v1; in dev it runs on localhost:8000 (YAWMI_API_PORT).
+      '/v1': `http://localhost:${PORTS.api}`,
     },
   },
   preview: {
     proxy: {
       // The end-to-end suite (web/e2e) serves the build with `vite preview` and a local API on
-      // port 8000. By address, not by name: the test server listens on IPv4 loopback only, and a
+      // YAWMI_API_PORT (8000 by default). By address, not by name: the test server listens on IPv4 loopback only, and a
       // proxy that resolves `localhost` to ::1 would be refused.
-      '/v1': 'http://127.0.0.1:8000',
+      '/v1': `http://127.0.0.1:${PORTS.api}`,
     },
   },
 });

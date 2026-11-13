@@ -1,7 +1,9 @@
 import { expect, test as base, type APIRequestContext, type Page } from '@playwright/test';
 
+import { PORTS } from './ports';
+
 /** The test API, by address (not through the web proxy): the suite's own server on this machine. */
-export const API_URL = 'http://127.0.0.1:8000';
+export const API_URL = `http://127.0.0.1:${PORTS.api}`;
 
 /** How long a saved entry may take to reach the server: the app sends the outbox five seconds after
  *  a save (the undo window), and a slow machine needs some room besides. */
