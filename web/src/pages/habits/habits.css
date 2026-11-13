@@ -160,3 +160,211 @@
   align-items: center;
   gap: var(--sp-2);
 }
+
+/* ---------- Habit editor (task 12) ---------- */
+
+.editor-cols {
+  align-items: start;
+}
+
+.editor-main,
+.editor-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-inline-size: 0;
+}
+
+.editor-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.editor-card > .card-title {
+  margin-block-end: 0;
+}
+
+.editor-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.editor-date-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+.editor-dates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.editor-source {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.editor-goals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.goal-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-block-size: 280px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.goal-list > li {
+  flex: none;
+}
+
+.goal-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  inline-size: 100%;
+  min-block-size: var(--hit);
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--c-blue);
+  border-radius: var(--radius-card);
+  background: var(--c-surface);
+  color: var(--c-ink);
+  font: inherit;
+  font-size: var(--fs-body);
+  text-align: start;
+  cursor: pointer;
+}
+
+.goal-item:hover:not(:disabled) {
+  background: var(--c-blue-pale);
+}
+
+.goal-item[aria-pressed='true'] {
+  border-color: var(--c-ink);
+  box-shadow: inset 0 0 0 1px var(--c-ink);
+}
+
+.goal-item:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--focus);
+}
+
+.goal-item:disabled {
+  cursor: progress;
+}
+
+li.goal-item.goal-off {
+  border-style: dashed;
+  border-color: var(--c-blue-light);
+  color: var(--c-ink-2);
+  cursor: default;
+}
+
+.goal-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: 600;
+}
+
+.goal-note {
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.goal-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.editor-reminders {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+
+.reminder-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  inline-size: 100%;
+  padding: var(--sp-3);
+  border: 1px solid var(--c-blue-light);
+  border-radius: var(--radius-card);
+}
+
+.summary-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-body);
+}
+
+.editor-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.editor-offline,
+.editor-notice {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.editor-notice {
+  margin-block-end: var(--sp-3);
+}
+
+@media (min-width: 900px) {
+  .editor-side {
+    position: sticky;
+    inset-block-start: var(--sp-4);
+  }
+}
+
+@media (max-width: 899px) {
+  .editor-date-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.editor-lock-note {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-card);
+  background: var(--c-blue-pale);
+  color: var(--c-ink);
+  font-size: var(--fs-note);
+}
+
+/* A segmented choice that wraps (six chips on a phone) keeps rounded corners, not a pill. */
+.editor-group .segmented {
+  border-radius: calc(var(--hit) / 2 + var(--sp-1));
+}

@@ -382,6 +382,16 @@
   background: var(--c-surface);
 }
 
+.segment:disabled,
+.chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.segment:disabled:hover {
+  background: transparent;
+}
+
 .segment[aria-checked='true'] {
   background: var(--c-ink);
   color: var(--c-surface);
