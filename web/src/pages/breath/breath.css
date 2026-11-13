@@ -1,0 +1,191 @@
+/* The breathing page (task 23b). Colors only through the tokens; logical properties only. The stage
+   is the ink surface of the page (design section 3): its controls take the on-ink colors of
+   components.css through .hero-card. */
+
+.breath-safety {
+  max-inline-size: 70ch;
+  margin-block-end: var(--sp-6);
+  padding-block: var(--sp-3);
+}
+
+.breath-safety p {
+  margin: 0;
+  font-size: var(--fs-note);
+  line-height: var(--lh);
+  color: var(--c-ink);
+}
+
+.breath-main,
+.breath-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  min-inline-size: 0;
+}
+
+.breath-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-inline-size: 0;
+}
+
+.breath-stage .card-title {
+  margin-block-end: 0;
+}
+
+/* A heading that takes focus by script (the stage changed) is not a control: no ring around it. */
+.breath-stage .card-title:focus,
+.breath-stage .card-title:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.pattern-picker,
+.session-sheet,
+.session-run,
+.checkin,
+.timed-test {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-inline-size: 0;
+}
+
+.session-run {
+  align-items: center;
+  text-align: center;
+}
+
+.checkin-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+.checkin-skip {
+  align-self: flex-start;
+}
+
+.breath-note,
+.breath-hint,
+.hold-note,
+.breath-left {
+  margin: 0;
+  font-size: var(--fs-note);
+  line-height: var(--lh);
+  color: var(--c-ink-2);
+}
+
+:is(.hero-card, .on-ink) :is(.breath-note, .breath-hint, .breath-left) {
+  color: var(--c-blue-light);
+}
+
+.hold-note {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--c-ink);
+}
+
+.breath-left {
+  font-size: var(--fs-section);
+}
+
+.breath-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.breath-card {
+  min-inline-size: 0;
+}
+
+.week-ring {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-4) var(--sp-5);
+}
+
+.week-ring .session-dots {
+  grid-column: 1 / -1;
+}
+
+.week-figures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-inline-size: 0;
+}
+
+.week-minutes {
+  margin: 0;
+  font-weight: 600;
+}
+
+.week-skeleton {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+/* Seven days, each a mark by its shape: a full circle for a day with a session, an empty ring for a
+   day without, and a heavier ring on today. The words are in the item for screen readers. */
+.session-dots {
+  display: flex;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.session-dot-mark {
+  display: block;
+  inline-size: 24px;
+  block-size: 24px;
+}
+
+.dot-full {
+  fill: var(--c-blue);
+  stroke: var(--c-blue);
+  stroke-width: 2;
+}
+
+.dot-empty {
+  fill: none;
+  stroke: var(--c-blue);
+  stroke-width: 2;
+}
+
+.session-dot[data-today='true'] .session-dot-mark {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-pill);
+}
+
+.test-clock {
+  margin: 0;
+  font-size: var(--fs-num);
+  font-weight: 600;
+}
+
+.test-result {
+  display: block;
+  font-size: var(--fs-section);
+  font-weight: 600;
+}
+
+@media (width < 700px) {
+  .week-ring {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Six styles wrap onto rows: the capsule of the shared switch would clip the words at its round
+   ends, so here it is a rounded panel. */
+.pattern-picker .segmented {
+  inline-size: 100%;
+  border-radius: var(--radius-card);
+}

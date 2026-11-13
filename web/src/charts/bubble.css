@@ -1,0 +1,42 @@
+/* The breath bubble (task 23b). Colors only through the tokens; logical properties only. It is drawn
+   on the ink surface of the breathing page, so its colors are the on-ink ones. */
+
+.breath-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  min-inline-size: 0;
+}
+
+.breath-bubble {
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+.bubble-halo {
+  stroke: var(--c-ink-2);
+}
+
+.bubble-core {
+  fill: var(--c-blue-light);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition-property: transform;
+  transition-timing-function: ease-in-out;
+  /* The length is set in the element's style, per phase; before it is set nothing moves. */
+  transition-duration: 0s;
+}
+
+.bubble-text {
+  margin: 0;
+  color: var(--c-bg);
+  font-size: var(--fs-num);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-core {
+    transition: none;
+  }
+}
