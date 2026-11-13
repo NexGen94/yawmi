@@ -9,7 +9,7 @@ import { Segmented } from '../../ui/Segmented';
 import { Skeleton } from '../../ui/Skeleton';
 import { StateFrame } from '../../ui/StateFrame';
 import { CycleCard } from './CycleCard';
-import { DomainCards } from './DomainCards';
+import { DomainCards } from '../../goals/DomainCards';
 import { DueReport } from './DueReport';
 import { GoalsTable } from './GoalsTable';
 import { Horizons } from './Horizons';

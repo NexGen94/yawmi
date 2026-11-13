@@ -12,10 +12,11 @@ import { unwrap } from '../api/unwrap';
 import { writeCache } from '../data/cache';
 import { type QueryResult, useQuery } from '../data/query';
 import { columnsOf, type GoalTable } from './columns';
+import { settingsQueryKey } from '../settings/data';
 import type { GoalColumnsIO, GoalsOut, SettingsOut } from './types';
 
 export const goalsQueryKey = 'goals';
-export const settingsQueryKey = 'settings';
+export { settingsQueryKey } from '../settings/data';
 
 export function useGoals(): QueryResult<GoalsOut> {
   return useQuery(goalsQueryKey, () => api.GET('/v1/goals').then(unwrap));

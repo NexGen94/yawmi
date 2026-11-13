@@ -7,7 +7,7 @@ import { LocationProvider } from 'preact-iso';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readCache, writeCache } from '../../src/data/cache';
-import { DomainCards } from '../../src/pages/goals/DomainCards';
+import { DomainCards } from '../../src/goals/DomainCards';
 import GoalsPage from '../../src/pages/goals/index';
 import { setDigits } from '../../src/lib/format';
 import { clearOutbox, closeDb } from '../../src/sync/outbox';

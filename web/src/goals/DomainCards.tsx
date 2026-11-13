@@ -1,9 +1,10 @@
-import { ProgressBar } from '../../charts/ProgressBar';
-import { Code } from '../../goals/Code';
-import { DOMAINS } from '../../goals/domains';
-import { pctOrDash } from '../../goals/format';
-import { Iso } from '../../goals/Iso';
-import { Card } from '../../ui/Card';
+import { ProgressBar } from '../charts/ProgressBar';
+import { Card } from '../ui/Card';
+import { Code } from './Code';
+import { DOMAINS } from './domains';
+import { pctOrDash } from './format';
+import { Iso } from './Iso';
+import './DomainCards.css';
 
 export interface DomainOutcome {
   code: string;
