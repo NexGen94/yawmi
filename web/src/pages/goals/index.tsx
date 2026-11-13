@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'preact/hooks';
 import { Timeline } from '../../charts/Timeline';
 import { type GoalTable, TABLES } from '../../goals/columns';
 import { isEmptyMirror, useGoalColumns, useGoals, useOnline, useToday } from '../../goals/data';
+import { centerInScroller } from '../../goals/scroll';
 import { Segmented } from '../../ui/Segmented';
 import { Skeleton } from '../../ui/Skeleton';
 import { StateFrame } from '../../ui/StateFrame';
@@ -56,10 +57,16 @@ export default function GoalsPage() {
   const table = parseTable(location.query?.table);
   const data = goals.data;
 
-  // Five views do not fit one row on a phone: the chosen one is brought into sight.
+  // Five views do not fit one row on a phone: when the view changes, the chosen one is centred in the
+  // switch. Only the switch scrolls; never the window, and never on the first load.
+  const shownView = useRef(view);
   useEffect(() => {
-    switchBox.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
-  }, [view, data !== undefined]);
+    if (shownView.current === view) return;
+    shownView.current = view;
+    const box = switchBox.current;
+    const chip = box?.querySelector<HTMLElement>('[aria-checked="true"]');
+    if (box && chip) centerInScroller(box, chip);
+  }, [view]);
 
   const choose = (next: { view?: View; table?: GoalTable }): void => {
     const query = new URLSearchParams({ view: next.view ?? view });

@@ -14,8 +14,6 @@
 
 .goals-body,
 .goals-skeleton {
-  /* The face of the outcome codes (O1 to O12): its letter O is round, so it is never read as a zero. */
-  --font-code: "Segoe UI", system-ui, Arial, sans-serif;
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
@@ -35,6 +33,7 @@
 
 /* Five views do not fit one row on a phone: the switch scrolls by itself, the page does not. */
 .goals-switch {
+  position: relative;
   min-inline-size: 0;
 }
 

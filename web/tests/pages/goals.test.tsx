@@ -388,14 +388,30 @@ describe('the timeline view', () => {
 });
 
 describe('the view switch', () => {
-  it('brings the chosen view into sight (it scrolls by itself on a phone)', async () => {
-    const spy = vi.fn();
-    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: spy });
+  it('never scrolls the window: not on load, and not when the view changes', async () => {
+    const intoView = vi.fn();
+    const windowScroll = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: intoView });
+    vi.stubGlobal('scrollTo', windowScroll);
     await open('/goals?view=timeline');
-    await waitFor(() => expect(spy).toHaveBeenCalled());
-    const target = spy.mock.contexts.at(-1) as HTMLElement;
-    expect(target.getAttribute('aria-checked')).toBe('true');
-    expect(target.textContent).toBe('الخط الزمني');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(intoView).not.toHaveBeenCalled();
+    expect(windowScroll).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('radio', { name: 'الآفاق' }));
+    await waitFor(() => expect(location.search).toContain('view=horizons'));
+    expect(intoView).not.toHaveBeenCalled();
+    expect(windowScroll).not.toHaveBeenCalled();
+  });
+
+  it('centres the chosen chip inside the switch itself, when the view changes', async () => {
+    await open('/goals?view=tree');
+    const box = document.querySelector('.goals-switch') as HTMLElement;
+    const sets: number[] = [];
+    let left = 0;
+    Object.defineProperty(box, 'scrollLeft', { configurable: true, get: () => left, set: (v: number) => { left = v; sets.push(v); } });
+    expect(sets).toEqual([]);
+    fireEvent.click(screen.getByRole('radio', { name: 'الآفاق' }));
+    await waitFor(() => expect(sets.length).toBeGreaterThan(0));
   });
 
   it('writes the view in ?view= and opens the tree by default', async () => {
