@@ -59,7 +59,8 @@ test('the review: the week with its insight, the journal timeline and the mood, 
   await expect(figures).toBeVisible();
   await expect(figures.getByRole('listitem').filter({ hasText: 'يومية الصباح' })).toHaveCount(1);
   for (const name of ['تمّ', 'معطَّل', 'التالي']) await expect(page.getByRole('list', { name, exact: true })).toBeVisible();
-  const generate = page.getByRole('button', { name: 'توليد مراجعة الأسبوع' });
+  // «توليد مراجعة الأسبوع» until a review is shown; «إعادة التوليد» once one is (the other project may have made it)
+  const generate = page.getByRole('button', { name: /^(توليد مراجعة الأسبوع|إعادة التوليد)$/ });
   await expect(generate).toBeVisible();
   await expectNoSeriousA11y(page);
   await expectNoHorizontalScroll(page);
@@ -76,6 +77,8 @@ test('the review: the week with its insight, the journal timeline and the mood, 
   await expectNoSeriousA11y(page);
   await consent.getByRole('button', { name: 'موافقة' }).click();
   await expect(page.getByText(FAKE_LINE)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'إعادة التوليد' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'توليد مراجعة الأسبوع' })).toHaveCount(0);
   // the first try was refused for want of the consent, the second answered
   await expect.poll(() => weeklyPosts.filter((s) => s !== 401)).toEqual([403, 200]);
   await expectNoSeriousA11y(page);
@@ -92,6 +95,8 @@ test('the review: the week with its insight, the journal timeline and the mood, 
   // the feelings of the day sit with its evening entry
   await expect(entries.getByRole('list', { name: 'المشاعر' }).first()).toContainText('هدوء');
   await expect(page.getByRole('list', { name: 'ملخص الأشهر' }).getByText(/للوعي الذاتي$/).first()).toBeVisible();
+  // the commitment of the month: the habit days kept, as a percent
+  await expect(page.getByRole('list', { name: 'ملخص الأشهر' }).getByText(/^الالتزام بالعادات اليومية: \d+% \(\d+ من \d+\)$/).first()).toBeVisible();
   await expectNoSeriousA11y(page);
   await expectNoHorizontalScroll(page);
   await shot(page, 'review-journal');
@@ -121,7 +126,7 @@ test('the review: the week with its insight, the journal timeline and the mood, 
   await shot(page, 'review-journal-offline');
   await tab(page, 'الأسبوع');
   await expect(page.getByText('نسخة محفوظة · بلا اتصال')).toBeVisible();
-  await page.getByRole('button', { name: 'توليد مراجعة الأسبوع' }).click();
+  await page.getByRole('button', { name: 'إعادة التوليد' }).click();
   await expect(page.getByText('يحتاج اتصالاً')).toBeVisible();
   await expectNoHorizontalScroll(page);
   await shot(page, 'review-week-offline');

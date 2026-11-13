@@ -184,11 +184,17 @@ export function monthLabel(month: string): string {
   return `${name} ${fmt.num(year, { useGrouping: false })}`;
 }
 
+/** The days with an evening journal, in the form the morning uses: a single day and two days are
+ *  words («يوم»، «يومان») in both, any other count is the numeral (the morning adds the noun). */
+function eveningDays(n: number): string {
+  return n === 1 || n === 2 ? fmt.count(n, 'day') : fmt.num(n);
+}
+
 /** The sentence of a month card (feature 15, ruling 16): the days with an entry, the mood, and the
  *  words that say it is for self-awareness. There is no watch data in it. */
 export function monthSentence(group: MonthGroup): string {
   const mood = group.moodAvg === null ? 'لا تسجيل للمزاج' : `متوسط المزاج ${valueNum(group.moodAvg)}`;
-  return `${monthLabel(group.month)}: ${fmt.count(group.morning, 'day')} صباحاً، ${fmt.num(group.evening)} مساءً، ${mood} · للوعي الذاتي`;
+  return `${monthLabel(group.month)}: ${fmt.count(group.morning, 'day')} صباحاً، ${eveningDays(group.evening)} مساءً، ${mood} · للوعي الذاتي`;
 }
 
 /** The ISO day `n` days before `day`. */

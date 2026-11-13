@@ -182,3 +182,30 @@ describe('the month sentence', () => {
     expect(text).toBe('أكتوبر 2026: يوم صباحاً، 0 مساءً، لا تسجيل للمزاج · للوعي الذاتي');
   });
 });
+
+describe('the month sentence: one form for the two journals (fix round 1, M-1)', () => {
+  const group = (morning: number, evening: number) => ({ month: '2026-09', morning, evening, moodDays: 0, moodAvg: null });
+
+  it('one and one: the same word for both', () => {
+    expect(monthSentence(group(1, 1))).toBe('سبتمبر 2026: يوم صباحاً، يوم مساءً، لا تسجيل للمزاج · للوعي الذاتي');
+  });
+
+  it('two and two, and the plural and zero keep the numeral for the evening as in the brief', () => {
+    expect(monthSentence(group(2, 2))).toContain('يومان صباحاً، يومان مساءً');
+    expect(monthSentence(group(9, 7))).toContain('9 أيام صباحاً، 7 مساءً');
+    expect(monthSentence(group(0, 0))).toContain('0 أيام صباحاً، 0 مساءً');
+  });
+
+  it('the same count is written the same way in the morning and in the evening, whatever the count', () => {
+    for (let n = 0; n <= 40; n += 1) {
+      const text = monthSentence(group(n, n));
+      const morning = text.split('، ')[0]?.split(': ')[1] ?? '';
+      const evening = text.split('، ')[1] ?? '';
+      // the morning word, without «صباحاً»; the evening word, without «مساءً»
+      const m = morning.replace(' صباحاً', '');
+      const e = evening.replace(' مساءً', '');
+      const word = n === 1 || n === 2;
+      expect(word ? e : e).toBe(word ? m : String(n));
+    }
+  });
+});

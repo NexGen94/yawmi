@@ -165,6 +165,12 @@
   line-height: var(--lh);
 }
 
+.review-month-commitment {
+  margin: var(--sp-2) 0 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
 .review-entries {
   gap: var(--sp-3);
 }

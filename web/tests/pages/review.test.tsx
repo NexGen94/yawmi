@@ -353,6 +353,102 @@ describe('the week tab: the weekly insight', () => {
   });
 });
 
+describe('the week tab: asking again (fix round 1, M-4)', () => {
+  it('after a reply the button is «إعادة التوليد», and it sends regenerate', async () => {
+    const s = serve();
+    await openWeek();
+    press('توليد مراجعة الأسبوع');
+    await screen.findByText('الموضوع المتكرر: ضغط العمل مساءً.');
+    expect(screen.queryByRole('button', { name: 'توليد مراجعة الأسبوع' })).toBeNull();
+    expect(s.of('POST', '/v1/insights/weekly')[0]?.body).toEqual({ day: '2026-11-14', regenerate: false });
+    press('إعادة التوليد');
+    await waitFor(() => expect(s.of('POST', '/v1/insights/weekly')).toHaveLength(2));
+    expect(s.of('POST', '/v1/insights/weekly')[1]?.body).toEqual({ day: '2026-11-14', regenerate: true });
+    // still one prominent button
+    expect(document.querySelectorAll('.btn-primary')).toHaveLength(1);
+  });
+
+  it('a review already stored for the week has «إعادة التوليد» from the start, and no call is made by showing it', async () => {
+    const s = serve({ 'GET /v1/reviews': () => json({ items: [weekly({ cards: [], source_ids: [], days: [] })] }) });
+    await openWeek();
+    await screen.findByText('الموضوع المتكرر: ضغط العمل مساءً.');
+    expect(screen.queryByRole('button', { name: 'توليد مراجعة الأسبوع' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'إعادة التوليد' })).toBeTruthy();
+    expect(s.of('POST', '/v1/insights/weekly')).toHaveLength(0);
+  });
+
+  it('a double click while the answer is awaited sends one request', async () => {
+    let release: (r: Response) => void = () => undefined;
+    const s = serve({ 'POST /v1/insights/weekly': () => new Promise<Response>((resolve) => (release = resolve)) });
+    await openWeek();
+    const button = screen.getByRole('button', { name: 'توليد مراجعة الأسبوع' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(s.of('POST', '/v1/insights/weekly')).toHaveLength(1));
+    release(json(weekly()));
+    await screen.findByText('الموضوع المتكرر: ضغط العمل مساءً.');
+    expect(s.of('POST', '/v1/insights/weekly')).toHaveLength(1);
+  });
+
+  it('the retry after a failure sends what the failed press sent', async () => {
+    const s = serve({ 'POST /v1/insights/weekly': () => coded(502, 'تعذّر الحصول على رد صالح', 'provider_error') });
+    await openWeek();
+    press('توليد مراجعة الأسبوع');
+    await screen.findByRole('alert');
+    press('إعادة المحاولة');
+    await waitFor(() => expect(s.of('POST', '/v1/insights/weekly')).toHaveLength(2));
+    expect(s.of('POST', '/v1/insights/weekly').map((c) => c.body)).toEqual([
+      { day: '2026-11-14', regenerate: false },
+      { day: '2026-11-14', regenerate: false },
+    ]);
+  });
+});
+
+describe('the week tab: a stored review is shown as it was stored (fix round 1, M-3)', () => {
+  const ONE_LINE = settings({ ai_lines: 1 });
+  const TWO = ['السطر الأول من مراجعة قديمة.', 'السطر الثاني منها.'];
+
+  it('a two-line review of a past week still shows both lines when ai_lines is 1 now', async () => {
+    serve({
+      'GET /v1/settings': () => json(ONE_LINE),
+      'GET /v1/reviews': () => json({ items: [weekly({ day: '2026-11-01', id: '00000000-0000-7000-8000-000000000031', lines: TWO })] }),
+    });
+    await openWeek();
+    const section = await screen.findByRole('region', { name: 'المراجعات السابقة' });
+    await waitFor(() => expect(within(section).getByText(TWO[0] as string)).toBeTruthy());
+    expect(within(section).getByText(TWO[1] as string)).toBeTruthy();
+    expect(within(section).queryByText('تعذّر التحليل اليوم')).toBeNull();
+  });
+
+  it('so does the stored review of this week', async () => {
+    serve({
+      'GET /v1/settings': () => json(ONE_LINE),
+      'GET /v1/reviews': () => json({ items: [weekly({ lines: TWO, cards: [], source_ids: [], days: [] })] }),
+    });
+    await openWeek();
+    expect(await screen.findByText(TWO[1] as string)).toBeTruthy();
+    expect(screen.queryByText('تعذّر التحليل اليوم')).toBeNull();
+  });
+
+  it('the other guards still hold for a stored row: a line with a new line in it is not shown', async () => {
+    serve({
+      'GET /v1/reviews': () => json({ items: [weekly({ day: '2026-11-01', id: '00000000-0000-7000-8000-000000000032', lines: ['سطر\nمكسور'] })] }),
+    });
+    await openWeek();
+    const section = await screen.findByRole('region', { name: 'المراجعات السابقة' });
+    await waitFor(() => expect(within(section).getByText('تعذّر التحليل اليوم')).toBeTruthy());
+  });
+
+  it('a new reply is still held to the lines asked for now: two lines with ai_lines 1 is not shown', async () => {
+    const s = serve({ 'GET /v1/settings': () => json(ONE_LINE) });
+    await openWeek();
+    await waitFor(() => expect(s.of('GET', '/v1/settings')).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    press('توليد مراجعة الأسبوع');
+    expect(await screen.findByText('تعذّر التحليل اليوم')).toBeTruthy();
+  });
+});
+
 describe('the week tab: the earlier reviews', () => {
   const OLD = [
     weekly({ day: '2026-11-01', id: '00000000-0000-7000-8000-000000000021', lines: ['أسبوع تشرين الأول: ثبات الصباح.'] }),
@@ -494,6 +590,72 @@ describe('the journal tab', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'الإدخالات' })).toBeTruthy();
   });
 
+  it('reads from the first day of the month that holds the start of the window, so the oldest month card is whole (I-1)', async () => {
+    // today is 2026-11-14: the window starts on 2026-05-19, and the card of May needs all of May
+    const entries = [
+      entry('2026-05-10', 'morning'),
+      entry('2026-05-10', 'evening'),
+      entry('2026-05-25', 'morning'),
+      entry('2026-05-25', 'evening'),
+    ];
+    const moods = [
+      { day: '2026-05-10', score: 3, feelings: [], activities: [] },
+      { day: '2026-05-25', score: 4, feelings: [], activities: [] },
+    ];
+    const between = (search: string) => {
+      const q = new URLSearchParams(search);
+      return (day: string): boolean => day >= (q.get('from') ?? '') && day <= (q.get('to') ?? '');
+    };
+    const s = serveJournal({
+      'GET /v1/journal': (call) => json({ entries: entries.filter((e) => between(call.search)(e.day)) }),
+      'GET /v1/mood': (call) => json({ logs: moods.filter((m) => between(call.search)(m.day)) }),
+    });
+    await openReview('/review?tab=journal');
+    expect(await screen.findByText('مايو 2026: يومان صباحاً، يومان مساءً، متوسط المزاج 3.5 · للوعي الذاتي')).toBeTruthy();
+    expect(s.of('GET', '/v1/journal')[0]?.search).toContain('from=2026-05-01');
+    expect(s.of('GET', '/v1/mood')[0]?.search).toContain('from=2026-05-01');
+    expect(s.of('GET', '/v1/habit-logs')[0]?.search).toContain('from=2026-05-01');
+  });
+
+  it('the month card has a line of commitment: the habit days kept, as a percent', async () => {
+    const walk = habit('walk', 'المشي');
+    const logs = DAYS.slice(0, 7).map((d) => log('walk', d));
+    serveJournal({ 'GET /v1/habits': () => json([walk]), 'GET /v1/habit-logs': () => json({ logs }) });
+    await openReview('/review?tab=journal');
+    // 1 to 14 November are due (the habit started on 31 October): 7 kept
+    expect(await screen.findByText('الالتزام بالعادات اليومية: 50% (7 من 14)')).toBeTruthy();
+    // October holds one due day (the 31st), not kept
+    expect(screen.getByText('الالتزام بالعادات اليومية: 0% (0 من 1)')).toBeTruthy();
+  });
+
+  it('a month without a daily habit day has no commitment line', async () => {
+    serveJournal({ 'GET /v1/habits': () => json([]), 'GET /v1/habit-logs': () => json({ logs: [] }) });
+    await openReview('/review?tab=journal');
+    await screen.findByText('نوفمبر 2026: 9 أيام صباحاً، 7 مساءً، متوسط المزاج 3.9 · للوعي الذاتي');
+    expect(screen.queryByText(/الالتزام بالعادات اليومية/)).toBeNull();
+  });
+
+  it('the commitment uses the digits of the setting', async () => {
+    setDigits('arab');
+    const walk = habit('walk', 'المشي');
+    serveJournal({
+      'GET /v1/settings': () => json(settings({ digits: 'arab' })),
+      'GET /v1/habits': () => json([walk]),
+      'GET /v1/habit-logs': () => json({ logs: DAYS.slice(0, 7).map((d) => log('walk', d)) }),
+    });
+    await openReview('/review?tab=journal');
+    expect(await screen.findByText(/الالتزام بالعادات اليومية: ٥٠٪ \(٧ من ١٤\)/)).toBeTruthy();
+  });
+
+  it('one morning and one evening are written in one form: «يوم صباحاً، يوم مساءً» (M-1)', async () => {
+    serveJournal({
+      'GET /v1/journal': () => json({ entries: [entry('2026-09-03', 'morning'), entry('2026-09-03', 'evening')] }),
+      'GET /v1/mood': () => json({ logs: [] }),
+    });
+    await openReview('/review?tab=journal');
+    expect(await screen.findByText('سبتمبر 2026: يوم صباحاً، يوم مساءً، لا تسجيل للمزاج · للوعي الذاتي')).toBeTruthy();
+  });
+
   it('shows the words of an entry', async () => {
     serveJournal();
     await openReview('/review?tab=journal');
@@ -518,13 +680,13 @@ describe('the journal tab', () => {
     expect(screen.getByText('أكتوبر 2026: يوم صباحاً، 0 مساءً، لا تسجيل للمزاج · للوعي الذاتي')).toBeTruthy();
   });
 
-  it('reads the last half year of the journal and the mood', async () => {
+  it('reads about half a year of the journal and the mood, from the first of a month (the contract of fix round 1, I-1)', async () => {
     const s = serveJournal();
     await openReview('/review?tab=journal');
     await screen.findByRole('list', { name: 'إدخالات اليوميات' });
     expect(s.of('GET', '/v1/journal')[0]?.search).toContain('to=2026-11-14');
-    expect(s.of('GET', '/v1/journal')[0]?.search).toContain('from=2026-05-19');
-    expect(s.of('GET', '/v1/mood')[0]?.search).toContain('from=2026-05-19');
+    expect(s.of('GET', '/v1/journal')[0]?.search).toContain('from=2026-05-01');
+    expect(s.of('GET', '/v1/mood')[0]?.search).toContain('from=2026-05-01');
   });
 
   it('shows twenty entries and adds twenty more on «عرض المزيد»', async () => {

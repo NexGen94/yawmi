@@ -7,6 +7,7 @@ import { type AiResult, unwrapAi, useAi } from '../../ai/useAi';
 import { api } from '../../api/client';
 import type { Day } from '../../domain/types';
 import { OFFLINE_NOTE } from '../../lib/notes';
+import { storedLines } from '../../review/stored';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { Skeleton } from '../../ui/Skeleton';
@@ -36,6 +37,8 @@ export function WeeklyInsight({ today, stored, maxLines }: WeeklyInsightProps) {
   const ai = useAi();
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const turn = useRef(0);
+  // what the last press asked for, so a retry asks the same
+  const asked = useRef(false);
   const linesNow = useRef(maxLines);
   linesNow.current = maxLines;
 
@@ -54,23 +57,28 @@ export function WeeklyInsight({ today, stored, maxLines }: WeeklyInsightProps) {
     }
   };
 
-  const generate = async (): Promise<void> => {
+  const generate = async (regenerate: boolean): Promise<void> => {
     const mine = ++turn.current;
+    asked.current = regenerate;
     setPhase({ kind: 'loading' });
     const result = await ai.run(() =>
-      api.POST('/v1/insights/weekly', { body: { day: today, regenerate: false } }).then(unwrapAi),
+      api.POST('/v1/insights/weekly', { body: { day: today, regenerate } }).then(unwrapAi),
     );
     if (mine === turn.current) setPhase(settle(result));
   };
 
   const loading = phase.kind === 'loading';
-  const storedInsight = stored === undefined ? null : acceptInsight(stored, maxLines, { cardsOptional: true });
+  // the stored review is shown as it was stored, whatever the lines setting is now
+  const storedLimit = stored === undefined ? maxLines : storedLines(stored, maxLines);
+  const storedInsight = stored === undefined ? null : acceptInsight(stored, storedLimit, { cardsOptional: true });
+  // once there is a reply (stored, or just made) the button says so: asking again is explicit
+  const hasReply = phase.kind === 'ok' || stored !== undefined;
   let body;
   switch (phase.kind) {
     case 'idle':
       body =
         storedInsight !== null && storedInsight.lines.length > 0 ? (
-          <InsightCard insight={storedInsight} maxLines={maxLines} />
+          <InsightCard insight={storedInsight} maxLines={storedLimit} />
         ) : (
           <p class="review-none">{stored !== undefined && storedInsight === null ? UNAVAILABLE_TEXT : 'لم تُولَّد مراجعة لهذا الأسبوع بعد'}</p>
         );
@@ -88,13 +96,13 @@ export function WeeklyInsight({ today, stored, maxLines }: WeeklyInsightProps) {
       body = <InsightCard insight={phase.insight} maxLines={maxLines} />;
       break;
     case 'consent':
-      body = <ConsentNotice onEnable={() => void generate()} />;
+      body = <ConsentNotice onEnable={() => void generate(asked.current)} />;
       break;
     case 'offline':
       body = (
         <div class="state-message">
           <p class="state-text">{OFFLINE_NOTE}</p>
-          <Button onClick={() => void generate()}>إعادة المحاولة</Button>
+          <Button onClick={() => void generate(asked.current)}>إعادة المحاولة</Button>
         </div>
       );
       break;
@@ -102,7 +110,7 @@ export function WeeklyInsight({ today, stored, maxLines }: WeeklyInsightProps) {
       body = (
         <div class="state-message" role="alert">
           <p class="state-text">{phase.message}</p>
-          <Button onClick={() => void generate()}>إعادة المحاولة</Button>
+          <Button onClick={() => void generate(asked.current)}>إعادة المحاولة</Button>
         </div>
       );
       break;
@@ -113,8 +121,8 @@ export function WeeklyInsight({ today, stored, maxLines }: WeeklyInsightProps) {
       <div class="review-insight" aria-busy={loading ? 'true' : 'false'}>
         {body}
         <div class="review-actions">
-          <Button variant="primary" disabled={loading} onClick={() => void generate()}>
-            توليد مراجعة الأسبوع
+          <Button variant="primary" disabled={loading} onClick={() => void generate(hasReply)}>
+            {hasReply ? 'إعادة التوليد' : 'توليد مراجعة الأسبوع'}
           </Button>
         </div>
       </div>

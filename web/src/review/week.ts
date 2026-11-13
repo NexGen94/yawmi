@@ -51,7 +51,7 @@ export function weekBounds(day: Day, weekStart: WeekStart): { start: Day; end: D
   return periodBounds(day, 'week', weekStart);
 }
 
-interface Prepared {
+export interface Prepared {
   habit: HabitOut;
   spec: HabitSpec;
   logs: HabitLog[];
@@ -60,12 +60,12 @@ interface Prepared {
 const inRange = (day: Day, first: Day, last: Day): boolean => day >= first && day <= last;
 
 /** A day has `skip` or `vacation` and no done log: it is neutral, in no count. */
-function isNeutral(logs: readonly HabitLog[], day: Day): boolean {
+export function isNeutral(logs: readonly HabitLog[], day: Day): boolean {
   const mine = logs.filter((l) => l.day === day);
   return mine.some((l) => l.status === 'skip' || l.status === 'vacation') && !mine.some((l) => l.status === 'done');
 }
 
-function prepare(habit: HabitOut, logs: readonly HabitLogOut[]): Prepared | null {
+export function prepare(habit: HabitOut, logs: readonly HabitLogOut[]): Prepared | null {
   try {
     return { habit, spec: habitSpecOf(habit), logs: toDomainLogs([...logs], habit.code) };
   } catch (error) {
@@ -76,7 +76,7 @@ function prepare(habit: HabitOut, logs: readonly HabitLogOut[]): Prepared | null
 }
 
 /** The scheduled days of the habit inside [first, last], as days. */
-function scheduledDays(spec: HabitSpec, first: Day, last: Day): Day[] {
+export function scheduledDays(spec: HabitSpec, first: Day, last: Day): Day[] {
   const out: Day[] = [];
   for (let ord = toOrdinal(first); ord <= toOrdinal(last); ord += 1) {
     const day = fromOrdinal(ord);

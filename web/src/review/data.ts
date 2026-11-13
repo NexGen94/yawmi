@@ -28,6 +28,11 @@ export const logsFromWeek = (today: Day): Day => daysBefore(today, LOG_WINDOW_DA
 /** The journal tab reads this many days back: a half year, at most 400 as the server allows. */
 export const JOURNAL_DAYS = 180;
 
+/** Where the journal tab starts reading: the first day of the month that holds the day `JOURNAL_DAYS - 1`
+ *  back, so the oldest month it shows is whole (its card counts all of its days). At most 209 days
+ *  back, inside the 400 the server allows. */
+export const journalFrom = (today: Day): Day => `${daysBefore(today, JOURNAL_DAYS - 1).slice(0, 7)}-01`;
+
 export const weekQueryKey = (today: Day): string => `review-week:${today}`;
 export const journalQueryKey = (today: Day): string => `review-journal:${today}`;
 export const moodQueryKey = (today: Day): string => `review-mood:${today}`;
@@ -98,21 +103,28 @@ export function useWeekData(today: Day): WeekData {
 interface JournalBundle {
   journal: JournalEntryOut[];
   mood: MoodLogOut[];
+  /** The habits and their logs over the same days: the month cards count the habit days kept. */
+  habits: HabitOut[];
+  logs: HabitLogOut[];
 }
 
 async function loadJournal(today: Day): Promise<JournalBundle> {
-  const from = daysBefore(today, JOURNAL_DAYS - 1);
-  const [journal, mood] = await Promise.all([
+  const from = journalFrom(today);
+  const [journal, mood, habits, logs] = await Promise.all([
     api.GET('/v1/journal', { params: { query: { from, to: today } } }).then(unwrap),
     api.GET('/v1/mood', { params: { query: { from, to: today } } }).then(unwrap),
+    api.GET('/v1/habits').then(unwrap),
+    api.GET('/v1/habit-logs', { params: { query: { from, to: today } } }).then(unwrap),
   ]);
-  return { journal: journal.entries, mood: mood.logs };
+  return { journal: journal.entries, mood: mood.logs, habits, logs: logs.logs };
 }
 
 export interface JournalData {
   query: QueryResult<JournalBundle>;
   journal: JournalEntryOut[];
   mood: MoodLogOut[];
+  habits: HabitOut[];
+  logs: HabitLogOut[];
 }
 
 export function useJournalData(today: Day): JournalData {
@@ -123,8 +135,10 @@ export function useJournalData(today: Day): JournalData {
     () => ({
       journal: bundle === undefined ? [] : applyPendingJournal(bundle.journal, pending),
       mood: bundle === undefined ? [] : applyPendingMood(bundle.mood, pending),
+      habits: bundle?.habits ?? [],
+      logs: bundle === undefined ? [] : applyPendingLogs(bundle.logs, pending, today),
     }),
-    [bundle, pending],
+    [bundle, pending, today],
   );
   return { query, ...derived };
 }

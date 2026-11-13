@@ -3,7 +3,8 @@ import { useMemo, useState } from 'preact/hooks';
 import type { Day } from '../../domain/types';
 import { fmt } from '../../lib/format';
 import { type JournalEntryOut, type MoodLogOut } from '../../data/pending';
-import { useJournalData } from '../../review/data';
+import { useJournalData, WEEK_START } from '../../review/data';
+import { monthCommitment } from '../../review/commitment';
 import { monthGroups } from '../../review/mood-stats';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
@@ -119,6 +120,10 @@ export function JournalTimeline({ today }: { today: Day }) {
   const [shown, setShown] = useState(PAGE_SIZE);
   const entries = useMemo(() => [...data.journal].sort(newestFirst), [data.journal]);
   const months = useMemo(() => monthGroups(data.journal, data.mood), [data.journal, data.mood]);
+  const commitments = useMemo(
+    () => new Map(months.map((g) => [g.month, monthCommitment({ habits: data.habits, logs: data.logs, month: g.month, today, weekStart: WEEK_START })])),
+    [months, data.habits, data.logs, today],
+  );
   const moods = useMemo(() => new Map(data.mood.map((m) => [m.day, m])), [data.mood]);
   const visible = entries.slice(0, shown);
 
@@ -136,7 +141,7 @@ export function JournalTimeline({ today }: { today: Day }) {
         <ul class="review-months" aria-label="ملخص الأشهر">
           {months.map((group) => (
             <li key={group.month}>
-              <MonthCard group={group} />
+              <MonthCard group={group} commitment={commitments.get(group.month)} />
             </li>
           ))}
         </ul>
