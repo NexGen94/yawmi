@@ -1,0 +1,227 @@
+/* The review page (task 21): the week, the journal timeline and the mood. Colors only through the
+   tokens; logical properties only. Two columns on the desktop (the shell's .page-cols), one under
+   900px in the same order. */
+
+.review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3) var(--sp-5);
+  margin-block-end: var(--sp-5);
+}
+
+.review-head h1 {
+  margin: 0;
+}
+
+.review-main,
+.review-side,
+.review-mood,
+.review-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-inline-size: 0;
+}
+
+.review-skeleton {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.review-none,
+.review-note,
+.review-range,
+.review-days {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.review-days {
+  margin-block-start: var(--sp-3);
+}
+
+/* ---------- The four numbers ---------- */
+
+.review-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--sp-3);
+  margin: var(--sp-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-inline-size: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--c-blue-pale);
+  border-radius: var(--radius-card);
+}
+
+.review-figure-label {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.review-figure-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-2);
+}
+
+.review-figure-num {
+  font-size: calc(var(--fs-num-lg) * 0.7);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.review-figure-of {
+  color: var(--c-ink-2);
+  font-size: var(--fs-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.review-figure-code {
+  align-self: flex-start;
+  color: var(--c-ink-2);
+  font-family: var(--font-code);
+  font-size: var(--fs-note);
+}
+
+/* ---------- Done, blocked, next ---------- */
+
+.review-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--sp-5);
+}
+
+.review-lines-title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-section);
+  font-weight: 600;
+}
+
+.review-lines-list,
+.review-previous,
+.review-correlations,
+.review-months,
+.review-entries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-lines-list li,
+.review-correlations li {
+  line-height: var(--lh);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- The insight and the earlier reviews ---------- */
+
+.review-insight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.review-previous > li {
+  border-block-end: 1px solid var(--c-blue-pale);
+}
+
+.review-previous > li:last-child {
+  border-block-end: 0;
+}
+
+/* ---------- The journal ---------- */
+
+.review-month-text {
+  margin: 0;
+  line-height: var(--lh);
+}
+
+.review-entries {
+  gap: var(--sp-3);
+}
+
+.review-entry article {
+  padding: var(--sp-4);
+  border: 1px solid var(--c-blue-pale);
+  border-radius: var(--radius-card);
+  background: var(--c-surface);
+}
+
+.review-entry-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.review-entry-mood {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  margin-block-end: var(--sp-2);
+}
+
+.review-mood-score {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.review-feelings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-fields {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+}
+
+.review-field dt {
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.review-field dd {
+  margin: 0;
+  line-height: var(--lh);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.review-more {
+  display: flex;
+  justify-content: center;
+}
