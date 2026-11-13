@@ -68,10 +68,10 @@ function reminderDays(mask: number): string {
 
 /** A count of periods: «3 أيام»، «أسبوعان»، «5 أشهر». */
 function periods(n: number, period: 'day' | 'week' | 'month'): string {
-  if (period === 'day') return fmt.count(n, 'day');
+  if (period === 'day') return fmt.stat(n, 'day');
   const forms = period === 'week' ? ['أسبوع', 'أسبوعان', 'أسابيع', 'أسبوعاً'] : ['شهر', 'شهران', 'أشهر', 'شهراً'];
-  if (n === 1) return forms[0] ?? '';
-  if (n === 2) return forms[1] ?? '';
+  if (n === 1) return `${fmt.num(1)} ${forms[0] ?? ''}`;
+  if (n === 2) return `${fmt.num(2)} ${forms[2] ?? ''}`;
   const last2 = Number.isInteger(n) ? n % 100 : -1;
   return `${fmt.num(n)} ${last2 >= 3 && last2 <= 10 ? forms[2] : forms[3]}`;
 }

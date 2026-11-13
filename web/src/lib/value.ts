@@ -16,3 +16,14 @@ export function points(ratio: number): number {
   if (ratio > 0 && ratio < 1) return Math.min(99, Math.max(1, Math.round(ratio * 100)));
   return Math.round(ratio * 100);
 }
+
+/** A value of the pace as text: «أقل من 1» between 0 and 1 (never «0», never «0.01»), one decimal
+ *  under 10, a whole number from 10. The pace is an estimate; two decimals of it are noise (Task 24).
+ *  The indicators keep `valueNum` of `lib/value`, which is exact. */
+export function paceNum(n: number): string {
+  if (n !== 0 && Math.abs(n) < 1) return 'أقل من 1';
+  return fmt.num(n, { maximumFractionDigits: Math.abs(n) < 10 ? 1 : 0 });
+}
+
+/** Where the pace ends, never above the target it is measured against. */
+export const shownEnd = (end: number, target: number): number => (target > 0 ? Math.min(end, target) : end);

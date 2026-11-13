@@ -46,7 +46,7 @@ export function WeekRing({ sessions, today, weekStart, target }: WeekRingProps) 
     <div class="week-ring">
       {target !== null && <Ring value={minutes / target} label="دقائق التنفّس هذا الأسبوع" size={112} />}
       <div class="week-figures">
-        <p class="week-minutes num">{target !== null ? `${fmt.num(minutes)} من ${fmt.count(target, 'minute')}` : fmt.count(minutes, 'minute')}</p>
+        <p class="week-minutes num">{target !== null ? `${fmt.num(minutes)} من ${fmt.count(target, 'minute')}` : fmt.stat(minutes, 'minute')}</p>
         <p class="breath-note">{count === 0 ? 'بلا جلسات هذا الأسبوع' : `${fmt.count(count, 'session')} هذا الأسبوع`}</p>
       </div>
       <SessionDots sessions={sessions} today={today} weekStart={weekStart} />

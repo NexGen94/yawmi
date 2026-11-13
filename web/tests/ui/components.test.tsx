@@ -376,6 +376,22 @@ describe('CheckRow', () => {
   });
 });
 
+describe('Slider that nobody moved (Task 24)', () => {
+  it('shows «—» and no fill instead of a number it will not save, and a number once it is set', () => {
+    const { container, rerender } = render(<Slider label="الهدوء" min={1} max={10} value={5} unset onChange={() => undefined} />);
+    expect(container.querySelector('.slider-value')?.textContent).toBe('—');
+    expect(container.querySelector('.slider')?.getAttribute('data-unset')).toBe('true');
+    rerender(<Slider label="الهدوء" min={1} max={10} value={5} onChange={() => undefined} />);
+    expect(container.querySelector('.slider-value')?.textContent).toBe('5');
+    expect(container.querySelector('.slider')?.getAttribute('data-unset')).toBeNull();
+  });
+
+  it('the filled part of the track follows the value, as a percentage of the range', () => {
+    const { container } = render(<Slider label="س" min={0} max={10} value={4} onChange={() => undefined} />);
+    expect((container.querySelector('.slider-fill') as HTMLElement).style.inlineSize).toBe('40%');
+  });
+});
+
 describe('Segmented with many options (Task 24)', () => {
   const many = (n: number) => Array.from({ length: n }, (_, i) => ({ value: `v${i}`, label: `خيار ${i}` }));
   const css = readFileSync(join(resolve(import.meta.dirname, '../../src/styles'), 'components.css'), 'utf8');

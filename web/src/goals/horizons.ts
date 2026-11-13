@@ -56,6 +56,13 @@ export function currentCycle(
   return { cycle, index: now - toOrdinal(cycle.start_date) + 1, length: toOrdinal(cycle.end_date) - toOrdinal(cycle.start_date) + 1 };
 }
 
+/** The length of cycle `no` in days, from the mirror: the home page and the goals page say the same
+ *  number (the home page had a constant of 56 while the first cycle is 57 days). */
+export function cycleLengthOf(goals: GoalsOut, no: number): number | undefined {
+  const cycle = goals.cycles.find((c) => c.cycle_no === no);
+  return cycle === undefined ? undefined : toOrdinal(cycle.end_date) - toOrdinal(cycle.start_date) + 1;
+}
+
 function cycleLine(goals: GoalsOut, today: Day): string {
   const first = [...goals.cycles].sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
   if (first === undefined) return NOTHING_DUE;

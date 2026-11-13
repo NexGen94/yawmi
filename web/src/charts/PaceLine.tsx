@@ -3,7 +3,7 @@ import { toOrdinal } from '../domain/days';
 import type { Day } from '../domain/types';
 import type { PaceOut } from '../goals/types';
 import { fmt } from '../lib/format';
-import { valueNum } from '../lib/value';
+import { paceNum, shownEnd } from '../lib/value';
 import { x } from './rtl';
 
 export interface PaceLineProps {
@@ -23,9 +23,9 @@ const PAD_BOTTOM = 28;
 const PLOT_W = W - PAD_START - PAD_END;
 const PLOT_H = H - PAD_TOP - PAD_BOTTOM;
 
-/** A value of the pace as text (the same formatter as the indicators: `lib/value`). */
-export const paceNum = valueNum;
+export { paceNum, shownEnd };
 const num = paceNum;
+
 
 /** «45 يوماً حتى الموعد», «الموعد اليوم» or «تجاوز الموعد بـ5 أيام». */
 export function daysLeftText(daysLeft: number): string {
@@ -40,7 +40,7 @@ export function paceSentence(pace: PaceOut, label: string): string {
   const parts: string[] = [];
   parts.push(pace.current_value === null ? 'لا قراءة بعد' : `القيمة ${num(pace.current_value)}`);
   parts.push(`المتوقع اليوم ${num(pace.expected_today)}`);
-  if (pace.projected_end !== null) parts.push(`المتوقع عند الموعد ${num(pace.projected_end)} من ${num(pace.target_value)}`);
+  if (pace.projected_end !== null) parts.push(`المتوقع عند الموعد ${num(shownEnd(pace.projected_end, pace.target_value))} من ${num(pace.target_value)}`);
   parts.push(daysLeftText(pace.days_left));
   return `${label}: ${parts.join('، ')}`;
 }

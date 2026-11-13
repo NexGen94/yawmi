@@ -160,6 +160,7 @@ function Score(props: { label: string; value: number | null; onChange(v: number)
         min={1}
         max={10}
         value={value ?? 5}
+        unset={value === null}
         onChange={onChange}
         valueText={(v) => `${fmt.num(v)} من ${fmt.num(10)}`}
       />

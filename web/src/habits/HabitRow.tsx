@@ -131,7 +131,9 @@ export function HabitRow({ item, onTick, onAdd, onUntick, onSkip, showState = fa
     <div class="habit-abstain-body">
       <span class={markClass} aria-hidden="true" />
       <span class="check-text">
-        <span class="check-label">{habit.title_ar}</span>
+        <span class="check-label">
+          <bdi>{habit.title_ar}</bdi>
+        </span>
         {habit.identity_text && <span class="check-note habit-identity">{habit.identity_text}</span>}
         {note && <span class="check-note">{note}</span>}
       </span>

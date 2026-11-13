@@ -93,7 +93,8 @@ describe('home: the ink card', () => {
     await renderStory();
     expect(screen.getByText(/الثلاثاء/)).toBeTruthy();
     expect(screen.getByText(/الدورة 1/)).toBeTruthy();
-    expect(screen.getByText(/اليوم 11 من 56/)).toBeTruthy();
+    // the length is the mirror's: with no mirror in this story, no length (and never the old constant 56)
+    expect(screen.getByText(/اليوم 11$/)).toBeTruthy();
   });
 
   it('calls setBadge with due minus done', async () => {

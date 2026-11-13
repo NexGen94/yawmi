@@ -17,7 +17,7 @@ import { toDomainLogs, type HabitLogOut } from '../data/pending';
 import { habitSpecOf } from '../habits/spec';
 import { roundUpNeed, type HabitTodayItem } from '../habits/useHabitsToday';
 import { fmt, type Noun } from '../lib/format';
-import { points, valueNum } from '../lib/value';
+import { paceNum, points, shownEnd, valueNum } from '../lib/value';
 import { lastScheduledBefore } from './state';
 
 export type LateItem =
@@ -117,7 +117,7 @@ export function impactSentence(item: LateItem): string {
       return `${late} ${item.outcomeCode}: أُنجز ${fmt.num(item.doneDue)} من ${fmt.num(item.totalDue)} محطة حان موعدها.`;
     }
     case 'goal_pace':
-      return `القيمة ${valueNum(item.current)} والمتوقع اليوم ${valueNum(item.expected)}. بالوتيرة الحالية يُبلغ ${valueNum(item.projected)} من ${valueNum(item.target)} عند الموعد.`;
+      return `القيمة ${valueNum(item.current)} والمتوقع اليوم ${paceNum(item.expected)}. بالوتيرة الحالية يُبلغ ${paceNum(shownEnd(item.projected, item.target))} من ${valueNum(item.target)} عند الموعد.`;
   }
 }
 

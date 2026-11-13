@@ -101,6 +101,8 @@ describe('impactSentence: the eight sentences of design 9.2', () => {
   it('a numeric goal under its pace', () => {
     const item: LateItem = { kind: 'goal_pace', ref: 'O3', title: 'الكتب', current: 2, expected: 3, projected: 8, target: 12 };
     expect(impactSentence(item)).toBe('القيمة 2 والمتوقع اليوم 3. بالوتيرة الحالية يُبلغ 8 من 12 عند الموعد.');
+    // an estimate is not written to two decimals, and is never above the target (Task 24)
+    expect(impactSentence({ ...item, expected: 0.014, projected: 134.8, target: 2 })).toBe('القيمة 2 والمتوقع اليوم أقل من 1. بالوتيرة الحالية يُبلغ 2 من 2 عند الموعد.');
   });
 
   it('a slip in an abstain habit: the strength now and without it', () => {

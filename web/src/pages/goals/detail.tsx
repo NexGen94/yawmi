@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useMemo } from 'preact/hooks';
 
-import { PaceLine, paceNum } from '../../charts/PaceLine';
+import { PaceLine, paceNum, shownEnd } from '../../charts/PaceLine';
 import { Code } from '../../goals/Code';
 import { useOnline, useToday } from '../../goals/data';
 import { cancelEdit, editCard, editMilestone, redoEdit, useGoalEdits } from '../../goals/edits';
@@ -59,7 +59,7 @@ function PaceCard({ pace }: { pace: PaceOut }) {
       <Facts>
         <Fact name="القيمة">{pace.current_value === null ? 'لا قراءة بعد' : `${num(pace.current_value)}${unit}`}</Fact>
         <Fact name="المتوقع اليوم">{`${num(pace.expected_today)}${unit}`}</Fact>
-        {pace.projected_end !== null && <Fact name="المتوقع عند الموعد">{`${num(pace.projected_end)} من ${num(pace.target_value)}${unit}`}</Fact>}
+        {pace.projected_end !== null && <Fact name="المتوقع عند الموعد">{`${num(shownEnd(pace.projected_end, pace.target_value))} من ${num(pace.target_value)}${unit}`}</Fact>}
         <Fact name="الموعد">
           <bdi>{fmt.day(pace.due_day)}</bdi>
         </Fact>
@@ -89,7 +89,7 @@ function Summary({
           <Iso text={o.acceptance} />
         </p>
         <Facts>
-          <Fact name="الإنجاز">{`${fmt.num(o.milestones_done)} من ${fmt.num(o.milestones_total)} محطة · ${pctOrDash(o.completion)}`}</Fact>
+          <Fact name="الإنجاز">{`${fmt.num(o.milestones_done)} من ${fmt.num(o.milestones_total)} محطة · ${fmt.ltr(pctOrDash(o.completion))}`}</Fact>
           <Fact name="الموعد">
             <bdi>{fmt.day(o.target_date)}</bdi>
           </Fact>

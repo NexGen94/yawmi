@@ -773,7 +773,7 @@ describe('the safety text and the four states', () => {
     expect(screen.getByRole('button', { name: 'بدء' }).hasAttribute('disabled')).toBe(false);
     fail = false;
     fireEvent.click(screen.getByRole('button', { name: 'إعادة المحاولة' }));
-    await screen.findByText(fmt.count(2, 'minute'));
+    await screen.findByText(fmt.stat(2, 'minute'));
   });
 
   it('offline with a saved copy: the copy and the badge', async () => {

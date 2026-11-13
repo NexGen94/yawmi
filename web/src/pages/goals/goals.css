@@ -172,9 +172,11 @@
   min-inline-size: 0;
 }
 
+/* The code, the title and the percentage on one row, at 390 as at 1280: a long title wraps inside its
+   own column, never under a code left alone. */
 .tree-head {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--sp-2) var(--sp-3);
 }
@@ -185,7 +187,6 @@
 }
 
 .tree-pct {
-  margin-inline-start: auto;
   font-variant-numeric: tabular-nums;
 }
 

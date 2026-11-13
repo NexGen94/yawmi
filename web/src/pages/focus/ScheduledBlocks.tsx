@@ -15,7 +15,9 @@ export function ScheduledBlocks({ plans }: { plans: FocusPlanOut[] }) {
         <ul class="focus-block-list">
           {blocks.map((p) => (
             <li key={p.id}>
-              <span class="focus-plan-title">{p.title_ar}</span>
+              <span class="focus-plan-title">
+              <bdi>{p.title_ar}</bdi>
+            </span>
               <span class="focus-note">{` · ${scheduleText(p.weekday_mask ?? 0, p.start_time ?? '')} · ${fmt.count(p.minutes, 'minute')}`}</span>
             </li>
           ))}

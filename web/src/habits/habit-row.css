@@ -22,6 +22,8 @@
 }
 
 .habit-row {
+  /* The title and its actions stay together on a wide page (they were 750 px apart). */
+  max-inline-size: 760px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -112,13 +114,13 @@
 }
 
 @media (width < 560px) {
-  /* A row with the «+» button drops its actions under the title, in line with the text, so the
-     title keeps its width. A row with «تخطي» alone keeps it on the same line. */
-  .habit-row:has(.habit-plus) {
+  /* Every row has one shape: the check and the title, then the actions under the text (not only the
+     rows with a «+» button: they used to drop in three different ways). */
+  .habit-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .habit-row:has(.habit-plus) .habit-actions {
+  .habit-row .habit-actions {
     padding-inline-start: calc(var(--sp-2) + var(--hit) + var(--sp-3));
   }
 }

@@ -9,7 +9,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../src/app';
-import { setDigits } from '../../src/lib/format';
+import { fmt, setDigits } from '../../src/lib/format';
 import { closeDb, enqueue } from '../../src/sync/outbox';
 import { card, coded, consent, consentRequired, insightOut, json, settings, stubServer, type Handler } from '../helpers/ai-fixtures';
 import { goals, milestone } from '../helpers/goals-fixtures';
@@ -170,7 +170,8 @@ describe('the week tab: four numbers and three lists', () => {
     expect(text[3]).toContain('الإنجليزية');
     expect(text[3]).toContain('85');
     expect(text[3]).toContain('من 285');
-    expect(text[3]).toContain('AC7.4');
+    // the code of the criterion is the plan's, not a label: it is data on the tile, not text (Task 24)
+    expect(text[3]).not.toContain('AC7.4');
   });
 
   it('a criterion no habit carries is not drawn', async () => {
@@ -623,9 +624,9 @@ describe('the journal tab', () => {
     serveJournal({ 'GET /v1/habits': () => json([walk]), 'GET /v1/habit-logs': () => json({ logs }) });
     await openReview('/review?tab=journal');
     // 1 to 14 November are due (the habit started on 31 October): 7 kept
-    expect(await screen.findByText('الالتزام بالعادات اليومية: 50% (7 من 14)')).toBeTruthy();
+    expect(await screen.findByText(`الالتزام بالعادات اليومية: ${fmt.ltr('50%')} (7 من 14)`)).toBeTruthy();
     // October holds one due day (the 31st), not kept
-    expect(screen.getByText('الالتزام بالعادات اليومية: 0% (0 من 1)')).toBeTruthy();
+    expect(screen.getByText(`الالتزام بالعادات اليومية: ${fmt.ltr('0%')} (0 من 1)`)).toBeTruthy();
   });
 
   it('a month without a daily habit day has no commitment line', async () => {
@@ -644,7 +645,7 @@ describe('the journal tab', () => {
       'GET /v1/habit-logs': () => json({ logs: DAYS.slice(0, 7).map((d) => log('walk', d)) }),
     });
     await openReview('/review?tab=journal');
-    expect(await screen.findByText(/الالتزام بالعادات اليومية: ٥٠٪ \(٧ من ١٤\)/)).toBeTruthy();
+    expect(await screen.findByText(/الالتزام بالعادات اليومية: .٥٠٪. \(٧ من ١٤\)/)).toBeTruthy();
   });
 
   it('one morning and one evening are written in one form: «يوم صباحاً، يوم مساءً» (M-1)', async () => {

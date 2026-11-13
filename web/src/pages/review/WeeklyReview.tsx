@@ -116,14 +116,11 @@ export function WeeklyReview({ today }: { today: Day }) {
             <p class="review-range">{`من ${fmt.dayShort(start)} إلى ${fmt.dayShort(end)}`}</p>
             <ul class="review-figures" aria-label="أرقام الأسبوع">
               {figures.map((f) => (
-                <li key={f.key} class="review-figure">
+                <li key={f.key} class="review-figure" data-ac={f.ac}>
                   <span class="review-figure-label">{f.label}</span>
                   <span class="review-figure-value">
                     <span class="review-figure-num">{f.value}</span>
                     <span class="review-figure-of">{f.of}</span>
-                  </span>
-                  <span class="review-figure-code" dir="ltr">
-                    {f.ac}
                   </span>
                 </li>
               ))}

@@ -17,7 +17,7 @@ export function MonthCard({ group, commitment }: MonthCardProps) {
     <div class="card review-month">
       <p class="review-month-text">{monthSentence(group)}</p>
       {commitment != null && (
-        <p class="review-month-commitment">{`الالتزام بالعادات اليومية: ${ratioPct(commitment.reached / commitment.total)} (${fmt.num(commitment.reached)} من ${fmt.num(commitment.total)})`}</p>
+        <p class="review-month-commitment">{`الالتزام بالعادات اليومية: ${fmt.ltr(ratioPct(commitment.reached / commitment.total))} (${fmt.num(commitment.reached)} من ${fmt.num(commitment.total)})`}</p>
       )}
     </div>
   );

@@ -716,24 +716,49 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
   cursor: pointer;
 }
 
-.slider-input::-webkit-slider-runnable-track {
+.slider-box {
+  position: relative;
+  display: grid;
+}
+
+/* The rail and its fill are drawn by the component (the filled part follows the value from the
+   inline start, in either direction); the native track is transparent over them. */
+.slider-rail {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 50%;
   block-size: 8px;
+  margin-block-start: -4px;
+  overflow: hidden;
   border: 1px solid var(--c-blue);
   border-radius: var(--radius-pill);
   background: var(--c-blue-pale);
+}
+
+.slider-fill {
+  display: block;
+  block-size: 100%;
+  background: var(--c-blue);
+}
+
+:is(.hero-card, .on-ink) .slider-rail {
+  border-color: var(--c-blue-light);
+}
+
+.slider-input {
+  position: relative;
+}
+
+.slider-input::-webkit-slider-runnable-track {
+  block-size: 8px;
+  border: 0;
+  background: transparent;
 }
 
 .slider-input::-moz-range-track {
   block-size: 8px;
-  border: 1px solid var(--c-blue);
-  border-radius: var(--radius-pill);
-  background: var(--c-blue-pale);
-}
-
-.slider-input::-moz-range-progress {
-  block-size: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--c-blue);
+  border: 0;
+  background: transparent;
 }
 
 .slider-input::-webkit-slider-thumb {
@@ -754,6 +779,25 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
   border-radius: 50%;
   background: var(--c-ink);
   box-shadow: 0 0 0 1px var(--c-ink);
+}
+
+/* Nobody moved it: a hollow thumb with a blue ring, no fill, and no pretence of a value. */
+.slider[data-unset='true'] .slider-input::-webkit-slider-thumb {
+  border-color: var(--c-blue);
+  background: var(--c-surface);
+  box-shadow: none;
+}
+
+.slider[data-unset='true'] .slider-input::-moz-range-thumb {
+  border-color: var(--c-blue);
+  background: var(--c-surface);
+  box-shadow: none;
+}
+
+:is(.hero-card, .on-ink) .slider-input::-webkit-slider-thumb {
+  border-color: var(--c-ink);
+  background: var(--c-bg);
+  box-shadow: 0 0 0 1px var(--c-bg);
 }
 
 /* ---------- Disclosure ---------- */
