@@ -2,19 +2,6 @@
 
 import { fmt } from '../lib/format';
 
-/** Said when there is no target to measure the minutes against. */
-export const NO_TARGET = 'لا هدف يومي للتركيز بعد';
-
-/** «45 من 90 دقيقة · للوعي الذاتي»: what a score stands for. It is an estimate, not a grade. */
-export function scoreDetail(minutes: number, target: number): string {
-  return `${fmt.num(minutes)} من ${fmt.count(target, 'minute')} · للوعي الذاتي`;
-}
-
-/** «50 · 45 من 90 دقيقة · للوعي الذاتي». */
-export function scoreLine(score: number, minutes: number, target: number): string {
-  return `${fmt.num(score)} · ${scoreDetail(minutes, target)}`;
-}
-
 /** The days of the week by the bit of `weekday_mask`: 0 is Sunday and 6 is Saturday. */
 export const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'] as const;
 

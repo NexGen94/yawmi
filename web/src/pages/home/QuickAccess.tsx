@@ -1,5 +1,5 @@
 import { openAsk } from '../../ask/controller';
-import type { FocusPlanOut } from '../../focus/calc';
+import type { FocusPlanOut } from '../../focus/today';
 import { fmt } from '../../lib/format';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';

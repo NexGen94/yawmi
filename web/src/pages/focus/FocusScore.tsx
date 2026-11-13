@@ -1,5 +1,4 @@
-import { focusScore } from '../../focus/calc';
-import { NO_TARGET, scoreDetail } from '../../focus/format';
+import { focusScore, NO_TARGET, scoreDetail } from '../../focus/today';
 import { fmt } from '../../lib/format';
 import { Card } from '../../ui/Card';
 

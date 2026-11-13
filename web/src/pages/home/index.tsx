@@ -3,8 +3,8 @@ import { useEffect, useMemo } from 'preact/hooks';
 
 import { acceptInsight, type GroundedInsight } from '../../ai/guard';
 import { combine } from '../../data/combine';
-import { focusTarget, minutesOn } from '../../focus/calc';
 import { useFocusPlans, useFocusSessions } from '../../focus/data';
+import { focusTarget, minutesOn } from '../../focus/today';
 import { useGoals } from '../../goals/data';
 import { useHabitsToday } from '../../habits/useHabitsToday';
 import { fmt } from '../../lib/format';

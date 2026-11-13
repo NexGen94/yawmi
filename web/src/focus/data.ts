@@ -1,24 +1,19 @@
 // What the focus page and the home page read: the plans (`/v1/focus/plans`) and the sessions of the
-// last 28 days (`/v1/focus/sessions`), each with a saved copy like every page. Writing a plan is a
-// setting call: it needs the network and is never queued (design 13.1, ruling 22). Sessions are
-// events and go through the outbox (`data/events.ts`).
+// last 28 days (`/v1/focus/sessions`), each with a saved copy like every page. Writing a plan is in
+// `pages/focus/plans.ts` (a setting call: it needs the network and is never queued, design 13.1,
+// ruling 22), so that it stays out of the first load. Sessions are events (`data/events.ts`).
 //
 // This file is read by the home page, which is in the first bundle: it holds no component.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { api } from '../api/client';
-import type { components } from '../api/schema';
 import { unwrap } from '../api/unwrap';
 import { type QueryResult, useQuery } from '../data/query';
 import { fromOrdinal, toOrdinal } from '../domain/days';
 import type { Day } from '../domain/types';
-import { isAbortOrTimeout } from '../lib/timeout';
 import { listPending, type OutboxEvent } from '../sync/outbox';
-import { applyPendingFocus, type FocusPlanOut, type FocusSessionOut } from './calc';
-
-type FocusPlanIO = components['schemas']['FocusPlanIO'];
-type FocusPlanPatch = components['schemas']['FocusPlanPatch'];
+import { applyPendingFocus, type FocusPlanOut, type FocusSessionOut } from './today';
 
 /** The sessions the page reads: today and the 27 days before it (design 9.5: the last 28 days). */
 export const SESSION_WINDOW_DAYS = 28;
@@ -26,7 +21,6 @@ export const SESSION_WINDOW_DAYS = 28;
 export const plansQueryKey = 'focus-plans';
 export const sessionsQueryKey = (day: Day): string => `focus-sessions:${day}`;
 
-const SAVE_TIMEOUT_MS = 15_000;
 /** How often the outbox is looked at while something waits in it (a session that was just saved). */
 export const focusPoll = { pendingMs: 2000 };
 
@@ -102,31 +96,4 @@ export function useFocusSessions(day: Day): FocusSessions {
     [query.data, pending],
   );
   return { query, sessions, refresh };
-}
-
-/** Why a plan was not saved: no connection (or a timeout), or the server refused it. */
-export type PlanResult = { ok: true; plan: FocusPlanOut } | { ok: false; reason: 'offline' | 'rejected' };
-
-async function send(call: () => Promise<FocusPlanOut>): Promise<PlanResult> {
-  try {
-    return { ok: true, plan: await call() };
-  } catch (error: unknown) {
-    if (error instanceof TypeError || isAbortOrTimeout(error)) return { ok: false, reason: 'offline' };
-    if ((error as { name?: unknown }).name === 'HttpError') return { ok: false, reason: 'rejected' };
-    throw error;
-  }
-}
-
-/** `POST /v1/focus/plans`. Never throws for a network or server refusal. */
-export function createPlan(body: FocusPlanIO): Promise<PlanResult> {
-  return send(() => api.POST('/v1/focus/plans', { body, signal: AbortSignal.timeout(SAVE_TIMEOUT_MS) }).then(unwrap));
-}
-
-/** `PATCH /v1/focus/plans/{id}`: only the fields given change. */
-export function patchPlan(id: string, body: FocusPlanPatch): Promise<PlanResult> {
-  return send(() =>
-    api
-      .PATCH('/v1/focus/plans/{plan_id}', { params: { path: { plan_id: id } }, body, signal: AbortSignal.timeout(SAVE_TIMEOUT_MS) })
-      .then(unwrap),
-  );
 }

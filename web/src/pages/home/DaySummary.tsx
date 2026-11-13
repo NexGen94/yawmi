@@ -1,8 +1,7 @@
 import { SourceCards } from '../../ai/SourceCards';
 import type { components } from '../../api/schema';
 import { openCountText } from '../../lib/counts';
-import { focusScore } from '../../focus/calc';
-import { NO_TARGET, scoreLine } from '../../focus/format';
+import { focusScore, NO_TARGET, scoreLine } from '../../focus/today';
 import { fmt } from '../../lib/format';
 import { Card } from '../../ui/Card';
 

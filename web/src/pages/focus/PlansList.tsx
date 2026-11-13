@@ -2,13 +2,13 @@ import { useState } from 'preact/hooks';
 
 import type { components } from '../../api/schema';
 import { type FocusPlanOut, FOCUS_TEMPLATES } from '../../focus/calc';
-import { createPlan, patchPlan, type PlanResult } from '../../focus/data';
 import { fmt } from '../../lib/format';
 import { OFFLINE_NOTE } from '../../lib/notes';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { Disclosure } from '../../ui/Disclosure';
 import { type HabitChoice, PlanForm } from './PlanForm';
+import { createPlan, patchPlan, type PlanResult } from './plans';
 
 type FocusPlanIO = components['schemas']['FocusPlanIO'];
 
