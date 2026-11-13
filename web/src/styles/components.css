@@ -19,7 +19,7 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
   text-decoration-color: var(--c-ink);
 }
 
-:is(.hero-card, .on-ink) a:where(:not(.btn)) {
+:is(.hero-card, .on-ink) a:where(:not([class^="btn"])) {
   color: var(--c-bg);
   text-decoration-color: var(--c-blue-light);
 }

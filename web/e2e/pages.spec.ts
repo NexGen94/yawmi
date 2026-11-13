@@ -142,3 +142,16 @@ test('pair: as loaded, a refused code, and offline', async ({ page, context }) =
     await context.setOffline(false);
   }
 });
+
+test('menu: the drawer opens under the top bar at 390, closes with Escape and returns the focus', async ({ paired: page, projectName }) => {
+  test.skip(projectName !== 'mobile', 'the menu button exists under 900 px only');
+  const button = page.getByRole('button', { name: 'القائمة' });
+  await button.focus();
+  await page.keyboard.press('Enter');
+  await expect(button).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('navigation', { name: 'التنقل الرئيسي' })).toBeVisible();
+  await inspect(page, 'menu-open');
+  await page.keyboard.press('Escape');
+  await expect(button).toHaveAttribute('aria-expanded', 'false');
+  await expect(button).toBeFocused();
+});
