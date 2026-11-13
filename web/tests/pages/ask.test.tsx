@@ -218,7 +218,7 @@ describe('the ask panel: the four states', () => {
   it('empty: says what to do, before any question', async () => {
     serve();
     const dialog = await openPanel();
-    expect(within(dialog).getByText('اكتب سؤالاً أو اختر واحداً من الأسئلة الجاهزة')).toBeTruthy();
+    expect(within(dialog).getByText('يمكن كتابة سؤال أو اختيار واحد من الأسئلة الجاهزة')).toBeTruthy();
   });
 
   it('loading: busy while the provider answers', async () => {

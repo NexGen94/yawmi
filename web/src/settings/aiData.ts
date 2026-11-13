@@ -35,29 +35,39 @@ export interface UseConsent {
 
 export function useConsent(): UseConsent {
   const query = useQuery<ConsentOut>('ai/consent', () => api.GET('/v1/ai/consent').then(unwrap));
-  const [saved, setSaved] = useState<ConsentOut | undefined>(undefined);
-  useEffect(() => setSaved(undefined), [query.data]);
-  const data = saved ?? query.data;
+  const [saved, setSaved] = useState<{ value: ConsentOut; base: ConsentOut | undefined } | undefined>(undefined);
+  // What a change returned stands over the reading it was made on; a newer reading replaces it. Kept
+  // with its reading (not reset by an effect) so a change cannot be wiped by a late effect.
+  const data = saved !== undefined && saved.base === query.data ? saved.value : query.data;
+  const reload = query.reload;
 
   const grant = useCallback(
     async (personalText: boolean): Promise<string | null> => {
       if (data === undefined) return FAILED;
+      let mismatch = false;
       const result = await callAi(() =>
-        api.PUT('/v1/ai/consent', { body: { provider: data.provider, personal_text: personalText } }).then(unwrapAi),
+        api.PUT('/v1/ai/consent', { body: { provider: data.provider, personal_text: personalText } }).then((r) => {
+          mismatch = r.response.status === 409;
+          return unwrapAi(r);
+        }),
       );
-      if (result.kind !== 'ok') return reason(result);
-      setSaved(result.value);
+      if (result.kind !== 'ok') {
+        // 409 provider_mismatch: the provider changed on the server; read it again so the name follows.
+        if (mismatch) reload();
+        return reason(result);
+      }
+      setSaved({ value: result.value, base: query.data });
       return null;
     },
-    [data],
+    [data, reload, query.data],
   );
 
   const withdraw = useCallback(async (): Promise<string | null> => {
     const result = await callAi(() => api.DELETE('/v1/ai/consent').then(unwrapAi));
     if (result.kind !== 'ok') return reason(result);
-    setSaved(result.value);
+    setSaved({ value: result.value, base: query.data });
     return null;
-  }, []);
+  }, [query.data]);
 
   return { data, state: query.state, reload: query.reload, grant, withdraw };
 }

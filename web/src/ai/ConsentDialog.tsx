@@ -6,6 +6,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import './ai.css';
+import './insight.css';
 import { PROVIDER_LABELS, type Provider } from './providers';
 
 /** What goes to the provider once the consent is given (design 10): the numbers of the habits and

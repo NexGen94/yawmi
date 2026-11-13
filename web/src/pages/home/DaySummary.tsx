@@ -1,4 +1,3 @@
-import '../../ai/ai.css';
 import { SourceCards } from '../../ai/SourceCards';
 import type { components } from '../../api/schema';
 import { openCountText } from '../../lib/counts';

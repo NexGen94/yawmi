@@ -109,7 +109,7 @@ export function AskPanel() {
     case 'idle':
       body = (
         <div class="state-message">
-          <p class="state-text">اكتب سؤالاً أو اختر واحداً من الأسئلة الجاهزة</p>
+          <p class="state-text">يمكن كتابة سؤال أو اختيار واحد من الأسئلة الجاهزة</p>
         </div>
       );
       break;

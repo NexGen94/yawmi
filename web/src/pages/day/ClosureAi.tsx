@@ -13,6 +13,7 @@ import { Skeleton } from '../../ui/Skeleton';
 /** What the summary of the closed day is doing: not asked, waiting, shown, or why it is not. */
 export type Summary =
   | { kind: 'none' }
+  | { kind: 'waiting' }
   | { kind: 'loading' }
   | { kind: 'ok'; insight: GroundedInsight }
   | { kind: 'consent' }
@@ -26,18 +27,23 @@ export interface ClosureAiProps {
   maxLines: 1 | 2;
   /** The day was closed in an earlier visit: the stored summary is read, if there is one. */
   stored: boolean;
+  /** No connection: the events of the closing wait for it. */
+  offline?: boolean;
   /** Asks again (a retry, or after the consent was given from the button). */
   onAsk(): void;
 }
 
-function Reading({ day, maxLines }: { day: Day; maxLines: 1 | 2 }) {
+function Reading({ day, maxLines, onAsk }: { day: Day; maxLines: 1 | 2; onAsk(): void }) {
   const reviews = useQuery('day/review', () =>
     api.GET('/v1/reviews', { params: { query: { kind: 'evening', limit: 1 } } }).then(unwrap),
   );
   const review = reviews.data?.items.find((r) => r.day === day);
   // A stored row may be older than task 18: its cards can be missing, and its words still show.
   const insight = review === undefined ? null : acceptInsight(review, maxLines, { cardsOptional: true });
-  if (review === undefined) return null;
+  if (review === undefined) {
+    // Closed in an earlier visit with no stored summary (it failed, or there was no consent then).
+    return reviews.state === 'ready' ? <Button onClick={onAsk}>ملخص اليوم</Button> : null;
+  }
   if (insight === null) return <p class="ai-note">{UNAVAILABLE_TEXT}</p>;
   return <Shown insight={insight} maxLines={maxLines} day={day} />;
 }
@@ -53,11 +59,18 @@ function Shown({ insight, maxLines, day }: { insight: GroundedInsight; maxLines:
 /** The AI summary of the closed day (design 4, the evening): two lines with their sources and one
  *  question. When the AI cannot answer the day is closed all the same, and this says why in a line,
  *  with the way to try again. */
-export function ClosureAi({ day, summary, maxLines, stored, onAsk }: ClosureAiProps) {
+export function ClosureAi({ day, summary, maxLines, stored, offline, onAsk }: ClosureAiProps) {
   let body;
   switch (summary.kind) {
     case 'none':
-      body = stored ? <Reading day={day} maxLines={maxLines} /> : null;
+      body = stored ? <Reading day={day} maxLines={maxLines} onAsk={onAsk} /> : null;
+      break;
+    case 'waiting':
+      body = (
+        <p class="ai-note" role="status">
+          {offline ? OFFLINE_NOTE : 'جارٍ الحفظ'}
+        </p>
+      );
       break;
     case 'loading':
       body = (

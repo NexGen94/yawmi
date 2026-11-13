@@ -148,6 +148,7 @@ export default function DayPage() {
         insight={live ? (data.today?.insight ?? null) : null}
         aiLines={aiLines}
         aiCheckin={aiCheckin}
+        autoSuggest={live && data.today !== undefined && !data.today.insight}
         habits={habits}
         onSaved={onSaved}
         saveRef={saveRef}
@@ -166,6 +167,8 @@ export default function DayPage() {
         closure={{ closed: evening !== undefined, waiting, offline: data.offline }}
         aiLines={aiLines}
         aiCheckin={aiCheckin}
+        pending={data.pending}
+        quarantine={data.quarantine}
         onSaved={onSaved}
         saveRef={saveRef}
       />

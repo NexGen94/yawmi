@@ -1,6 +1,10 @@
+/// <reference types="vite/client" />
+// (for the stylesheet import below: the test tsconfig does not load vite client types itself)
+
 import type { components } from '../api/schema';
 import { Sparkline } from '../charts/Sparkline';
 import { fmt } from '../lib/format';
+import './insight.css';
 
 type SourceCard = components['schemas']['SourceCard'];
 

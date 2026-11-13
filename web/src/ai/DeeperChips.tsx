@@ -1,7 +1,11 @@
+/// <reference types="vite/client" />
+// (for the stylesheet import below: the test tsconfig does not load vite client types itself)
+
 import { useState } from 'preact/hooks';
 
 import type { components } from '../api/schema';
 import { OPTIONS_MAX } from './guard';
+import './insight.css';
 
 type Priority = components['schemas']['Priority'];
 

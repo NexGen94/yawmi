@@ -1,0 +1,91 @@
+/* The reply card of the AI, the cards of its sources and the chips of «أسئلة أخرى» (task 20). Home
+   shows the day summary with them, so this file is small; the rest of the AI styles are in ai.css
+   (loaded only with the consent dialog and the ask panel). Colors only through the tokens; logical
+   properties only. */
+
+.ai-note {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.ai-insight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.ai-kicker {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.ai-line,
+.ai-question {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh);
+  overflow-wrap: anywhere;
+}
+
+.ai-question {
+  font-weight: 600;
+}
+
+.ai-deeper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.ai-sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-block-start: var(--sp-2);
+}
+
+.ai-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-inline-size: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--c-blue-pale);
+  border-radius: var(--radius-card);
+  background: var(--c-surface);
+}
+
+.ai-card-label {
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+  overflow-wrap: anywhere;
+}
+
+.ai-card-value {
+  font-size: var(--fs-num);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-card-text {
+  font-size: var(--fs-note);
+  overflow-wrap: anywhere;
+}
+
+.ai-days {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}

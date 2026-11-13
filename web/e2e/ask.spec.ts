@@ -112,6 +112,30 @@ test('closing the day with the consent in place shows the summary of the provide
   await api.send('DELETE', '/v1/ai/consent');
 });
 
+test('taking the closing back within its window sends nothing and asks for no summary', async ({ paired: page, api }) => {
+  await api.send('PUT', '/v1/ai/consent', { provider: 'anthropic', personal_text: false });
+  const closes: string[] = [];
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/v1/day/close') closes.push(request.method());
+  });
+  await page.goto('/day/evening');
+  await expect(page.getByRole('heading', { name: 'يومية المساء' })).toBeVisible();
+  // Different in every run: only this closing could put it on the server.
+  const marker = `إنجاز تراجع ${Date.now()}`;
+  await page.getByLabel('إنجاز اليوم').fill(marker);
+  await page.getByRole('button', { name: 'إغلاق اليوم' }).click();
+  await expect(page.getByText('جارٍ الحفظ')).toBeVisible();
+  await page.getByRole('button', { name: 'تراجع' }).click();
+  await expect(page.getByText('أُلغي الحفظ')).toBeVisible();
+  // Past the window (five seconds): nothing went out and no summary was asked for.
+  await page.waitForTimeout(7000);
+  expect(closes).toEqual([]);
+  const today = riyadhToday();
+  const { entries } = await api.get<{ entries: { part: string; answers: { win?: string | null } }[] }>(`/v1/journal?from=${today}&to=${today}`);
+  expect(entries.some((e) => e.answers.win === marker)).toBe(false);
+  await api.send('DELETE', '/v1/ai/consent');
+});
+
 test('the AI settings: consent, style, a lens and the visible memory', async ({ paired: page, api }) => {
   await api.send('DELETE', '/v1/ai/memory');
   await api.send('PUT', '/v1/ai/consent', { provider: 'anthropic', personal_text: false });

@@ -1,12 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'preact/hooks';
 
-import { flushFirst } from '../../ai/flushFirst';
 import { acceptInsight } from '../../ai/guard';
 import { type AiResult, unwrapAi, useAi } from '../../ai/useAi';
 import { api } from '../../api/client';
 import type { components } from '../../api/schema';
 import { logMood, saveJournal } from '../../data/events';
 import type { JournalEntryOut, MoodLogOut } from '../../data/pending';
+import type { OutboxEvent, QuarantinedEvent } from '../../sync/outbox';
 import type { Day } from '../../domain/types';
 import { fmt } from '../../lib/format';
 import { Button } from '../../ui/Button';
@@ -23,7 +23,7 @@ import { GratitudeFields } from './GratitudeFields';
 import { LIMITS } from './limits';
 import { MoodScale } from './MoodScale';
 import { OnThisDay } from './OnThisDay';
-import type { SaveRecord } from './SaveStatus';
+import { type SaveRecord, saveOutcome } from './SaveStatus';
 import type { DayHabit } from './useDayData';
 
 type EveningAnswers = components['schemas']['EveningAnswers'];
@@ -142,6 +142,9 @@ export interface EveningFormProps {
   aiLines?: 1 | 2;
   /** `ai_checkin`: with `morning` the AI summary belongs to the morning, and closing asks for none. */
   aiCheckin?: 'morning' | 'evening';
+  /** The queue as the page reads it: the summary is asked for once the closing has left it. */
+  pending?: readonly OutboxEvent[];
+  quarantine?: readonly QuarantinedEvent[];
   onSaved(record: SaveRecord): Promise<void>;
   /** The page can close this form too (the notice about yesterday's text does). */
   saveRef?: { current: (() => Promise<void>) | null };
@@ -190,14 +193,15 @@ export function EveningForm(props: EveningFormProps) {
   const linesNow = useRef(aiLines);
   linesNow.current = aiLines;
   const turn = useRef(0);
+  /** The ids of the closing while its events wait in the queue (the window of «تراجع», then the send). */
+  const [waitingIds, setWaitingIds] = useState<string[] | null>(null);
 
-  /** The AI summary of the day just closed. The journal was queued first; the queue is sent before
-   *  the request, so the server builds its sources from what was written. A failure of any kind
-   *  leaves the day closed and says «تعذّر التحليل اليوم» (the guard refusing a reply counts). */
+  /** The AI summary of the day just closed. It is asked for only after the server has accepted the
+   *  closing (so it is built from what was written) and never if the closing was taken back. A failure
+   *  of any kind leaves the day closed and says «تعذّر التحليل اليوم» (the guard refusing a reply counts). */
   const askSummary = async (prompt: boolean): Promise<void> => {
     const mine = ++turn.current;
     setSummary({ kind: 'loading' });
-    await flushFirst();
     const result: AiResult<components['schemas']['InsightOut']> = await ai.run(
       () => api.POST('/v1/day/close', { body: { day, regenerate: false } }).then(unwrapAi),
       { prompt },
@@ -210,6 +214,30 @@ export function EveningForm(props: EveningFormProps) {
     else if (result.kind === 'offline') setSummary({ kind: 'offline' });
     else setSummary({ kind: 'error' });
   };
+
+  // The closing waits in the queue for its window and then goes out. When the server has accepted
+  // every event of it, the summary is asked for; a refusal ends the wait; an undo clears it first.
+  useEffect(() => {
+    if (waitingIds === null) return;
+    if (props.pending === undefined) {
+      setWaitingIds(null);
+      void askSummary(false);
+      return;
+    }
+    const outcome = saveOutcome(
+      waitingIds,
+      new Set(props.pending.map((e) => e.id)),
+      new Set((props.quarantine ?? []).map((e) => e.id)),
+    );
+    if (outcome === 'accepted') {
+      setWaitingIds(null);
+      void askSummary(false);
+    } else if (outcome === 'refused') {
+      setWaitingIds(null);
+      setSummary({ kind: 'none' });
+    }
+    // askSummary only reads refs and the day
+      }, [waitingIds, props.pending, props.quarantine]);
 
   useEffect(() => {
     if (touched.current) writeDraft(day, 'evening', state);
@@ -297,13 +325,19 @@ export function EveningForm(props: EveningFormProps) {
           clearSaved(day, 'evening');
           touched.current = true;
           writeDraft(day, 'evening', latest.current);
+          // Taken back: nothing was sent, so no summary is asked for.
+          setWaitingIds(null);
+          setSummary({ kind: 'none' });
         },
         onRefused: (refused) => {
           if (moodId !== null && refused.has(moodId)) setLogged(before);
         },
       });
-      // The day is closed and saved whatever the AI does: its summary comes after, on its own.
-      if (aiCheckin === 'evening') void askSummary(false);
+      // The day is closed and saved whatever the AI does. Its summary waits until the events are accepted.
+      if (aiCheckin === 'evening') {
+        setSummary({ kind: 'waiting' });
+        setWaitingIds(ids);
+      }
     });
 
   const closeNow = useRef(close);
@@ -331,7 +365,8 @@ export function EveningForm(props: EveningFormProps) {
           day={day}
           summary={summary}
           maxLines={aiLines}
-          stored={summary.kind === 'none'}
+          stored={summary.kind === 'none' && !closure.waiting}
+          offline={closure.offline}
           onAsk={() => void askSummary(true)}
         />
       )}

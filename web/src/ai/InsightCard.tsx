@@ -3,7 +3,7 @@
 
 import type { ComponentChildren } from 'preact';
 
-import './ai.css';
+import './insight.css';
 import type { GroundedInsight } from './guard';
 import { SourceCards } from './SourceCards';
 

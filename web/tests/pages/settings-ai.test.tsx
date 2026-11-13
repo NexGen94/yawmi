@@ -198,6 +198,30 @@ describe('settings: the consent', () => {
     expect(await screen.findByRole('button', { name: 'سحب الموافقة' })).toBeTruthy();
   });
 
+  it('409 provider_mismatch: the dialog follows the new provider and the next «موافقة» puts it', async () => {
+    let provider: 'anthropic' | 'deepseek' = 'anthropic';
+    const s = serve({
+      'GET /v1/ai/consent': () => json(consent({ provider })),
+      'PUT /v1/ai/consent': (call) => {
+        const body = call.body as { provider: string };
+        if (body.provider !== 'deepseek') {
+          provider = 'deepseek';
+          return coded(409, 'المزوّد المذكور ليس المزوّد الحالي', 'provider_mismatch');
+        }
+        return json(consent({ provider: 'deepseek', granted: true }));
+      },
+    });
+    await open();
+    fireEvent.click(await screen.findByRole('button', { name: 'تفعيل الذكاء الاصطناعي' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'موافقة' }));
+    expect((await within(dialog).findAllByText(/DeepSeek/)).length).toBeGreaterThan(0);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'موافقة' }));
+    await waitFor(() => expect(s.of('PUT', '/v1/ai/consent')).toHaveLength(2));
+    expect((s.of('PUT', '/v1/ai/consent')[1]?.body as { provider: string }).provider).toBe('deepseek');
+    expect(await screen.findByRole('button', { name: 'سحب الموافقة' })).toBeTruthy();
+  });
+
   it('the personal-text key can be turned on after the consent (PUT again with true)', async () => {
     const s = serve({ 'PUT /v1/ai/consent': (call) => json(consent({ granted: true, ...(call.body as object) })) });
     await open();

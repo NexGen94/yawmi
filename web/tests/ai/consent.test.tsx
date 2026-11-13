@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../src/api/client';
 import { ConsentNotice } from '../../src/ai/ConsentDialog';
 import { callAi, PROVIDER_LABELS, unwrapAi, useAi, type AiResult } from '../../src/ai/useAi';
-import { consent, consentRequired, grounded, json, stubServer } from '../helpers/ai-fixtures';
+import { coded, consent, consentRequired, grounded, json, stubServer } from '../helpers/ai-fixtures';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -152,6 +152,40 @@ describe('the consent dialog', () => {
     expect(onResult.mock.calls[0]?.[0]).toEqual({ kind: 'consent_required' });
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(s.of('GET', '/v1/ai/consent')).toHaveLength(0);
+  });
+});
+
+describe('409 provider_mismatch', () => {
+  it('says the provider changed, shows the new name, and a second «موافقة» puts the new provider', async () => {
+    let provider: 'anthropic' | 'deepseek' = 'anthropic';
+    let granted = false;
+    const s = stubServer({
+      'GET /v1/ai/consent': () => json(consent({ provider })),
+      'PUT /v1/ai/consent': (call) => {
+        const body = call.body as { provider: string; personal_text: boolean };
+        if (body.provider !== 'deepseek') {
+          provider = 'deepseek'; // the server's provider changed while the dialog was open
+          return coded(409, 'المزوّد المذكور ليس المزوّد الحالي', 'provider_mismatch');
+        }
+        granted = true;
+        return json(consent({ provider: 'deepseek', granted: true }));
+      },
+      'POST /v1/ask': () => (granted ? json(grounded()) : consentRequired()),
+    });
+    const onResult = vi.fn();
+    render(<Harness onResult={onResult} />);
+    fireEvent.click(screen.getByRole('button', { name: 'تشغيل' }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findAllByText(/Anthropic/);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'موافقة' }));
+    expect((await within(dialog).findAllByText(/DeepSeek/)).length).toBeGreaterThan(0);
+    expect(within(dialog).getByRole('alert').textContent).toContain('المزوّد تغيّر');
+    expect(onResult).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'موافقة' }));
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    const puts = s.of('PUT', '/v1/ai/consent').map((c) => (c.body as { provider: string }).provider);
+    expect(puts).toEqual(['anthropic', 'deepseek']);
+    expect(onResult.mock.calls[0]?.[0]).toMatchObject({ kind: 'ok' });
   });
 });
 

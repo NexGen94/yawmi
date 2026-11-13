@@ -128,7 +128,7 @@ describe('session and pairing', () => {
     await logout();
 
     expect(confirmSpy).toHaveBeenCalledTimes(1);
-    expect(confirmSpy.mock.calls[0]?.[0]).toContain('في الطابور 3 تسجيلات لم تُرسل. الخروج يحذفها.');
+    expect(confirmSpy.mock.calls[0]?.[0]).toContain('في الطابور 3 تسجيلات لم تُرسَل. الخروج يحذفها.');
     expect(await pending()).toBe(0);
     expect(await isPaired()).toBe(false);
   });
@@ -211,8 +211,9 @@ describe('session and pairing', () => {
   it.each([
     [1, 'في الطابور تسجيل واحد لم يُرسَل. الخروج يحذفه.'],
     [2, 'في الطابور تسجيلان لم يُرسَلا. الخروج يحذفهما.'],
-    [3, 'في الطابور 3 تسجيلات لم تُرسل. الخروج يحذفها.'],
-    [11, 'في الطابور 11 تسجيلاً لم يُرسَل. الخروج يحذفه.'],
+    [3, 'في الطابور 3 تسجيلات لم تُرسَل. الخروج يحذفها.'],
+    [11, 'في الطابور 11 تسجيلاً لم تُرسَل. الخروج يحذفها.'],
+    [100, 'في الطابور 100 تسجيل لم تُرسَل. الخروج يحذفها.'],
   ])('logout prompts with correct Arabic count phrasing for %i unsent events', async (count, expectedPrompt) => {
     for (let i = 0; i < count; i += 1) {
       await enqueue('habit_logged', { habit_code: `h${i}`, status: 'done' });
