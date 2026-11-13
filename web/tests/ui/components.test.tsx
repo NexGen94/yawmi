@@ -965,3 +965,33 @@ describe('Segmented and Chips: disabled (the habit editor locks fields)', () => 
     expect(onChange).not.toHaveBeenCalled();
   });
 });
+
+describe('Segmented: one option disabled', () => {
+  const options = [
+    { value: 'a', label: 'أ' },
+    { value: 'b', label: 'ب', disabled: true },
+    { value: 'c', label: 'ج' },
+  ];
+
+  it('only that option is disabled and a click on it reports nothing', () => {
+    const onChange = vi.fn();
+    render(<Segmented label="النوع" options={options} value="a" onChange={onChange} />);
+    const radios = screen.getAllByRole('radio') as HTMLButtonElement[];
+    expect(radios.map((r) => r.disabled)).toEqual([false, true, false]);
+    fireEvent.click(radios[1] as HTMLButtonElement);
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(radios[2] as HTMLButtonElement);
+    expect(onChange).toHaveBeenCalledWith('c');
+  });
+
+  it('the arrow keys skip a disabled option', () => {
+    const onChange = vi.fn();
+    render(
+      <div dir="ltr">
+        <Segmented label="النوع" options={options} value="a" onChange={onChange} />
+      </div>,
+    );
+    fireEvent.keyDown(screen.getAllByRole('radio')[0] as HTMLElement, { key: 'ArrowRight' });
+    expect(onChange).toHaveBeenLastCalledWith('c');
+  });
+});

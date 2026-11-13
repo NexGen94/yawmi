@@ -5,6 +5,8 @@ import { rowStep } from './direction';
 export interface Option<T extends string> {
   value: T;
   label: string;
+  /** This option cannot be chosen (the others can). */
+  disabled?: boolean;
 }
 
 export interface SegmentedProps<T extends string> {
@@ -36,6 +38,9 @@ export function Segmented<T extends string>({ label, options, value, onChange, d
       const step = rowStep(event.key, event.currentTarget);
       if (step === 0) return;
       next = (index + step + n) % n;
+      // A disabled option is not a stop: go on to the next enabled one (or stay when there is none).
+      for (let tries = 0; options[next]?.disabled && tries < n; tries++) next = (next + step + n) % n;
+      if (options[next]?.disabled) return;
     }
     event.preventDefault();
     const option = options[next];
@@ -53,7 +58,7 @@ export function Segmented<T extends string>({ label, options, value, onChange, d
           type="button"
           role="radio"
           class="segment"
-          disabled={disabled}
+          disabled={disabled || option.disabled}
           aria-checked={i === selected && option.value === value ? 'true' : 'false'}
           tabIndex={i === selected ? 0 : -1}
           onClick={() => onChange(option.value)}
