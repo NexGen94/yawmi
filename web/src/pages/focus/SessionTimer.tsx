@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { Plant } from '../../charts/Plant';
 import { Ring } from '../../charts/Ring';
@@ -136,7 +136,14 @@ function Active({ focus, plans, goalTitle }: SessionTimerProps) {
   );
 }
 
-function Wrapup({ focus }: Pick<SessionTimerProps, 'focus'>) {
+function Wrapup({ focus, refocus }: Pick<SessionTimerProps, 'focus'> & { refocus: { current: boolean } }) {
+  const root = useRef<HTMLDivElement>(null);
+  // After «تراجع» the wrap-up is drawn again: focus goes back to the control that was pressed.
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    root.current?.querySelector<HTMLElement>('[data-return-focus]')?.focus();
+  }, [refocus]);
   const [rating, setRating] = useState('');
   const [step, setStep] = useState('');
   const { session, endedAt } = focus;
@@ -148,7 +155,7 @@ function Wrapup({ focus }: Pick<SessionTimerProps, 'focus'>) {
   const pastPlanned = elapsed - session.plannedMinutes > OVERFLOW_OFFER_MINUTES;
   const wrapup = () => ({ rating: rating === '' ? null : Number(rating), nextStep: step });
   return (
-    <div class="focus-wrapup">
+    <div class="focus-wrapup" ref={root}>
       <div class="focus-visual">
         <div class="focus-figures">
           <p class="focus-name">انتهت الجلسة</p>
@@ -172,7 +179,9 @@ function Wrapup({ focus }: Pick<SessionTimerProps, 'focus'>) {
           حفظ الجلسة
         </Button>
         {pastPlanned && <Button onClick={() => void focus.save(wrapup(), { atPlanned: true })}>حفظ بالمدة المقررة</Button>}
-        <Button onClick={() => void focus.discard()}>تجاهل الجلسة</Button>
+        <Button data-return-focus onClick={() => void focus.discard()}>
+          تجاهل الجلسة
+        </Button>
       </div>
       {pastPlanned && (
         <p class="focus-note">
@@ -184,14 +193,25 @@ function Wrapup({ focus }: Pick<SessionTimerProps, 'focus'>) {
 }
 
 /** «تجاهل الجلسة» pressed: the session is still on the device until the window ends. */
-function Discarded({ focus }: Pick<SessionTimerProps, 'focus'>) {
+function Discarded({ focus, refocus }: Pick<SessionTimerProps, 'focus'> & { refocus: { current: boolean } }) {
+  const undo = useRef<HTMLDivElement>(null);
+  // The button that was pressed is gone: focus moves to the one that takes the discard back.
+  useEffect(() => {
+    undo.current?.querySelector<HTMLElement>('button')?.focus();
+  }, []);
   return (
-    <div class="focus-idle">
+    <div class="focus-idle" ref={undo}>
       <p class="focus-name" role="status">
         أُلغيت الجلسة
       </p>
       <div class="focus-actions">
-        <Button variant="primary" onClick={() => focus.undoDiscard()}>
+        <Button
+          variant="primary"
+          onClick={() => {
+            refocus.current = true;
+            focus.undoDiscard();
+          }}
+        >
           تراجع
         </Button>
       </div>
@@ -203,11 +223,12 @@ function Discarded({ focus }: Pick<SessionTimerProps, 'focus'>) {
  *  wrap-up. It never waits for the network. */
 export function SessionTimer(props: SessionTimerProps) {
   const { focus } = props;
+  const refocus = useRef(false);
   let body;
   if (!focus.ready) body = <Skeleton blockSize="120px" />;
   else if (focus.session === null) body = <Idle {...props} />;
-  else if (focus.endedAt !== null && focus.discarding) body = <Discarded focus={focus} />;
-  else if (focus.endedAt !== null) body = <Wrapup focus={focus} />;
+  else if (focus.endedAt !== null && focus.discarding) body = <Discarded focus={focus} refocus={refocus} />;
+  else if (focus.endedAt !== null) body = <Wrapup focus={focus} refocus={refocus} />;
   else body = <Active {...props} />;
   return (
     <HeroCard title="جلسة التركيز" class="focus-hero">

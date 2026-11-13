@@ -238,6 +238,19 @@ describe('ending a session', () => {
     expect(await ofType('focus_ended')).toEqual([]);
   });
 
+  it('focus follows the controls: «تراجع» takes it when the discard starts, and «تجاهل الجلسة» gets it back', async () => {
+    routeFocus(fetchMock);
+    renderPage();
+    await start();
+    click('إنهاء');
+    fireEvent.click(await screen.findByRole('button', { name: 'تجاهل الجلسة' }));
+    const undo = await screen.findByRole('button', { name: 'تراجع' });
+    await waitFor(() => expect(document.activeElement).toBe(undo));
+    fireEvent.click(undo);
+    const discard = await screen.findByRole('button', { name: 'تجاهل الجلسة' });
+    await waitFor(() => expect(document.activeElement).toBe(discard));
+  });
+
   it('after the window the session is gone, nothing was queued, and the page is free', async () => {
     const before = discardWindow.ms;
     discardWindow.ms = 60;
