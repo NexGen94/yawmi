@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { fireEvent, render, screen } from '@testing-library/preact';
+import { cleanup, fireEvent, render, screen } from '@testing-library/preact';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { useState } from 'preact/hooks';
@@ -930,4 +930,135 @@ describe('components.css', () => {
 
 afterEach(() => {
   document.head.querySelectorAll('style').forEach((style) => style.remove());
+});
+
+describe('Segmented and Chips: disabled (the habit editor locks fields)', () => {
+  it('a disabled Segmented has every radio disabled and reports no change', () => {
+    const onChange = vi.fn();
+    render(
+      <Segmented
+        label="النوع"
+        disabled
+        options={[
+          { value: 'a', label: 'أ' },
+          { value: 'b', label: 'ب' },
+        ]}
+        value="a"
+        onChange={onChange}
+      />,
+    );
+    const radios = screen.getAllByRole('radio') as HTMLButtonElement[];
+    expect(radios.every((r) => r.disabled)).toBe(true);
+    fireEvent.click(radios[1] as HTMLButtonElement);
+    fireEvent.keyDown(radios[0] as HTMLButtonElement, { key: 'ArrowLeft' });
+    expect(onChange).not.toHaveBeenCalled();
+    // The selected option is still said to be selected.
+    expect(radios[0]?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('a disabled Chips has every chip disabled and reports no change', () => {
+    const onChange = vi.fn();
+    render(<Chips label="الأيام" disabled options={[{ value: 'a', label: 'أ' }]} selected={[]} onChange={onChange} />);
+    const chip = screen.getByRole('button', { name: 'أ' }) as HTMLButtonElement;
+    expect(chip.disabled).toBe(true);
+    fireEvent.click(chip);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('Segmented: one option disabled', () => {
+  const options = [
+    { value: 'a', label: 'أ' },
+    { value: 'b', label: 'ب', disabled: true },
+    { value: 'c', label: 'ج' },
+  ];
+
+  it('only that option is disabled and a click on it reports nothing', () => {
+    const onChange = vi.fn();
+    render(<Segmented label="النوع" options={options} value="a" onChange={onChange} />);
+    const radios = screen.getAllByRole('radio') as HTMLButtonElement[];
+    expect(radios.map((r) => r.disabled)).toEqual([false, true, false]);
+    fireEvent.click(radios[1] as HTMLButtonElement);
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(radios[2] as HTMLButtonElement);
+    expect(onChange).toHaveBeenCalledWith('c');
+  });
+
+  it('the arrow keys skip a disabled option', () => {
+    const onChange = vi.fn();
+    render(
+      <div dir="ltr">
+        <Segmented label="النوع" options={options} value="a" onChange={onChange} />
+      </div>,
+    );
+    fireEvent.keyDown(screen.getAllByRole('radio')[0] as HTMLElement, { key: 'ArrowRight' });
+    expect(onChange).toHaveBeenLastCalledWith('c');
+  });
+});
+
+describe('Segmented: Home, End and wrapping never select a disabled option (R-1), in RTL', () => {
+  const ends = [
+    { value: 'a', label: 'أ', disabled: true },
+    { value: 'b', label: 'ب' },
+    { value: 'c', label: 'ج' },
+    { value: 'd', label: 'د', disabled: true },
+  ];
+  const press = (key: string, from: number, value: string) => {
+    const onChange = vi.fn();
+    render(
+      <div dir="rtl">
+        <Segmented label="النوع" options={ends} value={value} onChange={onChange} />
+      </div>,
+    );
+    fireEvent.keyDown(screen.getAllByRole('radio')[from] as HTMLElement, { key });
+    return onChange;
+  };
+
+  it('Home goes to the first enabled option and End to the last one', () => {
+    expect(press('Home', 2, 'c')).toHaveBeenLastCalledWith('b');
+    cleanup();
+    expect(press('End', 1, 'b')).toHaveBeenLastCalledWith('c');
+  });
+
+  it('the arrows wrap around past the disabled ends to an enabled option', () => {
+    // RTL: ArrowLeft goes forward. From «ج» it passes «د» and «أ» and lands on «ب».
+    expect(press('ArrowLeft', 2, 'c')).toHaveBeenLastCalledWith('b');
+    cleanup();
+    // ArrowRight goes back. From «ب» it passes «أ» and «د» and lands on «ج».
+    expect(press('ArrowRight', 1, 'b')).toHaveBeenLastCalledWith('c');
+  });
+
+  it('with only one enabled option no key selects another', () => {
+    const onChange = vi.fn();
+    render(
+      <div dir="rtl">
+        <Segmented
+          label="النوع"
+          options={[
+            { value: 'a', label: 'أ' },
+            { value: 'b', label: 'ب', disabled: true },
+          ]}
+          value="a"
+          onChange={onChange}
+        />
+      </div>,
+    );
+    const first = screen.getAllByRole('radio')[0] as HTMLElement;
+    for (const key of ['Home', 'End', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) {
+      fireEvent.keyDown(first, { key });
+    }
+    expect(onChange.mock.calls.every(([value]) => value === 'a')).toBe(true);
+  });
+
+  it('a click on a disabled option selects nothing', () => {
+    const onChange = vi.fn();
+    render(
+      <div dir="rtl">
+        <Segmented label="النوع" options={ends} value="b" onChange={onChange} />
+      </div>,
+    );
+    fireEvent.click(screen.getAllByRole('radio')[3] as HTMLElement);
+    fireEvent.click(screen.getAllByRole('radio')[0] as HTMLElement);
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

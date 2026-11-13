@@ -12,6 +12,7 @@ import type {
   HabitIn,
   HabitKind,
   HabitOut,
+  HabitPatch,
   HabitPeriod,
   HabitPolarity,
   HabitUnit,
@@ -24,6 +25,13 @@ export const maxReminders = 3;
 
 /** A fixed chip, `custom` for a hand-entered end day, or null for an open-ended habit. */
 export type DurationChoice = (typeof durationChips)[number] | 'custom' | null;
+
+/** What the indicator of the habit measures: the period target, or the average of the last 7 days
+ *  («متوسط», design 13.1 ruling 11: a daily count with an `avg_7d` indicator, not a fourth kind). */
+export type HabitMeasure = 'target' | 'average';
+
+/** The five types the editor offers; each is a setting of `kind`, `polarity` and `measure`. */
+export type HabitType = 'yesno' | 'count' | 'duration' | 'average' | 'abstain';
 
 export interface HabitForm {
   title_ar: string;
@@ -47,7 +55,9 @@ export interface HabitForm {
   system: boolean;
   created_by: HabitCreator;
   polarity: HabitPolarity;
-  identity_text: string | null;
+  /** The identity sentence as typed; blank is sent as null. */
+  identity_text: string;
+  measure: HabitMeasure;
 }
 
 export type FormErrors = Partial<Record<keyof HabitForm, string>>;
@@ -55,6 +65,7 @@ export type FormErrors = Partial<Record<keyof HabitForm, string>>;
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
 // Server limits (HabitIn in openapi/openapi.json).
 const MAX_TITLE = 200;
+const MAX_IDENTITY = 300;
 const MAX_TARGET = 100_000;
 const MIN_EVERY_N = 2;
 const MAX_EVERY_N = 365;
@@ -124,7 +135,8 @@ export function emptyForm(today: string): HabitForm {
     system: false,
     created_by: 'user',
     polarity: 'build',
-    identity_text: null,
+    identity_text: '',
+    measure: 'target',
   };
 }
 
@@ -150,15 +162,31 @@ export function fromHabit(h: HabitOut): HabitForm {
     system: h.system,
     created_by: h.created_by,
     polarity: h.polarity,
-    identity_text: h.identity_text,
+    identity_text: h.identity_text ?? '',
+    measure: 'target',
   };
 }
+
+/** The end of a yearly habit: 31 December of its start year, or the end it already has if that comes first. */
+function withinYear(start: string, end: string | null): string {
+  const yearEnd = `${start.slice(0, 4)}-12-31`;
+  return end !== null && end < yearEnd ? end : yearEnd;
+}
+
+/** The indicator whose habit is one of the year, not of the whole plan span (design 13, M-5). */
+const YEARLY_KPI = 'books_done';
 
 /**
  * A goal-to-habit suggestion opens the editor as a new, unsaved user habit. The server fills every
  * field of a draft, its start day included (today in Riyadh unless the goal says otherwise).
+ *
+ * `kpiCode` is the indicator the draft was asked for. The books-read indicator is a total of the
+ * year (the server spreads what is left up to 31 December), so its habit ends there too; a nights
+ * or days indicator needs nothing here, for the server already makes it a yes/no weekly habit
+ * (M-4).
  */
-export function fromDraft(d: HabitDraft): HabitForm {
+export function fromDraft(d: HabitDraft, kpiCode?: string | null): HabitForm {
+  const end = kpiCode === YEARLY_KPI ? withinYear(d.start_day, d.end_day) : d.end_day;
   return {
     ...emptyForm(d.start_day),
     title_ar: d.title_ar,
@@ -174,21 +202,21 @@ export function fromDraft(d: HabitDraft): HabitForm {
     every_n: d.every_n,
     anchor_day: d.anchor_day,
     start_day: d.start_day,
-    end_day: d.end_day,
+    end_day: end,
     anchor: d.anchor,
     reminders: d.reminders.map((r) => ({ ...r })),
-    duration: chipFor(d.start_day, d.end_day),
+    duration: end === null ? null : (chipFor(d.start_day, end) ?? 'custom'),
     polarity: d.polarity,
-    identity_text: d.identity_text ?? null,
+    identity_text: d.identity_text ?? '',
   };
 }
 
 /**
- * Field errors, in Arabic, for what the server would refuse. `today` (the Riyadh day) is needed for
- * one rule only: with `start_day` left empty the server starts the habit today, so a custom end
- * before today is refused; without `today` that case is not checked.
+ * Field errors, in Arabic, for what the server would refuse. `today` (the Riyadh day) is required:
+ * with `start_day` left empty the server starts the habit today, so a custom end before today is
+ * refused, and a caller that forgot the day would silently skip that rule.
  */
-export function validate(f: HabitForm, today?: string): FormErrors {
+export function validate(f: HabitForm, today: string): FormErrors {
   const errors: FormErrors = {};
   const set = (field: keyof HabitForm, message: string | undefined): void => {
     if (message !== undefined) errors[field] = message;
@@ -199,6 +227,8 @@ export function validate(f: HabitForm, today?: string): FormErrors {
   scheduleErrors(f, errors);
   dayErrors(f, today, errors);
   set('reminders', remindersError(f.reminders));
+  set('identity_text', identityError(f.identity_text));
+  set('kind', abstainError(f));
   return errors;
 }
 
@@ -208,6 +238,16 @@ function titleError(title: string): string | undefined {
   // The server counts characters (code points), as the spread does; `length` would count UTF-16 units.
   if ([...trimmed].length > MAX_TITLE) return `العنوان لا يتجاوز ${MAX_TITLE} حرف.`;
   return undefined;
+}
+
+function identityError(text: string): string | undefined {
+  return [...text.trim()].length > MAX_IDENTITY ? `جملة الهوية لا تتجاوز ${MAX_IDENTITY} حرف.` : undefined;
+}
+
+function abstainError(f: HabitForm): string | undefined {
+  if (f.polarity !== 'abstain') return undefined;
+  const fits = f.kind === 'boolean' && f.period === 'day' && f.target_per_period === 1;
+  return fits ? undefined : 'عادة الامتناع بنعم أو لا يومية وهدفها 1.';
 }
 
 function unitError(f: HabitForm): string | undefined {
@@ -247,7 +287,7 @@ function scheduleErrors(f: HabitForm, errors: FormErrors): void {
   }
 }
 
-function dayErrors(f: HabitForm, today: string | undefined, errors: FormErrors): void {
+function dayErrors(f: HabitForm, today: string, errors: FormErrors): void {
   const start = startDayError(f);
   if (start !== undefined) errors.start_day = start;
   const end = endDayError(f, today);
@@ -260,7 +300,7 @@ function startDayError(f: HabitForm): string | undefined {
   return inRange(f.start_day) ? undefined : DAY_OUT_OF_RANGE;
 }
 
-function endDayError(f: HabitForm, today: string | undefined): string | undefined {
+function endDayError(f: HabitForm, today: string): string | undefined {
   const end = effectiveEnd(f);
   if (end === null) return f.duration === 'custom' ? 'المدة المخصصة تحتاج تاريخ نهاية.' : undefined;
   const endOrd = parseDay(end);
@@ -268,10 +308,10 @@ function endDayError(f: HabitForm, today: string | undefined): string | undefine
   if (!inRange(end)) return DAY_OUT_OF_RANGE;
   if (f.start_day === null) {
     // The server starts an undated habit today, so the end may not come before today.
-    return today !== undefined && end < today ? 'النهاية لا تسبق اليوم، وهو يوم البداية حين يُترك فارغاً.' : undefined;
+    return end < today ? 'النهاية لا تسبق اليوم، وهو يوم البداية حين يُترك فارغاً.' : undefined;
   }
   const startOrd = parseDay(f.start_day);
-  return startOrd !== null && endOrd < startOrd ? 'النهاية لا تسبق البداية.' : undefined;
+  return startOrd !== null && endOrd < startOrd ? 'تاريخ النهاية قبل البداية.' : undefined;
 }
 
 function remindersError(reminders: ReminderIn[]): string | undefined {
@@ -303,14 +343,80 @@ export function toHabitIn(f: HabitForm): HabitIn {
     anchor: f.anchor,
     reminders: f.reminders.map((r) => ({ time: r.time, days_mask: r.days_mask })),
     polarity: f.polarity,
-    identity_text: f.identity_text,
+    identity_text: f.identity_text.trim() === '' ? null : f.identity_text.trim(),
   };
 }
 
-/** System habits (seeded from GOAL-2031.md) change only their anchor and reminders. */
+/** The fields that differ between what the habit was and what the form now says, and nothing else
+ *  (a stored habit is patched, never rewritten). A start day left empty is never sent. */
+export function toHabitPatch(original: HabitOut, f: HabitForm): HabitPatch {
+  const before = toHabitIn(fromHabit(original)) as Record<string, unknown>;
+  const after = toHabitIn(f) as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
+  for (const key of Object.keys(after)) {
+    if (key === 'start_day' && after[key] === null) continue;
+    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) patch[key] = after[key];
+  }
+  return patch as HabitPatch;
+}
+
+/** The type the form's `kind`, `polarity` and `measure` add up to. */
+export function habitType(f: HabitForm): HabitType {
+  if (f.polarity === 'abstain') return 'abstain';
+  if (f.measure === 'average') return 'average';
+  return f.kind === 'boolean' ? 'yesno' : f.kind;
+}
+
+/** Chooses a type: sets `kind`, `unit`, `polarity` and `measure`, and the fields a type fixes
+ *  (abstain: daily, target 1; average: daily). A yes/no target is brought inside its period. */
+export function withType(f: HabitForm, type: HabitType): HabitForm {
+  const base: HabitForm = { ...f, polarity: 'build', measure: 'target' };
+  switch (type) {
+    case 'abstain':
+      return { ...base, polarity: 'abstain', kind: 'boolean', unit: '', period: 'day', target_per_period: 1 };
+    case 'average':
+      return { ...base, measure: 'average', kind: 'count', unit: '', period: 'day' };
+    case 'yesno': {
+      const inside = Math.min(periodDays(f.period), Math.max(1, Math.round(f.target_per_period) || 1));
+      return { ...base, kind: 'boolean', unit: '', target_per_period: f.kind === 'boolean' ? f.target_per_period : inside };
+    }
+    case 'count':
+      return { ...base, kind: 'count', unit: f.unit === 'session' ? 'session' : '' };
+    case 'duration':
+      return { ...base, kind: 'duration', unit: f.unit === 'hour' ? 'hour' : 'min' };
+  }
+}
+
+/** Chooses the length of the period by a chip (or `null`: «مستمرة»). The end day follows the chip. */
+export function withDuration(f: HabitForm, choice: DurationChoice): HabitForm {
+  const next: HabitForm = { ...f, duration: choice };
+  if (choice === null) return { ...next, end_day: null };
+  if (choice === 'custom') return next;
+  return { ...next, end_day: effectiveEnd(next) };
+}
+
+/** A new start day: while a chip is chosen the end day follows it, a typed end stays where it is. */
+export function withStart(f: HabitForm, day: string): HabitForm {
+  const next: HabitForm = { ...f, start_day: day === '' ? null : day };
+  return typeof f.duration === 'number' ? { ...next, end_day: effectiveEnd(next) } : next;
+}
+
+/** A typed end day: the chip is the one that length makes, else «مخصص»; empty is open-ended. */
+export function withEnd(f: HabitForm, day: string): HabitForm {
+  if (day === '') return { ...f, end_day: null, duration: null };
+  return { ...f, end_day: day, duration: chipFor(f.start_day, day) ?? 'custom' };
+}
+
+/** System habits (seeded from GOAL-2031.md) change only their anchor, reminders and identity
+ *  sentence. A habit of the abstain type has its kind, period and target fixed, and an average
+ *  habit its kind and period. */
 export function lockedFields(f: HabitForm): Set<keyof HabitForm> {
-  if (!f.system) return new Set();
-  const editable = new Set<keyof HabitForm>(['anchor', 'reminders']);
-  const all = Object.keys(f) as (keyof HabitForm)[];
-  return new Set(all.filter((k) => !editable.has(k)));
+  const locked = new Set<keyof HabitForm>();
+  if (f.system) {
+    const editable = new Set<keyof HabitForm>(['anchor', 'reminders', 'identity_text']);
+    for (const key of Object.keys(f) as (keyof HabitForm)[]) if (!editable.has(key)) locked.add(key);
+  }
+  if (f.polarity === 'abstain') for (const key of ['kind', 'unit', 'period', 'target_per_period'] as const) locked.add(key);
+  if (f.measure === 'average') for (const key of ['kind', 'period'] as const) locked.add(key);
+  return locked;
 }
