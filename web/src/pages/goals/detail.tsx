@@ -107,7 +107,6 @@ function Summary({
           <Fact name="الموعد">
             <bdi>{fmt.day(o.target_date)}</bdi>
           </Fact>
-          <Fact name="الحالة">{o.status}</Fact>
         </Facts>
       </Card>
     );

@@ -65,7 +65,7 @@ export function LinkedHabits({ habits, items, newHabitHref, onTick, onAdd }: Lin
       )}
       {newHabitHref !== undefined && (
         <a class="btn btn-quiet lh-new" href={newHabitHref}>
-          إضافة عادة من هذا الهدف
+          إضافة عادة
         </a>
       )}
     </>

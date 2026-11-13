@@ -24,8 +24,11 @@ export const FAILED_MESSAGE = 'تعذّر الحفظ؛ يمكن المحاولة
 /** An edit that did not happen, with the sentence to show beside the field. */
 export class EditError extends Error {}
 
+/** A due date outside the plan (2026-10-31 to 2031-12-31): said here before the request, and by the server after it. */
+export const DUE_OUT_OF_RANGE = 'الموعد خارج مدى الخطة (من 2026-10-31 إلى 2031-12-31).';
+
 const REFUSALS: Record<string, string> = {
-  due_date_out_of_range: 'الموعد خارج مدى الخطة (من 2026-10-31 إلى 2031-12-31).',
+  due_date_out_of_range: DUE_OUT_OF_RANGE,
   status_unknown: 'حالة ليست بين حالات البطاقات في الخطة.',
   field_not_editable: 'هذا الحقل لا يُعدَّل من يومي.',
 };

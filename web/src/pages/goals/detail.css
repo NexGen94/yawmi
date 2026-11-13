@@ -74,6 +74,18 @@
   margin-block-end: var(--sp-3);
 }
 
+/* The links of the page are in the ink, underlined: the browser's own blue is no colour of the plan. */
+.page-cols a:not(.btn) {
+  color: var(--c-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--c-blue);
+  text-underline-offset: 3px;
+}
+
+.page-cols a:not(.btn):hover {
+  text-decoration-color: var(--c-ink);
+}
+
 /* ---------- One editable value ---------- */
 
 .edit-field {
@@ -225,6 +237,11 @@
   flex-direction: column;
   gap: var(--sp-1);
   margin-block-start: var(--sp-2);
+}
+
+.ms-fields .edit-label {
+  flex: none;
+  inline-size: 4.5em;
 }
 
 .ms-row > .edit-offline {

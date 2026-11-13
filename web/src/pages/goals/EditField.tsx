@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'preact/hooks';
 
-import { EditError, FAILED_MESSAGE, OFFLINE_NOTE } from '../../goals/edits';
+import { DUE_OUT_OF_RANGE, EditError, FAILED_MESSAGE, OFFLINE_NOTE } from '../../goals/edits';
 import { DASH } from '../../goals/format';
 import { fmt } from '../../lib/format';
 import { Badge } from '../../ui/Badge';
@@ -165,6 +165,10 @@ export function EditField(props: EditFieldProps) {
       setError('اختيار تاريخ مطلوب.');
       return;
     }
+    if (props.kind === 'date' && ((props.min !== undefined && draft < props.min) || (props.max !== undefined && draft > props.max))) {
+      setError(DUE_OUT_OF_RANGE);
+      return;
+    }
     if (draft === (value ?? '')) {
       close();
       return;
@@ -174,7 +178,7 @@ export function EditField(props: EditFieldProps) {
 
   if (editing) {
     return (
-      <form class="edit-field edit-form" ref={form} onSubmit={(event) => void submit(event)} onKeyDown={(event) => event.key === 'Escape' && close()}>
+      <form class="edit-field edit-form" noValidate ref={form} onSubmit={(event) => void submit(event)} onKeyDown={(event) => event.key === 'Escape' && close()}>
         <Field
           label={label}
           type={props.kind === 'date' ? 'date' : 'text'}

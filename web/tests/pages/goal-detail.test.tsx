@@ -145,17 +145,27 @@ describe('goal detail: editing a milestone', () => {
     expect(within(rowOf(container, 'm-blood')).queryByText('معلّق')).toBeNull();
   });
 
-  it('keeps the edit open with the server words when the date is out of the plan (422)', async () => {
+  it('keeps the edit open with the server words when the server refuses the date (422)', async () => {
     const { container } = await open('O1', {
       patchStatus: 422,
       patchBody: { detail: 'طلب غير صالح', errors: [{ loc: ['body', 'due_date'], type: 'due_date_out_of_range' }] },
     });
     const row = rowOf(container, 'm-late');
+    await changeDate(row, '2027-01-01');
+    const alert = await within(row).findByRole('alert');
+    expect(alert.textContent).toContain('خارج مدى الخطة');
+    expect((within(row).getByLabelText('الموعد') as HTMLInputElement).value).toBe('2027-01-01');
+    expect(within(row).queryByText('معلّق')).toBeNull();
+  });
+
+  it('a date outside the plan is refused at once, in Arabic, and nothing is sent', async () => {
+    const { container } = await open();
+    const row = rowOf(container, 'm-late');
     await changeDate(row, '2032-01-01');
     const alert = await within(row).findByRole('alert');
     expect(alert.textContent).toContain('خارج مدى الخطة');
+    expect(server.called('PATCH', /milestones/)).toHaveLength(0);
     expect((within(row).getByLabelText('الموعد') as HTMLInputElement).value).toBe('2032-01-01');
-    expect(within(row).queryByText('معلّق')).toBeNull();
   });
 
   it('marking a milestone done calls PATCH once with done: true', async () => {
@@ -397,7 +407,7 @@ describe('goal detail: linked habits', () => {
 
   it('«إضافة عادة» in the section links to the same editor draft', async () => {
     await open('O1', { pace: 404 });
-    const link = within(linked()).getByRole('link', { name: 'إضافة عادة من هذا الهدف' });
+    const link = within(linked()).getByRole('link', { name: 'إضافة عادة' });
     expect(link.getAttribute('href')).toBe('/habits/new?goal=m-late');
   });
 });

@@ -13,12 +13,12 @@ export interface PaceLineProps {
 }
 
 // Geometry: the start day is the right edge of the plot (where reading starts), the due day the left.
-const W = 480;
-const H = 200;
-const PAD_START = 44;
-const PAD_END = 44;
+const W = 360;
+const H = 180;
+const PAD_START = 36;
+const PAD_END = 36;
 const PAD_TOP = 30;
-const PAD_BOTTOM = 26;
+const PAD_BOTTOM = 28;
 const PLOT_W = W - PAD_START - PAD_END;
 const PLOT_H = H - PAD_TOP - PAD_BOTTOM;
 
@@ -85,11 +85,14 @@ export function PaceLine({ pace, label }: PaceLineProps) {
       <text class="pace-word" x={left} y={yOf(pace.target_value) - 10} text-anchor="middle" direction="rtl">
         المتوقع
       </text>
-      <text class="pace-end" x={left} y={H - 6} text-anchor="middle" direction="rtl">
+      <text class="pace-end" x={left} y={yOf(pace.target_value) + 18} text-anchor="middle" direction="rtl">
         {num(pace.target_value)}
       </text>
-      <text class="pace-end" x={right} y={H - 6} text-anchor="middle" direction="rtl">
-        {num(pace.start_value)}
+      <text class="pace-end" x={right} y={H - 8} text-anchor="middle" direction="rtl">
+        {pace.start_day}
+      </text>
+      <text class="pace-end" x={left} y={H - 8} text-anchor="middle" direction="rtl">
+        {pace.due_day}
       </text>
       {readings.length > 1 && <polyline class="pace-actual" fill="none" points={actualPoints} />}
       {hasValue && (
