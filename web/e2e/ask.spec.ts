@@ -21,17 +21,25 @@ test('the ask panel: shortcut or button, the consent dialog, then the answer of 
   await api.send('DELETE', '/v1/ai/consent');
   await api.send('DELETE', '/v1/ai/memory');
 
-  // What the app sends to /v1/ask: the question and the range, never a context or sources. The body
-  // is read where the app hands it to fetch (it is a stream by then, which the network log of the
-  // browser does not keep).
+  // What the app sends to /v1/ask, with the status it got: the question and the range, never a
+  // context or sources. The body is read where the app hands it to fetch (it is a stream by then,
+  // which the network log of the browser does not keep).
+  //
+  // After the reload the in-memory token is gone, and the first request waits on the cookie refresh.
+  // On a slow machine /v1/ask goes out before the refresh is done: the server answers 401 and
+  // `authedFetch` sends the same request again once the token is there (F-066). That 401 never
+  // reaches the consent check or the provider, so it is not an ask: only answers other than 401 count.
   await page.addInitScript(() => {
-    const seen: string[] = [];
-    (window as unknown as { __askBodies: string[] }).__askBodies = seen;
+    const seen: { body: string; status: number }[] = [];
+    (window as unknown as { __asks: typeof seen }).__asks = seen;
     const original = window.fetch.bind(window);
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = input instanceof Request ? input : new Request(input, init);
-      if (request.method === 'POST' && new URL(request.url).pathname === '/v1/ask') seen.push(await request.clone().text());
-      return original(input, init);
+      const isAsk = request.method === 'POST' && new URL(request.url).pathname === '/v1/ask';
+      const body = isAsk ? await request.clone().text() : '';
+      const response = await original(input, init);
+      if (isAsk) seen.push({ body, status: response.status });
+      return response;
     };
   });
   await page.reload();
@@ -61,15 +69,16 @@ test('the ask panel: shortcut or button, the consent dialog, then the answer of 
   await expect(panel.getByText(FAKE_LINES[0] as string)).toBeVisible();
   await expect(panel.getByText(FAKE_LINES[1] as string)).toBeVisible();
   await expect(panel.getByText(/^من أيام:/).or(panel.getByRole('list', { name: 'مصادر الجواب' })).first()).toBeVisible();
-  const bodies = (await page.evaluate(() => (window as unknown as { __askBodies: string[] }).__askBodies)).map(
-    (text) => JSON.parse(text) as object,
-  );
-  // the first try (refused for want of a consent) and the one after «موافقة»
-  expect(bodies).toHaveLength(2);
-  for (const body of bodies) {
+  const asks = await page.evaluate(() => (window as unknown as { __asks: { body: string; status: number }[] }).__asks);
+  const answered = asks.filter((ask) => ask.status !== 401);
+  // The first try is refused for want of a consent (403); after «موافقة» exactly one request goes
+  // out and the provider answers it (200): the provider is asked once.
+  expect(answered.map((ask) => ask.status)).toEqual([403, 200]);
+  for (const ask of asks) {
+    const body = JSON.parse(ask.body) as object;
     expect(body).toEqual({ question: QUESTION, range: '7d' });
-    expect(Object.keys(body as object)).not.toContain('context');
-    expect(Object.keys(body as object)).not.toContain('sources');
+    expect(Object.keys(body)).not.toContain('context');
+    expect(Object.keys(body)).not.toContain('sources');
   }
 
   await expectNoSeriousA11y(page);
@@ -91,20 +100,72 @@ test('the ask panel: shortcut or button, the consent dialog, then the answer of 
   await api.send('DELETE', '/v1/ai/consent');
 });
 
+test('a slow refresh after the reload: the 401 is sent again by the app, and the provider is still asked once', async ({
+  paired: page,
+  api,
+  projectName,
+}) => {
+  await api.send('DELETE', '/v1/ai/consent');
+  await page.addInitScript(() => {
+    const seen: number[] = [];
+    (window as unknown as { __statuses: number[] }).__statuses = seen;
+    const original = window.fetch.bind(window);
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const response = await original(input, init);
+      if (request.method === 'POST' && new URL(request.url).pathname === '/v1/ask') seen.push(response.status);
+      return response;
+    };
+  });
+  // The cookie refresh after the reload takes 1.5 s: /v1/ask goes out without a token, the server
+  // answers 401, and `authedFetch` sends it again when the token is there (F-066).
+  await page.route('**/v1/auth/refresh', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1, name: 'الرئيسية' })).toBeVisible();
+  if (projectName === 'desktop') await page.keyboard.press('Control+K');
+  else await page.getByRole('button', { name: 'اسأل' }).click();
+  const panel = page.getByRole('dialog', { name: 'اسأل' });
+  await panel.getByLabel('السؤال').fill(QUESTION);
+  await panel.getByRole('button', { name: 'سؤال', exact: true }).click();
+  await page.getByRole('dialog', { name: /Anthropic/ }).getByRole('button', { name: 'موافقة' }).click();
+  await expect(panel.getByText(FAKE_LINES[0] as string)).toBeVisible();
+  const statuses = await page.evaluate(() => (window as unknown as { __statuses: number[] }).__statuses);
+  // the unauthenticated try, the one refused for want of a consent, the one the provider answered
+  expect(statuses).toEqual([401, 403, 200]);
+  await api.send('DELETE', '/v1/ai/memory');
+  await api.send('DELETE', '/v1/ai/consent');
+});
+
 test('closing the day with the consent in place shows the summary of the provider', async ({ paired: page, api }) => {
   await api.send('PUT', '/v1/ai/consent', { provider: 'anthropic', personal_text: false });
   await page.goto('/day/evening');
   await expect(page.getByRole('heading', { name: 'يومية المساء' })).toBeVisible();
 
+  // The day may already hold a summary (the other project closed it): the region then shows that one
+  // until this closing replaces it with «جارٍ الحفظ». So the lines are read only after this closing
+  // has run its course: the window of «تراجع» (five seconds), the events, then the summary request.
+  const eventsSent = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === '/v1/events' && r.request().method() === 'POST',
+    { timeout: SYNC_TIMEOUT },
+  );
+  const summaryAsked = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === '/v1/day/close' && r.request().method() === 'POST',
+    { timeout: SYNC_TIMEOUT },
+  );
   await page.getByRole('button', { name: 'إغلاق اليوم' }).click();
-
-  const summary = page.getByRole('region', { name: 'ملخص اليوم من الذكاء' });
-  await expect(summary.getByText(FAKE_LINES[0] as string)).toBeVisible({ timeout: SYNC_TIMEOUT });
-  await expect(summary.getByText(FAKE_LINES[1] as string)).toBeVisible();
+  expect((await eventsSent).status()).toBe(200);
   // The journal of the day reached the server before the summary was asked for.
   const today = riyadhToday();
   const { entries } = await api.get<{ entries: { part: string }[] }>(`/v1/journal?from=${today}&to=${today}`);
   expect(entries.some((e) => e.part === 'evening')).toBe(true);
+  expect((await summaryAsked).status()).toBe(200);
+
+  const summary = page.getByRole('region', { name: 'ملخص اليوم من الذكاء' });
+  await expect(summary.getByText(FAKE_LINES[0] as string)).toBeVisible();
+  await expect(summary.getByText(FAKE_LINES[1] as string)).toBeVisible();
 
   await expectNoSeriousA11y(page);
   await expectNoHorizontalScroll(page);
@@ -114,10 +175,14 @@ test('closing the day with the consent in place shows the summary of the provide
 
 test('taking the closing back within its window sends nothing and asks for no summary', async ({ paired: page, api }) => {
   await api.send('PUT', '/v1/ai/consent', { provider: 'anthropic', personal_text: false });
-  const closes: string[] = [];
+  const requests: string[] = [];
   page.on('request', (request) => {
-    if (new URL(request.url()).pathname === '/v1/day/close') closes.push(request.method());
+    const path = new URL(request.url()).pathname;
+    if (request.method() === 'POST' && (path === '/v1/day/close' || path === '/v1/events')) requests.push(path);
   });
+  // A fake clock instead of a wait: the page's timers (the five-second send, the polling of the
+  // queue) are run past the window at once, so a summary that should not be asked for would be.
+  await page.clock.install();
   await page.goto('/day/evening');
   await expect(page.getByRole('heading', { name: 'يومية المساء' })).toBeVisible();
   // Different in every run: only this closing could put it on the server.
@@ -127,9 +192,10 @@ test('taking the closing back within its window sends nothing and asks for no su
   await expect(page.getByText('جارٍ الحفظ')).toBeVisible();
   await page.getByRole('button', { name: 'تراجع' }).click();
   await expect(page.getByText('أُلغي الحفظ')).toBeVisible();
-  // Past the window (five seconds): nothing went out and no summary was asked for.
-  await page.waitForTimeout(7000);
-  expect(closes).toEqual([]);
+  // Ten seconds later by the page's clock: nothing went out and no summary was asked for.
+  await page.clock.fastForward(10_000);
+  await page.waitForLoadState('networkidle');
+  expect(requests).toEqual([]);
   const today = riyadhToday();
   const { entries } = await api.get<{ entries: { part: string; answers: { win?: string | null } }[] }>(`/v1/journal?from=${today}&to=${today}`);
   expect(entries.some((e) => e.answers.win === marker)).toBe(false);
