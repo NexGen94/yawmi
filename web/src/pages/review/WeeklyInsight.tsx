@@ -78,9 +78,7 @@ export function WeeklyInsight({ today, stored, maxLines }: WeeklyInsightProps) {
     case 'loading':
       body = (
         <>
-          <span class="state-text" role="status">
-            جارٍ التحليل
-          </span>
+          <output class="state-text">جارٍ التحليل</output>
           <Skeleton inlineSize="90%" />
           <Skeleton inlineSize="70%" />
         </>

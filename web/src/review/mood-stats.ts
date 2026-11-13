@@ -4,7 +4,7 @@
 
 import { fromOrdinal, toOrdinal } from '../domain/days';
 import { isScheduled } from '../domain/periods';
-import type { Day } from '../domain/types';
+import type { Day, HabitSpec } from '../domain/types';
 import type { HabitLogOut, JournalEntryOut, MoodLogOut } from '../data/pending';
 import { habitSpecOf } from '../habits/spec';
 import type { HabitOut } from '../habits/types';
@@ -61,36 +61,52 @@ export function moodByActivity(
 ): ActivityMood[] {
   const rows: ActivityMood[] = [];
   for (const habit of habits) {
-    if (habit.polarity === 'abstain') continue;
-    let spec;
-    try {
-      spec = habitSpecOf(habit);
-    } catch (error) {
-      if (error instanceof RangeError) continue;
-      throw error;
-    }
-    const kinds = dayKinds(habit, logs);
-    const withDays: MoodLogOut[] = [];
-    const withoutDays: MoodLogOut[] = [];
-    for (const entry of mood) {
-      const kind = kinds.get(entry.day);
-      if (kind === 'done') withDays.push(entry);
-      else if (kind === 'neutral') continue;
-      else if (entry.day >= habit.start_day && (habit.end_day == null || entry.day <= habit.end_day) && isScheduled(entry.day, spec)) {
-        withoutDays.push(entry);
-      }
-    }
-    // A done day outside the habit's life would be a stray log: it does not count either.
-    const inLife = withDays.filter((m) => m.day >= habit.start_day && (habit.end_day == null || m.day <= habit.end_day));
-    if (inLife.length < minDays || withoutDays.length < minDays) continue;
+    const spec = activitySpec(habit);
+    if (spec === null) continue;
+    const { withDays, withoutDays } = splitMood(habit, spec, mood, dayKinds(habit, logs));
+    if (withDays.length < minDays || withoutDays.length < minDays) continue;
     rows.push({
       code: habit.code,
       title: habit.title_ar,
-      withAvg: moodAverage(inLife) ?? 0,
+      withAvg: moodAverage(withDays) ?? 0,
       withoutAvg: moodAverage(withoutDays) ?? 0,
     });
   }
   return rows;
+}
+
+/** The rule input of a habit that can be an activity: not an abstain habit, and one the rules accept. */
+function activitySpec(habit: HabitOut): HabitSpec | null {
+  if (habit.polarity === 'abstain') return null;
+  try {
+    return habitSpecOf(habit);
+  } catch (error) {
+    if (error instanceof RangeError) return null;
+    throw error;
+  }
+}
+
+/** The day is inside the life of the habit: from its start to its end. */
+const inLife = (habit: HabitOut, day: Day): boolean => day >= habit.start_day && (habit.end_day == null || day <= habit.end_day);
+
+/** The days with a mood, split into those the habit was done and the other days of its life it was
+ *  scheduled and neither done nor skipped. A done day outside its life is a stray log: it counts for
+ *  neither side. */
+function splitMood(
+  habit: HabitOut,
+  spec: HabitSpec,
+  mood: readonly MoodLogOut[],
+  kinds: ReadonlyMap<Day, DayKind>,
+): { withDays: MoodLogOut[]; withoutDays: MoodLogOut[] } {
+  const withDays: MoodLogOut[] = [];
+  const withoutDays: MoodLogOut[] = [];
+  for (const entry of mood) {
+    const kind = kinds.get(entry.day);
+    if (kind === 'neutral' || !inLife(habit, entry.day)) continue;
+    if (kind === 'done') withDays.push(entry);
+    else if (isScheduled(entry.day, spec)) withoutDays.push(entry);
+  }
+  return { withDays, withoutDays };
 }
 
 // ---------- the year ----------

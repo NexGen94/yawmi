@@ -132,7 +132,8 @@ function byCriterion(items: readonly Prepared[], start: Day, today: Day, weekSta
     if (mine.length === 0) continue;
     // Habits of one criterion that count the same thing add up (the two journals); when they count
     // different things (minutes and sessions) the one with the larger target is the criterion.
-    const lead = mine.reduce((a, b) => (b.habit.target_per_period > a.habit.target_per_period ? b : a));
+    const [head = mine[0] as Prepared] = mine;
+    const lead = mine.reduce((a, b) => (b.habit.target_per_period > a.habit.target_per_period ? b : a), head);
     const same = mine.filter((m) => m.habit.kind === lead.habit.kind && m.habit.unit === lead.habit.unit);
     let done = 0;
     let target = 0;

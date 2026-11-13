@@ -54,10 +54,6 @@ export function entryFields(entry: JournalEntryOut): Field[] {
   return fields;
 }
 
-function moodOf(moods: ReadonlyMap<Day, MoodLogOut>, entry: JournalEntryOut, last: boolean): MoodLogOut | undefined {
-  return last ? moods.get(entry.day) : undefined;
-}
-
 function Entry({ entry, mood }: { entry: JournalEntryOut; mood: MoodLogOut | undefined }) {
   const fields = entryFields(entry);
   return (
@@ -102,7 +98,8 @@ function Entry({ entry, mood }: { entry: JournalEntryOut; mood: MoodLogOut | und
 /** Newest day first, and the evening before the morning of the same day. */
 function newestFirst(a: JournalEntryOut, b: JournalEntryOut): number {
   if (a.day !== b.day) return a.day < b.day ? 1 : -1;
-  return a.part === b.part ? 0 : a.part === 'evening' ? -1 : 1;
+  if (a.part === b.part) return 0;
+  return a.part === 'evening' ? -1 : 1;
 }
 
 function TimelineSkeleton() {
@@ -148,7 +145,7 @@ export function JournalTimeline({ today }: { today: Day }) {
           {visible.map((entry, i) => {
             // the mood of a day sits with the last part of that day that was written
             const lastOfDay = visible.findIndex((e) => e.day === entry.day) === i;
-            return <Entry key={`${entry.day}:${entry.part}`} entry={entry} mood={moodOf(moods, entry, lastOfDay)} />;
+            return <Entry key={`${entry.day}:${entry.part}`} entry={entry} mood={lastOfDay ? moods.get(entry.day) : undefined} />;
           })}
         </ol>
         {entries.length > shown && (

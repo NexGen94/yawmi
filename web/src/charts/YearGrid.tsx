@@ -24,6 +24,13 @@ const ROWS = 7;
  *  (and never red). The word and the number of the grade are in the key and in each day's title. */
 export const SHADES: Readonly<Record<number, number>> = { 1: 0.2, 2: 0.4, 3: 0.6, 4: 0.8, 5: 1 };
 
+/** The words beside a grade in the key: the two ends say what they are. */
+function keyWord(score: number): string {
+  if (score === 1) return `${fmt.num(score)} الأدنى`;
+  if (score === 5) return `${fmt.num(score)} الأعلى`;
+  return fmt.num(score);
+}
+
 const shade = (score: number): number => SHADES[Math.min(5, Math.max(1, Math.round(score)))] ?? SHADES[3] ?? 0.6;
 
 /** The mood of a year as a calendar of weeks (a column a week, Sunday on top, the first week at the
@@ -81,7 +88,7 @@ export function YearGrid({ year, days, label }: YearGridProps) {
             <svg class="year-key-swatch" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
               <rect class="year-cell" fill-opacity={SHADES[score]} x="1" y="1" width="14" height="14" rx="3" />
             </svg>
-            {score === 1 ? `${fmt.num(score)} الأدنى` : score === 5 ? `${fmt.num(score)} الأعلى` : fmt.num(score)}
+            {keyWord(score)}
           </li>
         ))}
       </ul>
