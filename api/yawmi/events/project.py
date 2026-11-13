@@ -73,6 +73,7 @@ MAX_BACKDATE_DAYS = 7
 INVALID_PAYLOAD = "حمولة الحدث غير صالحة"
 DAY_OUT_OF_WINDOW = "لا يمكن تعديل يوم يسبق يوم الحدث بأكثر من 7 أيام"
 DAY_IN_FUTURE = "لا يمكن تسجيل يوم يلي يوم الحدث"
+BREATH_LIMIT = "قيمة التنفّس خارج الحد الآمن"
 SESSION_BOUNDS = "نهاية الجلسة تسبق بدايتها"
 
 
@@ -163,6 +164,36 @@ class FocusEndedPayload(BaseModel):
     actual_minutes: Minutes | None = None
     focus_rating: Rating | None = None
     next_step: Annotated[str, StringConstraints(max_length=500)] | None = None
+
+
+# Breath safety limits, enforced on the server as defence in depth (design §7.5, §9.5 and
+# controller ruling م5; the client enforces them first). `pattern` itself stays free text (R-5):
+# only these codes are limited, `box`, `4-7-8` and any other code are not.
+HOLD_TEST_MAX_SECONDS = 30  # §9.5: the optional breath-hold test stops by itself at 30 s
+EXHALE_TEST_MAX_SECONDS = 60  # §9.5: the exhale-length test stops by itself at 60 s
+NAMED_PATTERNS = frozenset({"calm", "focus", "sleep", "energize", "unwind", "prepare"})
+NAMED_RATE_MIN = Decimal(5)  # §9.5: the six named patterns breathe 5 to 6.5 a minute
+NAMED_RATE_MAX = Decimal("6.5")
+
+
+def check_breath_limits(breath: "BreathEndedPayload") -> None:
+    """Raise `ProjectionError("breath_limit")` for a value past a limit above."""
+    seconds, rate = breath.duration_seconds, breath.breaths_per_min
+    over = (
+        (breath.pattern == "hold_test" and seconds is not None and seconds > HOLD_TEST_MAX_SECONDS)
+        or (
+            breath.pattern == "exhale_test"
+            and seconds is not None
+            and seconds > EXHALE_TEST_MAX_SECONDS
+        )
+        or (
+            breath.pattern in NAMED_PATTERNS
+            and rate is not None
+            and not NAMED_RATE_MIN <= rate <= NAMED_RATE_MAX
+        )
+    )
+    if over:
+        raise ProjectionError("breath_limit", BREATH_LIMIT)
 
 
 class BreathEndedPayload(BaseModel):
@@ -446,6 +477,7 @@ def project_event(event: "EventIn", source: str) -> Intent | None:
             )
         case "breath_ended":
             breath = _parse(BreathEndedPayload, event.payload)
+            check_breath_limits(breath)
             breath_span = (
                 timedelta(seconds=breath.duration_seconds)
                 if breath.duration_seconds is not None

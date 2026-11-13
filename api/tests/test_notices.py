@@ -12,6 +12,7 @@ import pytest
 from api_harness import open_pool
 from goals_harness import GoalsBackend, MemoryGoals, PostgresGoals, ensure_schema
 
+from yawmi.events.memory_store import InMemoryEventStore
 from yawmi.focus.memory import InMemoryFocusStore
 from yawmi.focus.models import FocusPlanIO
 from yawmi.focus.store import AsyncpgFocusStore
@@ -64,7 +65,7 @@ class MemoryBackend:
         self.store = InMemoryPushStore()
         self.prefs = InMemoryPrefsStore()
         self.journal = InMemoryJournalReader()
-        self.focus = InMemoryFocusStore()
+        self.focus = InMemoryFocusStore(events=InMemoryEventStore())
         self.goals = MemoryGoals()
 
     async def setup(self) -> None:
@@ -74,7 +75,7 @@ class MemoryBackend:
         self.store = InMemoryPushStore()
         self.prefs = InMemoryPrefsStore()
         self.journal = InMemoryJournalReader()
-        self.focus = InMemoryFocusStore()
+        self.focus = InMemoryFocusStore(events=InMemoryEventStore())
         self.goals = MemoryGoals()
 
     async def plant(self, key: str, value: Any) -> None:
@@ -124,6 +125,7 @@ class PostgresBackend:
         await self.pool.execute("DELETE FROM yawmi.notice_sends")
         await self.pool.execute("DELETE FROM yawmi.focus_plans")
         await self.pool.execute("DELETE FROM yawmi.focus_sessions WHERE id::text LIKE 'aaaa%'")
+        await self.pool.execute("DELETE FROM yawmi.events WHERE id::text LIKE 'bbbb%'")
         await self.pool.execute("DELETE FROM yawmi.journal_entries")
         await self.pool.execute("DELETE FROM yawmi.user_settings")
         await self.pool.execute("DELETE FROM yawmi.push_subscriptions")
@@ -758,3 +760,53 @@ async def test_a_focus_plan_without_a_schedule_sends_nothing(
 ) -> None:
     await plan_for_monday(backend, weekday_mask=None, start_time=None)
     assert await _tick(backend, sender, _riyadh(MONDAY, 9, 3)) == 0
+
+
+async def plant_focus_started(backend: Backend, at: datetime) -> None:
+    """A `focus_started` event only (the session is still running: no `focus_ended` yet)."""
+    eid = UUID(f"bbbbbbbb-0000-4000-8000-{at.hour:02d}{at.minute:02d}00000000")
+    if hasattr(backend, "pool"):
+        await backend.pool.execute(
+            "INSERT INTO yawmi.events (id, type, payload, occurred_at)"
+            " VALUES ($1, 'focus_started', '{\"planned_minutes\": 25}'::jsonb, $2)",
+            eid,
+            at,
+        )
+    else:
+        backend.focus.add_started_event(eid, at)
+
+
+async def test_a_running_session_holds_back_the_plan_notice(
+    backend: Backend, sender: FakeSender
+) -> None:
+    """I-1: only `focus_started` reached the server so far, at 08:50, and the tick is 09:03."""
+    await plan_for_monday(backend)
+    await plant_focus_started(backend, datetime(2026, 11, MONDAY, 8, 50, tzinfo=RIYADH))
+    assert await _tick(backend, sender, _riyadh(MONDAY, 9, 3)) == 0
+    assert sender.sent == []
+
+
+async def test_a_started_event_outside_the_half_hour_does_not_silence_the_notice(
+    backend: Backend, sender: FakeSender
+) -> None:
+    await plan_for_monday(backend)
+    await plant_focus_started(backend, datetime(2026, 11, MONDAY, 8, 29, tzinfo=RIYADH))
+    assert await _tick(backend, sender, _riyadh(MONDAY, 9, 3)) == 1
+
+
+async def test_a_session_begun_late_the_day_before_holds_back_a_plan_just_after_midnight(
+    backend: Backend, sender: FakeSender
+) -> None:
+    """M-3: a Tuesday 00:00 plan, a session that began on Monday at 23:50, the tick at 00:05."""
+    await plan_for_monday(backend, weekday_mask=4, start_time="00:00")  # Tuesday
+    await plant_focus_session(backend, datetime(2026, 11, MONDAY, 23, 50, tzinfo=RIYADH))
+    assert await _tick(backend, sender, _riyadh(MONDAY + 1, 0, 5)) == 0
+    assert sender.sent == []
+
+
+async def test_a_session_far_before_midnight_does_not_hold_back_the_plan(
+    backend: Backend, sender: FakeSender
+) -> None:
+    await plan_for_monday(backend, weekday_mask=4, start_time="00:00")
+    await plant_focus_session(backend, datetime(2026, 11, MONDAY, 23, 20, tzinfo=RIYADH))
+    assert await _tick(backend, sender, _riyadh(MONDAY + 1, 0, 5)) == 1

@@ -16,7 +16,7 @@ import pytest
 from ai_harness import DAY, AiBackend, auth, citing, empty_reply
 from goals_harness import PREFIX
 
-from yawmi.ai.base import ProviderError
+from yawmi.ai.base import ProviderError, ProviderNotConfigured, ProviderRefusal
 from yawmi.ai.store import week_key
 
 WALK = f"habit:{PREFIX}walk"
@@ -689,3 +689,48 @@ async def test_a_failed_renewal_keeps_the_stored_row_for_the_next_call(
     ai.provider.script = [citing_journals(J08, J09, J10)]
     renewed = await post(client, MORNING)
     assert renewed.status_code == 200 and renewed.json()["id"] == first.json()["id"]
+
+
+# --- task 22 fix round 1, M-1: a 503 and a refusal on an unasked renewal ----------------------
+
+
+@pytest.mark.parametrize("path", [MORNING, WEEKLY])
+@pytest.mark.parametrize(
+    ("failure", "status", "code"),
+    [
+        (ProviderNotConfigured("no key"), 503, "ai_not_configured"),
+        (ProviderRefusal("declined"), 422, "ai_refusal"),
+    ],
+    ids=["not_configured", "refusal"],
+)
+async def test_an_unasked_renewal_that_fails_returns_the_stored_row_but_regenerate_keeps_the_error(
+    ai: AiBackend,
+    client: httpx.AsyncClient,
+    path: str,
+    failure: Exception,
+    status: int,
+    code: str,
+) -> None:
+    await seed_journals(ai, J08, J09)
+    ai.provider.script = [citing_journals(J08, J09)]
+    await consent(client)
+    first = await post(client, path)
+    assert first.status_code == 200, first.text
+    await seed_journals(ai, J10)  # the data changed: the next call rebuilds the request
+    ai.provider.script = [failure]
+    again = await post(client, path)
+    assert again.status_code == 200, again.text
+    assert again.json() == first.json()
+    asked = await post(client, path, regenerate=True)
+    assert asked.status_code == status, asked.text
+    assert asked.json()["errors"][0]["type"] == code
+
+
+@pytest.mark.parametrize("path", [MORNING, WEEKLY])
+async def test_a_refusal_with_no_stored_row_is_still_a_422(
+    ai: AiBackend, client: httpx.AsyncClient, path: str
+) -> None:
+    await seed_journals(ai, J08, J09)
+    ai.provider.script = [ProviderRefusal("declined")]
+    await consent(client)
+    assert (await post(client, path)).status_code == 422

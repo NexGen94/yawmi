@@ -33,6 +33,7 @@ reply still invalid after the repair attempt or any provider failure is a 502, a
 This module is discovered automatically (see `yawmi.routes`).
 """
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -304,6 +305,14 @@ class _Deps:
     memory: MemoryStore
 
 
+def _provider_failed(result: JSONResponse) -> bool:
+    """A 5xx, or the provider's refusal (`ai_refusal`); not our own raw-health guard."""
+    if result.status_code >= 500:
+        return True
+    errors = json.loads(result.body).get("errors") or [{}]
+    return errors[0].get("type") == "ai_refusal"
+
+
 async def _stored_insight(
     deps: _Deps,
     kind: InsightKind,
@@ -318,7 +327,8 @@ async def _stored_insight(
     is built again and the provider is called only when it changed (its `request_hash`, which
     covers the sources and the memory block); the row is then renewed in place. A renewal that
     nobody asked for (`renew_on_change` without `regenerate`) whose provider call fails with a
-    5xx returns the stored row with a 200; with `regenerate` the error stays (ruling N-2)."""
+    5xx or a refusal returns the stored row with a 200; with `regenerate` the error stays
+    (ruling N-2)."""
     existing = await deps.store.get_for_day(kind, key)
     if existing is not None and not (regenerate or renew_on_change):
         return _out(existing)
@@ -339,14 +349,9 @@ async def _stored_insight(
         return _out(existing)
     result = await _generate(deps.service, req, prefs.ai_lines)
     if isinstance(result, JSONResponse):
-        if (
-            existing is not None
-            and renew_on_change
-            and not regenerate
-            and result.status_code >= 500
-        ):
-            # ruling N-2: a renewal nobody asked for failed on the provider's side, and the stored
-            # row is still a valid reply: a provider failure must not hide it
+        if existing is not None and renew_on_change and not regenerate and _provider_failed(result):
+            # ruling N-2 (and its extension to a refusal): a renewal nobody asked for failed on
+            # the provider's side, and the stored row is still a valid reply: it must not be hidden
             return _out(existing)
         return result
     model = deps.settings.model_weekly if kind == WEEKLY_KIND else deps.settings.model_daily
@@ -456,7 +461,8 @@ async def ask(
         "معطى، مع بطاقات المصادر المستشهد بها. يُحفظ صف واحد لليوم ويعرضه `GET /v1/today`. كل "
         "طلب يبني المصادر والذاكرة من جديد: إن لم تتغيّر بصمتها يُعاد المخزَّن دون استدعاء "
         "المزوّد، وإن تغيّرت (سجل جديد، أو عدسة حُذفت) يُستدعى المزوّد ويُستبدل الصف في مكانه، "
-        "و`regenerate` بالأثر نفسه. السطر الثابت («خارج النطاق» أو «لا بيانات كافية») رد صالح. "
+        "و`regenerate` بالأثر نفسه، لكن إن فشل تجديد لم يُطلب (خطأ من المزوّد أو امتناع) عاد الصف "
+        "المخزَّن، ومع `regenerate` يبقى الخطأ. السطر الثابت («خارج النطاق» أو «لا بيانات كافية») رد صالح. "
         "يُقبل اليوم الحالي والأيام السبعة قبله. يحتاج موافقة سارية للمزوّد الحالي، ورمز الخدمة "
         "مرفوض."
     ),
@@ -492,7 +498,8 @@ async def morning_insight(
         "متى وُجدا، وإلا إصلاح واحد ثم 502، والسطر الثابت («خارج النطاق» أو «لا بيانات كافية») "
         "رد صالح. كل طلب يبني المصادر والذاكرة من جديد: بصمة متغيّرة (يوميات جديدة مع تقدّم "
         "الأسبوع) تستدعي المزوّد وتستبدل الصف في مكانه، وإلا يُعاد المخزَّن، و`regenerate` "
-        "بالأثر نفسه. يُقبل اليوم الحالي والأيام السبعة قبله. يقبل رمز الخدمة أيضاً، ويحتاج "
+        "بالأثر نفسه، لكن إن فشل تجديد لم يُطلب (خطأ من المزوّد أو امتناع) عاد الصف المخزَّن، ومع "
+        "`regenerate` يبقى الخطأ. يُقبل اليوم الحالي والأيام السبعة قبله. يقبل رمز الخدمة أيضاً، ويحتاج "
         "موافقة سارية للمزوّد الحالي."
     ),
     responses=_ERRORS,

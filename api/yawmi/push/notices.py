@@ -241,8 +241,7 @@ FOCUS_STARTED_NEAR = timedelta(minutes=30)
 
 async def _focus_began_near(focus: Any, day: date, at: time, local: datetime) -> bool:
     start = datetime.combine(day, at, local.tzinfo)
-    sessions = await focus.sessions(day, day + _ONE_DAY)
-    return any(abs(s.started_at - start) <= FOCUS_STARTED_NEAR for s in sessions)
+    return await focus.started_between(start - FOCUS_STARTED_NEAR, start + FOCUS_STARTED_NEAR)
 
 
 async def focus_plan_notices(ctx: NoticeContext, now: datetime) -> list[Notice]:

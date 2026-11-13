@@ -24,6 +24,7 @@ class InMemoryFocusStore:
         self._order: dict[UUID, int] = {}  # the last write of each plan: newest first
         self._clock = 0
         self.session_rows: list[FocusSessionOut] = []
+        self.started_events: list[datetime] = []
 
     def _check_habit(self, code: str | None) -> None:
         if code is not None and self.events is not None and code not in self.events.habits:
@@ -112,3 +113,16 @@ class InMemoryFocusStore:
             if first <= s.day <= last
         ]
         return sorted(rows, key=lambda r: (r.started_at, str(r.id)))
+
+    def add_started_event(self, id: UUID, at: datetime) -> None:
+        """A `focus_started` event with no `focus_ended` after it (a test helper)."""
+        self.started_events.append(at)
+
+    async def started_between(self, lo: datetime, hi: datetime) -> bool:
+        starts = [r.started_at for r in self.session_rows] + self.started_events
+        if self.events is not None:
+            starts += [s.started_at for s in self.events.focus_sessions]
+            starts += [
+                e.occurred_at for e in self.events.events.values() if e.type == "focus_started"
+            ]
+        return any(lo <= t <= hi for t in starts)

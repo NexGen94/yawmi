@@ -101,3 +101,34 @@ async def test_breath_sessions_are_ordered_and_bounded_like_the_other_reads(
     )
     assert wide.status_code == 422
     assert wide.json()["errors"][0]["type"] == "range_too_large"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"pattern": "hold_test", "duration_seconds": 31},
+        {"pattern": "hold_test", "duration_seconds": 600},
+        {"pattern": "exhale_test", "duration_seconds": 61},
+        {"pattern": "calm", "breaths_per_min": 20},
+    ],
+)
+async def test_over_limit_breath_events_are_refused_with_a_code_and_store_nothing(
+    focus_client: httpx.AsyncClient, payload: dict[str, Any]
+) -> None:
+    ev = event("breath_ended", payload)
+    resp = await focus_client.post("/v1/events", json={"events": [ev]}, headers=auth())
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["errors"][0]["type"] == "breath_limit"
+    assert (await focus_client.get(BREATH, params=DAY, headers=auth())).json() == {"items": []}
+
+
+async def test_the_limits_themselves_are_accepted(focus_client: httpx.AsyncClient) -> None:
+    await post_events(
+        focus_client,
+        event("breath_ended", {"pattern": "hold_test", "duration_seconds": 30}),
+        event("breath_ended", {"pattern": "exhale_test", "duration_seconds": 60}),
+        event("breath_ended", {"pattern": "calm", "breaths_per_min": 6.5}),
+        event("breath_ended", {"pattern": "box", "breaths_per_min": 20}),
+    )
+    resp = await focus_client.get(BREATH, params=DAY, headers=auth())
+    assert len(resp.json()["items"]) == 4

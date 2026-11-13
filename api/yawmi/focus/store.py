@@ -53,6 +53,17 @@ WHERE day BETWEEN $1 AND $2
 ORDER BY started_at, id
 """
 
+# A session "began" in a window when its row says so, or when its `focus_started` event does (a
+# session still running has no row yet: only `focus_ended` is projected).
+STARTED_BETWEEN = """
+SELECT EXISTS (
+    SELECT 1 FROM yawmi.focus_sessions WHERE started_at BETWEEN $1 AND $2
+) OR EXISTS (
+    SELECT 1 FROM yawmi.events
+    WHERE type = 'focus_started' AND occurred_at BETWEEN $1 AND $2
+) AS began
+"""
+
 SELECT_BREATH_SESSIONS = """
 SELECT id, day, started_at, ended_at, pattern, breaths_per_min::float8 AS breaths_per_min,
        duration_seconds, completed, feeling
@@ -91,6 +102,7 @@ class FocusStore(Protocol):
     async def patch_plan(self, id: UUID, changes: dict[str, Any]) -> FocusPlanOut | None: ...
     async def sessions(self, first: date, last: date) -> list[FocusSessionOut]: ...
     async def breath_sessions(self, first: date, last: date) -> list[BreathSessionOut]: ...
+    async def started_between(self, lo: datetime, hi: datetime) -> bool: ...
 
 
 class AsyncpgFocusStore:
@@ -152,3 +164,7 @@ class AsyncpgFocusStore:
     async def breath_sessions(self, first: date, last: date) -> list[BreathSessionOut]:
         rows = await self._pool.fetch(SELECT_BREATH_SESSIONS, first, last)
         return [BreathSessionOut(**dict(r)) for r in rows]
+
+    async def started_between(self, lo: datetime, hi: datetime) -> bool:
+        """Did a focus session begin in `[lo, hi]`, finished or still running?"""
+        return bool(await self._pool.fetchval(STARTED_BETWEEN, lo, hi))
