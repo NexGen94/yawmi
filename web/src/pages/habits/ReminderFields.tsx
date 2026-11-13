@@ -1,4 +1,4 @@
-import { ALL_DAYS, maskOf, namesOf, WEEKDAYS } from '../../habits/days';
+import { ALL_DAYS, daysWord, maskOf, namesOf, WEEKDAYS } from '../../habits/days';
 import { maxReminders } from '../../habits/form';
 import type { ReminderIn } from '../../habits/types';
 import { fmt } from '../../lib/format';
@@ -10,12 +10,6 @@ import { Field } from '../../ui/Field';
 const DAY_OPTIONS = WEEKDAYS.map((name) => ({ value: name, label: name }));
 /** A new reminder: the morning, every day. */
 const NEW_REMINDER: ReminderIn = { time: '07:00', days_mask: ALL_DAYS };
-
-/** The days of a reminder in a few words: «كل يوم» or the names. */
-function daysWord(mask: number): string {
-  if (mask === ALL_DAYS) return 'كل يوم';
-  return namesOf(mask).join('، ') || 'لا يوم';
-}
 
 export interface ReminderFieldsProps {
   reminders: ReminderIn[];

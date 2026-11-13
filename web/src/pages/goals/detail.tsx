@@ -13,7 +13,10 @@ import { useGoalTasks } from '../../goals/tasks';
 import { habitHref, milestonesOf, resolveGoal, titleOf, titlesOf, type GoalTarget } from '../../goals/target';
 import type { CardFull, GoalEditOut, MilestoneFull, PaceOut } from '../../goals/types';
 import { type HabitTodayItem, useHabitsToday } from '../../habits/useHabitsToday';
+import { IndicatorPanel } from '../../indicators/IndicatorPanel';
+import { useIndicators } from '../../indicators/data';
 import { fmt } from '../../lib/format';
+import { goalIndicatorView } from '../../progress/indicator';
 import { Badge } from '../../ui/Badge';
 import { Card } from '../../ui/Card';
 import { Skeleton } from '../../ui/Skeleton';
@@ -152,6 +155,13 @@ function linkedOf(target: GoalTarget, items: HabitTodayItem[]): LinkedHabit[] {
     .map((i) => ({ code: i.habit.code, title_ar: i.habit.title_ar, adherence: null, total_done: null }));
 }
 
+/** The indicator the server computed for an outcome or a card; a milestone has none. */
+function indicatorOfTarget(target: GoalTarget) {
+  if (target.kind === 'outcome') return target.outcome.indicator;
+  if (target.kind === 'card') return target.card.indicator;
+  return undefined;
+}
+
 export interface GoalDetailProps {
   /** Filled in by the router from `/goals/:ref`: an outcome code, a card or a milestone page. */
   params?: { ref?: string };
@@ -172,6 +182,7 @@ function GoalDetail({ params }: GoalDetailProps) {
   const tasks = useGoalTasks(ref);
   const habits = useHabitsToday('all');
   const note = useLogNote(habits);
+  const stored = useIndicators();
 
   const data = goals.data;
   const target = data === undefined ? undefined : resolveGoal(data, ref);
@@ -204,6 +215,8 @@ function GoalDetail({ params }: GoalDetailProps) {
   };
 
   const title = target === undefined ? 'تفاصيل الهدف' : titleOf(target);
+  // An outcome and a card have an indicator (the server computes it); a milestone has none.
+  const indicatorOf = target === undefined ? undefined : indicatorOfTarget(target);
   const href = target === undefined ? undefined : habitHref(target, pace);
   const state = goals.state;
 
@@ -248,9 +261,22 @@ function GoalDetail({ params }: GoalDetailProps) {
                 بدء تركيز
               </a>
             </div>
-            {/* the indicator card of the goal goes here (task 17) */}
             <div class="page-cols">
               <div class="gd-col">
+                {indicatorOf !== undefined && (
+                  <IndicatorPanel
+                    subject={{ kind: 'goal', ref: target.ref, title }}
+                    view={goalIndicatorView(indicatorOf)}
+                    display={indicatorOf.display}
+                    online={online}
+                    goal={indicatorOf}
+                    config={stored.get('goal', target.ref)}
+                    onChanged={() => {
+                      void goals.refetch();
+                      stored.query.reload();
+                    }}
+                  />
+                )}
                 <Summary target={target} online={online} statuses={statuses} onStatus={editStatus} />
                 {pace != null && <PaceCard pace={pace} />}
                 <Card title="المحطات">

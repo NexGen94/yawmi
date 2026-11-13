@@ -7,11 +7,17 @@ import { Heatmap } from '../../charts/Heatmap';
 import { Ring } from '../../charts/Ring';
 import { WeekBars } from '../../charts/WeekBars';
 import { combine } from '../../data/combine';
+import { toDomainLogs } from '../../data/pending';
 import { useQuery } from '../../data/query';
+import { fromOrdinal, toOrdinal } from '../../domain/days';
+import { useOnline } from '../../goals/data';
 import { amount, lateWord, PERIOD_WORD } from '../../habits/amount';
 import { abstainNote } from '../../habits/HabitRow';
 import { type HabitTodayItem, useHabitsToday } from '../../habits/useHabitsToday';
+import { IndicatorPanel } from '../../indicators/IndicatorPanel';
+import { useIndicators } from '../../indicators/data';
 import { fmt } from '../../lib/format';
+import { habitIndicator } from '../../progress/indicator';
 import type { HabitState } from '../../progress/state';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
@@ -31,6 +37,8 @@ const ANCHOR = { after_wake: 'بعد الاستيقاظ', free: 'خلال الي
 // Bit 0 is Sunday, bit 6 is Saturday (the reminders' days_mask).
 const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'] as const;
 const ALL_DAYS = 0b1111111;
+/** The firm rule of the plan: the week starts on Sunday (design 13). */
+const WEEK_START = 'sun';
 
 /** What a state is called on the page (design 9.1); an active habit needs no word. */
 function stateBadge(item: HabitTodayItem): { text: ComponentChildren; signal: boolean } | undefined {
@@ -120,10 +128,16 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
     }
   });
   const note = useLogNote(habits);
+  const stored = useIndicators();
+  const online = useOnline();
   const { state, stale } = combine(habits, progress);
 
   const item = habits.items.find((i) => i.habit.code === code);
   const indicators = progress.data ?? undefined;
+  const config = stored.get('habit', code);
+  // The first day of the current cycle, for a total over the cycle.
+  const dayInCycle = habits.today?.plan.day_in_cycle;
+  const cycleStart = dayInCycle == null ? null : fromOrdinal(toOrdinal(habits.day) - (dayInCycle - 1));
   const missing = state === 'ready' && (item === undefined || indicators === undefined);
   const habit = item?.habit;
   const badge = item && stateBadge(item);
@@ -167,9 +181,28 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
                 {badge && <Badge tone={badge.signal ? 'signal' : 'neutral'}>{badge.text}</Badge>}
               </p>
             </div>
-            {/* later: the indicator card, with its «إضافة تذكير» */}
             <div class="page-cols">
               <div class="detail-col">
+                <IndicatorPanel
+                  subject={{ kind: 'habit', ref: habit.code, title: habit.title_ar }}
+                  view={habitIndicator(
+                    habit,
+                    toDomainLogs(habits.logs, habit.code),
+                    config,
+                    habits.day,
+                    WEEK_START,
+                    indicators.strength,
+                    cycleStart,
+                  )}
+                  display={config?.display ?? 'ring'}
+                  online={online}
+                  habit={habit}
+                  config={config}
+                  onChanged={() => {
+                    habits.reload();
+                    stored.query.reload();
+                  }}
+                />
                 <Card title="درجة القوة" class="strength-card">
                   <div class="strength-body">
                     <Ring value={indicators.strength} label="درجة القوة" size={120} />

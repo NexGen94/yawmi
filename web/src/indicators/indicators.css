@@ -1,0 +1,110 @@
+/* The indicator card and its dialog (task 17). Colors only through the tokens; logical properties only. */
+
+.indicator-body {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  margin-block-end: var(--sp-3);
+}
+
+.indicator-body .ring {
+  flex: none;
+}
+
+.indicator-figures {
+  min-inline-size: 0;
+}
+
+.indicator-text {
+  margin: 0;
+  font-size: var(--fs-num);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.indicator-number .indicator-text {
+  font-size: calc(var(--fs-num-lg) * 0.8);
+}
+
+.indicator-reason {
+  margin: var(--sp-1) 0 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.indicator-card .bar,
+.indicator-card .spark {
+  display: block;
+  inline-size: 100%;
+  margin-block-end: var(--sp-3);
+}
+
+.indicator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* ---------- The dialog ---------- */
+
+.indicator-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.indicator-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.indicator-group-title {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+  font-weight: 600;
+}
+
+.indicator-reminders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-block-start: var(--sp-3);
+  border-block-start: 1px solid var(--c-blue-pale);
+}
+
+.reminder-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.reminder-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.indicator-hint {
+  margin: 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}
+
+.indicator-status {
+  margin: 0;
+  font-size: var(--fs-note);
+}
+
+.indicator-error {
+  margin: 0;
+  color: var(--c-signal-ink);
+  font-size: var(--fs-note);
+}

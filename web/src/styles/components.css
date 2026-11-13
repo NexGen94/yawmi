@@ -23,6 +23,13 @@
   box-shadow: var(--focus);
 }
 
+/* A time field has a ring in each of its segments: Chromium moves focus to the minutes segment, and
+   there the field itself no longer matches :focus-visible, so the ring is also drawn on :focus-within. */
+.field-input[type='time']:focus-within {
+  outline: 2px solid transparent;
+  box-shadow: var(--focus);
+}
+
 :where(.hero-card, .on-ink, .toast) :focus-visible {
   box-shadow: var(--focus-on-ink);
 }

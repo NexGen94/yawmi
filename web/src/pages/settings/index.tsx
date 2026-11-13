@@ -2,10 +2,19 @@ import { useEffect, useState } from 'preact/hooks';
 
 import { kvGet } from '../../data/cache';
 import type { QueryState } from '../../data/query';
+import { useDigits } from '../../settings/digits';
+import { useSettings } from '../../settings/data';
+import { Button } from '../../ui/Button';
+import { Card } from '../../ui/Card';
 import { Skeleton } from '../../ui/Skeleton';
 import { StateFrame } from '../../ui/StateFrame';
+import { DayRemindersSection } from './DayRemindersSection';
+import { DisplaySection } from './DisplaySection';
 import { NotificationsSection } from './NotificationsSection';
+import { ProfileSection } from './ProfileSection';
 import { SessionSection } from './SessionSection';
+import { ShortcutsSection } from './ShortcutsSection';
+import './settings.css';
 
 export interface SettingsPageProps {
   state?: QueryState;
@@ -15,6 +24,9 @@ export interface SettingsPageProps {
 }
 
 export default function SettingsPage(props: SettingsPageProps) {
+  // The numbers on this page are drawn again when the digits setting changes.
+  useDigits();
+  const settings = useSettings();
   const [loading, setLoading] = useState<boolean>(props.state === undefined);
   const [error, setError] = useState<boolean>(false);
   const [deviceInfo, setDeviceInfo] = useState<{ id?: string; name?: string } | null>(null);
@@ -106,9 +118,32 @@ export default function SettingsPage(props: SettingsPageProps) {
         onRetry={handleRetry}
         skeleton={skeleton}
       >
-        <SessionSection deviceName={deviceName} disabled={isOffline} />
+        {settings.data !== undefined ? (
+          <ProfileSection key="profile" settings={settings.data} online={!isOffline} onSave={settings.save} />
+        ) : (
+          <SettingsUnread loading={settings.query.state === 'loading'} onRetry={settings.query.reload} />
+        )}
         <NotificationsSection disabled={isOffline} />
+        {settings.data !== undefined && (
+          <>
+            <DayRemindersSection settings={settings.data} online={!isOffline} onSave={settings.save} />
+            <DisplaySection settings={settings.data} online={!isOffline} onSave={settings.save} />
+          </>
+        )}
+        <SessionSection deviceName={deviceName} disabled={isOffline} />
+        <ShortcutsSection />
       </StateFrame>
     </div>
+  );
+}
+
+/** The settings of the person could not be read (or are being read): the sections that need them wait. */
+function SettingsUnread({ loading, onRetry }: { loading: boolean; onRetry(): void }) {
+  if (loading) return <Skeleton blockSize="140px" inlineSize="100%" />;
+  return (
+    <Card title="رسالتي ورؤيتي والتذكيرات والعرض" class="settings-card">
+      <p class="settings-note">تعذّرت قراءة هذه الإعدادات الآن.</p>
+      <Button onClick={onRetry}>إعادة قراءة الإعدادات</Button>
+    </Card>
   );
 }
