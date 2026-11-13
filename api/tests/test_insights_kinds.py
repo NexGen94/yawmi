@@ -16,6 +16,7 @@ import pytest
 from ai_harness import DAY, AiBackend, auth, citing, empty_reply
 from goals_harness import PREFIX
 
+from yawmi.ai.base import ProviderError
 from yawmi.ai.store import week_key
 
 WALK = f"habit:{PREFIX}walk"
@@ -571,3 +572,120 @@ def test_the_spec_publishes_the_deeper_refusal_codes() -> None:
     assert codes == {"out_of_scope", "no_data"}
     assert {"type": "null"} in refusal["anyOf"]
     assert "refusal" in schema["DeeperOut"]["required"]
+
+
+# --- task 22, N-1: a near miss of a fixed line is normalised before validation -------------------
+
+NEAR_MISSES = [
+    pytest.param(NO_DATA.removesuffix("."), NO_DATA, id="no_data_without_full_stop"),
+    pytest.param(f"  {NO_DATA}  ", NO_DATA, id="no_data_padded"),
+    pytest.param(OUT_OF_SCOPE.removesuffix("."), OUT_OF_SCOPE, id="scope_without_full_stop"),
+    pytest.param(OUT_OF_SCOPE.replace("، ", "،  ") + " ", OUT_OF_SCOPE, id="scope_extra_spaces"),
+]
+
+
+@pytest.mark.parametrize(("sent", "exact"), NEAR_MISSES)
+@pytest.mark.parametrize("path", [MORNING, CLOSE, WEEKLY])
+async def test_a_near_miss_of_a_fixed_line_is_stored_as_the_exact_line(
+    ai: AiBackend, client: httpx.AsyncClient, path: str, sent: str, exact: str
+) -> None:
+    await seed_journals(ai, J08, J09)
+    ai.provider.script = [fixed(sent)]
+    await consent(client)
+    resp = await post(client, path)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["lines"] == [exact]
+    assert len(ai.provider.calls) == 1  # no repair attempt
+
+
+@pytest.mark.parametrize(("sent", "exact"), NEAR_MISSES)
+async def test_go_deeper_takes_a_near_miss_of_a_fixed_line_as_that_line(
+    ai: AiBackend, client: httpx.AsyncClient, sent: str, exact: str
+) -> None:
+    await seed_day(ai)
+    ai.provider.script = [fixed(sent)]
+    await consent(client)
+    resp = await post(client, DEEPER)
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {
+        "question": None,
+        "options": [],
+        "source_ids": [],
+        "refusal": "no_data" if exact == NO_DATA else "out_of_scope",
+    }
+    assert len(ai.provider.calls) == 1
+
+
+async def test_a_line_that_only_resembles_a_fixed_line_is_left_alone(
+    ai: AiBackend, client: httpx.AsyncClient
+) -> None:
+    """Only whitespace and the final full stop are forgiven, not another wording."""
+    await seed_day(ai)
+    ai.provider.script = [fixed("لا بيانات كافية لهذا اليوم.")]
+    await consent(client)
+    resp = await post(client, MORNING)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["lines"] == ["لا بيانات كافية لهذا اليوم."]
+
+
+# --- task 22, N-2: a failed renewal returns the valid stored row -------------------------------
+
+
+@pytest.mark.parametrize("path", [MORNING, WEEKLY])
+@pytest.mark.parametrize("failure", ["timeout", "invalid"])
+async def test_a_failed_renewal_returns_the_stored_row_with_a_200(
+    ai: AiBackend, client: httpx.AsyncClient, path: str, failure: str
+) -> None:
+    await seed_journals(ai, J08, J09)
+    ai.provider.script = [citing_journals(J08, J09)]
+    await consent(client)
+    first = await post(client, path)
+    assert first.status_code == 200, first.text
+    await seed_journals(ai, J10)  # the data changed: the next call rebuilds the request
+    bad = {"lines": ["سطر."], "question": None, "source_ids": ["nope"], "priorities": []}
+    ai.provider.script = [ProviderError("timeout")] if failure == "timeout" else [bad, bad]
+    again = await post(client, path)
+    assert again.status_code == 200, again.text
+    assert again.json() == first.json()
+    assert len(ai.provider.calls) >= 2  # the provider was asked, and it failed
+
+
+@pytest.mark.parametrize("path", [MORNING, WEEKLY])
+async def test_a_failure_with_regenerate_stays_an_error(
+    ai: AiBackend, client: httpx.AsyncClient, path: str
+) -> None:
+    await seed_journals(ai, J08, J09)
+    ai.provider.script = [citing_journals(J08, J09)]
+    await consent(client)
+    assert (await post(client, path)).status_code == 200
+    await seed_journals(ai, J10)
+    ai.provider.script = [ProviderError("timeout")]
+    asked = await post(client, path, regenerate=True)
+    assert asked.status_code == 502, asked.text
+    assert asked.json()["errors"][0]["type"] == "ai_unavailable"
+
+
+@pytest.mark.parametrize("path", [MORNING, WEEKLY])
+async def test_a_failure_with_no_stored_row_is_still_a_502(
+    ai: AiBackend, client: httpx.AsyncClient, path: str
+) -> None:
+    await seed_journals(ai, J08, J09)
+    ai.provider.script = [ProviderError("timeout")]
+    await consent(client)
+    resp = await post(client, path)
+    assert resp.status_code == 502, resp.text
+
+
+async def test_a_failed_renewal_keeps_the_stored_row_for_the_next_call(
+    ai: AiBackend, client: httpx.AsyncClient
+) -> None:
+    await seed_journals(ai, J08, J09)
+    ai.provider.script = [citing_journals(J08, J09)]
+    await consent(client)
+    first = await post(client, MORNING)
+    await seed_journals(ai, J10)
+    ai.provider.script = [ProviderError("timeout")]
+    assert (await post(client, MORNING)).json() == first.json()
+    ai.provider.script = [citing_journals(J08, J09, J10)]
+    renewed = await post(client, MORNING)
+    assert renewed.status_code == 200 and renewed.json()["id"] == first.json()["id"]

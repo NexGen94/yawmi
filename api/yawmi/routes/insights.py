@@ -316,7 +316,9 @@ async def _stored_insight(
     """The stored insight of `kind` under `key` (first writer wins), made for `day` over `range_`
     when none is stored. With `regenerate`, or on every call with `renew_on_change`, the request
     is built again and the provider is called only when it changed (its `request_hash`, which
-    covers the sources and the memory block); the row is then renewed in place."""
+    covers the sources and the memory block); the row is then renewed in place. A renewal that
+    nobody asked for (`renew_on_change` without `regenerate`) whose provider call fails with a
+    5xx returns the stored row with a 200; with `regenerate` the error stays (ruling N-2)."""
     existing = await deps.store.get_for_day(kind, key)
     if existing is not None and not (regenerate or renew_on_change):
         return _out(existing)
@@ -337,6 +339,15 @@ async def _stored_insight(
         return _out(existing)
     result = await _generate(deps.service, req, prefs.ai_lines)
     if isinstance(result, JSONResponse):
+        if (
+            existing is not None
+            and renew_on_change
+            and not regenerate
+            and result.status_code >= 500
+        ):
+            # ruling N-2: a renewal nobody asked for failed on the provider's side, and the stored
+            # row is still a valid reply: a provider failure must not hide it
+            return _out(existing)
         return result
     model = deps.settings.model_weekly if kind == WEEKLY_KIND else deps.settings.model_daily
     row = new_insight(
