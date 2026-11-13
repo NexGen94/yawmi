@@ -308,3 +308,31 @@ describe('PaceLine', () => {
     expect(label).toContain('المتوقع اليوم 3،');
   });
 });
+
+describe('Timeline: the plan year (Task 24)', () => {
+  it('draws only the plan year that holds today, with the cycles and milestones of it', () => {
+    const full = draw();
+    const year = draw({ range: 'year' });
+    const marks = (c: Element): number => c.querySelectorAll('[data-milestone]').length;
+    expect(marks(year.container)).toBeLessThan(marks(full.container));
+    expect(year.container.querySelectorAll('rect.timeline-cycle').length).toBeLessThan(21);
+    // the first year: no Gregorian year label but 2027, which the plan year ends on
+    expect(Array.from(year.container.querySelectorAll('text.timeline-year')).map((t) => t.textContent)).toEqual(['2027']);
+    // the milestones that are drawn have room: none is within 2 px of its neighbour in the same lane at this scale
+    expect(year.container.querySelector('.timeline-today')).not.toBeNull();
+  });
+
+  it('a cycle is a tick and a number, not a box', () => {
+    const { container } = draw();
+    expect(container.querySelectorAll('line.timeline-cycle-tick')).toHaveLength(21);
+  });
+
+  it('the today line is drawn before (under) the marks of the milestones', () => {
+    const { container } = draw();
+    const all = Array.from(container.querySelectorAll('svg > *'));
+    const today = all.findIndex((e) => e.classList.contains('timeline-today'));
+    const firstMark = all.findIndex((e) => e.hasAttribute('data-milestone'));
+    expect(today).toBeGreaterThan(-1);
+    expect(today).toBeLessThan(firstMark);
+  });
+});

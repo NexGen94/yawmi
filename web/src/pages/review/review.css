@@ -237,3 +237,9 @@
   display: flex;
   justify-content: center;
 }
+
+.review-hint {
+  align-self: center;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}

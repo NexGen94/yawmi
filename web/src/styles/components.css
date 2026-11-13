@@ -1195,6 +1195,10 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
   fill: var(--c-blue);
 }
 
+.bars-empty {
+  fill: var(--c-blue-pale);
+}
+
 .bars-latest {
   fill: var(--c-ink);
 }
@@ -1207,6 +1211,10 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
 
 :is(.hero-card, .on-ink) .bars-base {
   stroke: var(--c-ink-2);
+}
+
+:is(.hero-card, .on-ink) .bars-empty {
+  fill: var(--c-ink-2);
 }
 
 :is(.hero-card, .on-ink) .bars-bar {

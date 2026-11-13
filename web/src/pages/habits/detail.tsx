@@ -213,7 +213,12 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
                   <WeekBars
                     label="نسبة إنجاز آخر 8 فترات"
                     values={indicators.last_8_periods.map((v) => Math.round(v * 100))}
+                    slots={8}
                   />
+                  <p class="bars-axis" aria-hidden="true">
+                    <span>الأقدم</span>
+                    <span>الأحدث</span>
+                  </p>
                 </Card>
                 <Card title={grid.cycle ? 'أيام الدورة' : 'آخر 56 يوماً'}>
                   <Heatmap label={grid.cycle ? 'أيام الدورة' : 'آخر 56 يوماً'} days={dayStates(habit, habits.logs, grid.first, habits.day)} />

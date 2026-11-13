@@ -5,6 +5,7 @@ import { acceptInsight, type GroundedInsight, UNAVAILABLE_TEXT } from '../../ai/
 import { InsightCard } from '../../ai/InsightCard';
 import { type AiResult, unwrapAi, useAi } from '../../ai/useAi';
 import { api } from '../../api/client';
+import { useOnline } from '../../goals/data';
 import type { Day } from '../../domain/types';
 import { OFFLINE_NOTE } from '../../lib/notes';
 import { storedLines } from '../../review/stored';
@@ -35,6 +36,7 @@ export interface WeeklyInsightProps {
  *  scope, no data) is a plain reply. */
 export function WeeklyInsight({ today, stored, maxLines }: WeeklyInsightProps) {
   const ai = useAi();
+  const online = useOnline();
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const turn = useRef(0);
   // what the last press asked for, so a retry asks the same
@@ -102,7 +104,6 @@ export function WeeklyInsight({ today, stored, maxLines }: WeeklyInsightProps) {
       body = (
         <div class="state-message">
           <p class="state-text">{OFFLINE_NOTE}</p>
-          <Button onClick={() => void generate(asked.current)}>إعادة المحاولة</Button>
         </div>
       );
       break;
@@ -121,9 +122,10 @@ export function WeeklyInsight({ today, stored, maxLines }: WeeklyInsightProps) {
       <div class="review-insight" aria-busy={loading ? 'true' : 'false'}>
         {body}
         <div class="review-actions">
-          <Button variant="primary" disabled={loading} onClick={() => void generate(hasReply)}>
+          <Button variant="primary" disabled={loading || !online} onClick={() => void generate(hasReply)}>
             {hasReply ? 'إعادة التوليد' : 'توليد مراجعة الأسبوع'}
           </Button>
+          {!online && <span class="review-hint">{OFFLINE_NOTE}</span>}
         </div>
       </div>
       {ai.dialog}

@@ -352,3 +352,22 @@ describe('Ring: one big number per card (Task 24)', () => {
     expect(off.container.querySelector('svg')?.getAttribute('aria-label')).toContain('50%');
   });
 });
+
+describe('WeekBars: every slot of the period is drawn (Task 24)', () => {
+  it('pads the older slots of a short series with 2 px stubs, so one bar is not alone in a card', () => {
+    const { container } = render(<WeekBars values={[100]} label="س" slots={8} />);
+    expect(container.querySelectorAll('.bars-bar')).toHaveLength(1);
+    expect(container.querySelectorAll('.bars-empty')).toHaveLength(7);
+    // the one bar is the latest, at the inline end (the left in RTL): the older slots are to its right
+    const stubs = [...container.querySelectorAll('.bars-empty')].map((r) => Number(r.getAttribute('x')));
+    const bar = Number(container.querySelector('.bars-bar')?.getAttribute('x'));
+    expect(Math.min(...stubs)).toBeGreaterThan(bar);
+    // the sentence does not call the padding «missing periods»
+    expect(container.querySelector('svg')?.getAttribute('aria-label')).not.toContain('بلا بيانات');
+  });
+
+  it('without `slots` draws what it is given, as before', () => {
+    const { container } = render(<WeekBars values={[10, 20]} label="س" />);
+    expect(container.querySelectorAll('.bars-empty')).toHaveLength(0);
+  });
+});

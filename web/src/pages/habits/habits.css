@@ -373,3 +373,12 @@ li.goal-item.goal-off {
 .editor-group .segmented {
   border-radius: calc(var(--hit) / 2 + var(--sp-1));
 }
+
+/* The two ends of the bars of the periods: the oldest at the inline start, the latest at the end. */
+.bars-axis {
+  display: flex;
+  justify-content: space-between;
+  margin: var(--sp-1) 0 0;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+}

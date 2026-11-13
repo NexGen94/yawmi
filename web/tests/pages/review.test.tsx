@@ -124,6 +124,21 @@ const press = (name: string): void => {
   fireEvent.click(screen.getByRole('button', { name }));
 };
 
+describe('the weekly review offline (Task 24)', () => {
+  it('has the generate button off with «يحتاج اتصالاً», and no second retry button', async () => {
+    serve({});
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      await openWeek();
+      const generate = screen.getByRole('button', { name: /^(توليد مراجعة الأسبوع|إعادة التوليد)$/ });
+      expect(generate.hasAttribute('disabled')).toBe(true);
+      expect(within(generate.closest('.review-actions') as HTMLElement).getByText('يحتاج اتصالاً')).toBeTruthy();
+    } finally {
+      online.mockRestore();
+    }
+  });
+});
+
 describe('the review page: the tabs', () => {
   it('has the three tabs, the week first, and writes the chosen tab in ?tab=', async () => {
     serve();

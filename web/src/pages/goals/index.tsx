@@ -1,11 +1,12 @@
 import { useLocation } from 'preact-iso';
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { Timeline } from '../../charts/Timeline';
 import { type GoalTable, TABLES } from '../../goals/columns';
 import { useGoalColumns } from '../../goals/columnsData';
 import { isEmptyMirror, useGoals, useOnline, useToday } from '../../goals/data';
 import { centerInScroller } from '../../goals/scroll';
+import { Button } from '../../ui/Button';
 import { Segmented } from '../../ui/Segmented';
 import { Skeleton } from '../../ui/Skeleton';
 import { StateFrame } from '../../ui/StateFrame';
@@ -49,6 +50,8 @@ function GoalsSkeleton() {
 
 export default function GoalsPage() {
   const switchBox = useRef<HTMLDivElement>(null);
+  // The timeline opens on the plan year that holds today; «الخطة كاملة» shows all five years.
+  const [fullPlan, setFullPlan] = useState(false);
   const goals = useGoals();
   const location = useLocation();
   const today = useToday();
@@ -118,7 +121,20 @@ export default function GoalsPage() {
               )}
               {view === 'due' && <DueReport milestones={data.milestones} today={today} />}
               {view === 'timeline' && (
-                <Timeline cycles={data.cycles} milestones={data.milestones} today={today} label="الخط الزمني للخطة" />
+                <>
+                  <div class="timeline-range">
+                    <Button onClick={() => setFullPlan(!fullPlan)} aria-pressed={fullPlan ? 'true' : 'false'}>
+                      {fullPlan ? 'السنة الحالية' : 'الخطة كاملة'}
+                    </Button>
+                  </div>
+                  <Timeline
+                    cycles={data.cycles}
+                    milestones={data.milestones}
+                    today={today}
+                    label="الخط الزمني للخطة"
+                    range={fullPlan ? 'full' : 'year'}
+                  />
+                </>
               )}
               {view === 'horizons' && <Horizons goals={data} today={today} />}
             </div>
