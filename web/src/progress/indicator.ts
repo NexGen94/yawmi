@@ -31,6 +31,7 @@ export interface IndicatorView {
 }
 
 const DASH = '—';
+const UNIT_NOUN = { '': 'time', session: 'session', min: 'minute', hour: 'hour' } as const;
 const SERIES_DAYS = 30;
 const STRENGTH_DAYS = 14;
 const PERIODS_SHOWN = 8;
@@ -50,7 +51,7 @@ function quantity(n: number, habit: Pick<HabitOut, 'kind' | 'unit'>): string {
   if (habit.kind === 'boolean') return Number.isInteger(n) ? fmt.count(n, 'day') : `${valueNum(n)} يوماً`;
   if (habit.kind === 'count' && habit.unit === '') return valueNum(n);
   if (Number.isInteger(n)) return amount(n, habit.unit);
-  const counted = fmt.count(n, habit.unit === 'hour' ? 'hour' : habit.unit === 'min' ? 'minute' : 'session');
+  const counted = fmt.count(n, UNIT_NOUN[habit.unit]);
   const word = counted.slice(fmt.num(n).length + 1);
   return `${valueNum(n)} ${word}`;
 }

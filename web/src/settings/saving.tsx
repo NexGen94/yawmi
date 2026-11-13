@@ -31,9 +31,7 @@ export function useSaving(): Saving {
 export function SaveNote({ status }: { status: SaveStatus }) {
   if (status === 'saved') {
     return (
-      <p class="settings-status" role="status">
-        تم الحفظ
-      </p>
+      <output class="settings-status">تم الحفظ</output>
     );
   }
   if (status === 'failed') {

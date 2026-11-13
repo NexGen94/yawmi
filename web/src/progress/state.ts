@@ -39,6 +39,18 @@ export function lastScheduledBefore(spec: HabitSpec, today: Day): Day | null {
   return null;
 }
 
+/** The state of a daily habit that is not done: an abstain habit is late after a slip today or
+ *  yesterday; any other after a scheduled day that was left without a log. */
+function dailyState(spec: HabitSpec, logs: readonly HabitLog[], today: Day): HabitState {
+  if (spec.polarity === 'abstain') {
+    const yesterday = fromOrdinal(toOrdinal(today) - 1);
+    return logs.some((log) => log.status === 'done' && (log.day === today || log.day === yesterday)) ? 'late' : 'active';
+  }
+  const last = lastScheduledBefore(spec, today);
+  const closed = last !== null && logs.some((log) => log.day === last && ['done', 'skip', 'vacation'].includes(log.status));
+  return last !== null && !closed ? 'late' : 'active';
+}
+
 export function habitState(
   habit: HabitStateInput,
   logs: readonly HabitLog[],
@@ -56,17 +68,7 @@ export function habitState(
   const progress = periodProgress(spec, logs, today, weekStart);
   if (!abstain && progress.reached) return 'done';
 
-  if (spec.period === 'day') {
-    if (abstain) {
-      const yesterday = fromOrdinal(toOrdinal(today) - 1);
-      return logs.some((log) => log.status === 'done' && (log.day === today || log.day === yesterday)) ? 'late' : 'active';
-    }
-    const last = lastScheduledBefore(spec, today);
-    if (last !== null && !logs.some((log) => log.day === last && ['done', 'skip', 'vacation'].includes(log.status))) {
-      return 'late';
-    }
-    return 'active';
-  }
+  if (spec.period === 'day') return dailyState(spec, logs, today);
   return progress.onTrack ? 'active' : 'late';
 }
 

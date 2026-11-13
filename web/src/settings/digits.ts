@@ -18,7 +18,7 @@ export function applyDigits(next: Digits, remember = true): void {
   if (next === getDigits()) return;
   setDigits(next);
   if (remember) void kvSet(KEY, next).catch(() => undefined);
-  for (const listener of [...listeners]) listener();
+  for (const listener of listeners) listener();
 }
 
 /** At the start: the digits this device remembers (the server's answer replaces them when it comes). */

@@ -117,7 +117,7 @@ function LateNotice({ settings, online, onSave }: DayRemindersSectionProps) {
             void toggling.run(() => onSave({ late_notice_enabled: next }));
           }}
         />
-        إشعار يومي بالمتأخرات
+        <span>إشعار يومي بالمتأخرات</span>
       </label>
       <p class="settings-note">إشعار واحد في اليوم يلخّص ما تأخر، ما دام فيه متأخر.</p>
       {!notificationsEnabled() && <p class="settings-note">يعمل بعد تفعيل الإشعارات</p>}

@@ -155,6 +155,13 @@ function linkedOf(target: GoalTarget, items: HabitTodayItem[]): LinkedHabit[] {
     .map((i) => ({ code: i.habit.code, title_ar: i.habit.title_ar, adherence: null, total_done: null }));
 }
 
+/** The indicator the server computed for an outcome or a card; a milestone has none. */
+function indicatorOfTarget(target: GoalTarget) {
+  if (target.kind === 'outcome') return target.outcome.indicator;
+  if (target.kind === 'card') return target.card.indicator;
+  return undefined;
+}
+
 export interface GoalDetailProps {
   /** Filled in by the router from `/goals/:ref`: an outcome code, a card or a milestone page. */
   params?: { ref?: string };
@@ -209,7 +216,7 @@ function GoalDetail({ params }: GoalDetailProps) {
 
   const title = target === undefined ? 'تفاصيل الهدف' : titleOf(target);
   // An outcome and a card have an indicator (the server computes it); a milestone has none.
-  const indicatorOf = target?.kind === 'outcome' ? target.outcome.indicator : target?.kind === 'card' ? target.card.indicator : undefined;
+  const indicatorOf = target === undefined ? undefined : indicatorOfTarget(target);
   const href = target === undefined ? undefined : habitHref(target, pace);
   const state = goals.state;
 

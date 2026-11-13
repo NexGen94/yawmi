@@ -184,9 +184,7 @@ export function RemindersSection({ kind, reminders, online, onSave }: RemindersS
         </p>
       )}
       {saved && (
-        <p class="indicator-status" role="status">
-          تم الحفظ
-        </p>
+        <output class="indicator-status">تم الحفظ</output>
       )}
     </section>
   );

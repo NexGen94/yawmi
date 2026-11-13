@@ -275,10 +275,10 @@ export function useHabitsToday(scope: ItemScope = 'due'): UseHabitsToday {
     () => (bundle === undefined ? [] : buildItems(bundle, sent, pending, day, scope)),
     [bundle, sent, pending, day, scope],
   );
-  const allItems = useMemo(
-    () => (scope === 'all' ? items : bundle === undefined ? [] : buildItems(bundle, sent, pending, day, 'all')),
-    [scope, items, bundle, sent, pending, day],
-  );
+  const allItems = useMemo(() => {
+    if (scope === 'all') return items;
+    return bundle === undefined ? [] : buildItems(bundle, sent, pending, day, 'all');
+  }, [scope, items, bundle, sent, pending, day]);
   const logs = useMemo(
     () => (bundle === undefined ? [] : overlayLogs(bundle, sent, pending, day)),
     [bundle, sent, pending, day],

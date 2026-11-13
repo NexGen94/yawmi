@@ -23,7 +23,8 @@ export function IndicatorCard({ subject, value, display, onCustomize }: Indicato
   const label = `مؤشر ${subject.title}`;
   const ratio = value.completion;
   // A ring or a bar needs a ratio, a sparkline a series: without one the number stands alone.
-  const shape = display === 'sparkline' ? (value.series && value.series.length > 1 ? 'sparkline' : 'number') : display;
+  const hasSeries = value.series !== undefined && value.series.length > 1;
+  const shape = display === 'sparkline' && !hasSeries ? 'number' : display;
   const drawn = (shape === 'ring' || shape === 'bar') && ratio === null ? 'number' : shape;
   // The ring writes its own percentage in the middle: the text beside it only says what it adds
   // (a total, an average, «أقل من 1%»), and is left out when it would repeat the ring.

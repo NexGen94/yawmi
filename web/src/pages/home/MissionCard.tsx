@@ -1,3 +1,5 @@
+import type { ComponentChildren } from 'preact';
+
 import { Card } from '../../ui/Card';
 import { Skeleton } from '../../ui/Skeleton';
 
@@ -24,26 +26,32 @@ function Piece({ name, text }: { name: string; text: string }) {
  *  brackets with the way to write them. Nothing here is generated, suggested or reworded. */
 export function MissionCard({ mission, vision, loading = false, unavailable = false }: MissionCardProps) {
   const empty = mission === '' || vision === '';
+  let body: ComponentChildren;
+  if (loading) {
+    body = (
+      <>
+        <Skeleton />
+        <Skeleton inlineSize="70%" />
+      </>
+    );
+  } else if (unavailable) {
+    body = <p class="mission-empty">تعذّرت القراءة الآن.</p>;
+  } else {
+    body = (
+      <>
+        <Piece name="رسالتي" text={mission} />
+        <Piece name="رؤيتي" text={vision} />
+        {empty && (
+          <a class="mission-link" href="/settings">
+            كتابتهما من الإعدادات
+          </a>
+        )}
+      </>
+    );
+  }
   return (
     <Card title="رسالتي ورؤيتي" class="mission-card">
-      {loading ? (
-        <>
-          <Skeleton />
-          <Skeleton inlineSize="70%" />
-        </>
-      ) : unavailable ? (
-        <p class="mission-empty">تعذّرت القراءة الآن.</p>
-      ) : (
-        <>
-          <Piece name="رسالتي" text={mission} />
-          <Piece name="رؤيتي" text={vision} />
-          {empty && (
-            <a class="mission-link" href="/settings">
-              كتابتهما من الإعدادات
-            </a>
-          )}
-        </>
-      )}
+      {body}
     </Card>
   );
 }

@@ -93,6 +93,8 @@ function OpenDialog({ onClose, onChanged, subject, habit, goal, config, online }
   const stored = config !== undefined || goal?.custom === true;
   const wantsTarget = isHabit ? measure === 'total' || measure === 'avg_7d' || measure === 'avg_30d' : source !== 'linked_habits';
   const disabled = !online || busy;
+  const goalReminder = config?.reminder ? [config.reminder] : [];
+  const shownReminders = isHabit ? (habit?.reminders ?? []) : goalReminder;
 
   const body = (reminder: IndicatorIO['reminder']): IndicatorIO | undefined => {
     const target = wantsTarget ? parseTarget(targetText) : { value: null };
@@ -208,7 +210,7 @@ function OpenDialog({ onClose, onChanged, subject, habit, goal, config, online }
         )}
         <RemindersSection
           kind={subject.kind}
-          reminders={isHabit ? (habit?.reminders ?? []) : config?.reminder ? [config.reminder] : []}
+          reminders={shownReminders}
           online={online}
           onSave={saveReminders}
         />

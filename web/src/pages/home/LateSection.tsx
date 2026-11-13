@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
 
 import { fmt } from '../../lib/format';
@@ -32,20 +33,26 @@ const keyOf = (item: LateItem): string => {
 /** An ISO day or an outcome code inside an Arabic sentence is isolated left to right, so «2026-11-09»
  *  is not read backwards. The text itself is unchanged. */
 function Sentence({ text }: { text: string }) {
-  const parts = text.split(/(\d{4}-\d{2}-\d{2}|O\d+)/);
-  return (
-    <>
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
-          <bdi key={i} dir="ltr">
-            {part}
-          </bdi>
-        ) : (
-          part
-        ),
-      )}
-    </>
-  );
+  const nodes: ComponentChildren[] = [];
+  const isolated = /\d{4}-\d{2}-\d{2}|O\d+/g;
+  let from = 0;
+  for (const match of text.matchAll(isolated)) {
+    const at = match.index;
+    if (at > from) nodes.push(text.slice(from, at));
+    nodes.push(
+      <bdi key={at} dir="ltr">
+        {match[0]}
+      </bdi>,
+    );
+    from = at + match[0].length;
+  }
+  if (from < text.length) nodes.push(text.slice(from));
+  return <>{nodes}</>;
+}
+
+function hrefOf(item: Exclude<LateItem, { kind: 'habit_period' | 'habit_daily' }>): string {
+  if (item.kind === 'abstain_slip') return `/habits/${encodeURIComponent(item.code)}`;
+  return `/goals/${encodeURIComponent(item.kind === 'milestone' ? item.pageId : item.ref)}`;
 }
 
 const LATE = <Badge tone="signal">متأخر</Badge>;
@@ -68,10 +75,7 @@ function LateRow({ item, onTick }: { item: LateItem; onTick(code: string): void 
       </li>
     );
   }
-  const href =
-    item.kind === 'abstain_slip'
-      ? `/habits/${encodeURIComponent(item.code)}`
-      : `/goals/${encodeURIComponent(item.kind === 'milestone' ? item.pageId : item.ref)}`;
+  const href = hrefOf(item);
   return (
     <li class="late-item">
       <a class="late-link" href={href}>

@@ -157,6 +157,13 @@ describe('home: «المتأخر وغير المنجز»', () => {
     expect(within(row).queryByRole('button', { pressed: false })).toBeNull();
   });
 
+  it('an ISO day and an outcome code inside the sentence are isolated left to right', async () => {
+    await renderHome({ goals: OVERDUE });
+    const first = within(late()).getByText('أولى متأخرة').closest('li') as HTMLElement;
+    const isolated = [...first.querySelectorAll('bdi[dir="ltr"]')].map((el) => el.textContent);
+    expect(isolated).toEqual(['2026-11-02', 'O1']);
+  });
+
   it('a milestone and a goal are links to their pages', async () => {
     await renderHome({ goals: OVERDUE });
     const first = within(late()).getByText('أولى متأخرة').closest('a');
