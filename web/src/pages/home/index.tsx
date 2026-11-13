@@ -3,6 +3,8 @@ import { useEffect, useMemo } from 'preact/hooks';
 
 import { acceptInsight, type GroundedInsight } from '../../ai/guard';
 import { combine } from '../../data/combine';
+import { focusTarget, minutesOn } from '../../focus/calc';
+import { useFocusPlans, useFocusSessions } from '../../focus/data';
 import { useGoals } from '../../goals/data';
 import { useHabitsToday } from '../../habits/useHabitsToday';
 import { fmt } from '../../lib/format';
@@ -66,6 +68,8 @@ export default function HomePage() {
   // still shows the habits, and says what is missing in the cards that need them.
   const goals = useGoals();
   const settings = useSettings();
+  const focusPlans = useFocusPlans();
+  const focusSessions = useFocusSessions(day);
   const lateList = useMemo(
     () =>
       lateItems({ habits: habits.allItems, logs: habits.logs, goals: goals.data, today: day, weekStart: WEEK_START }),
@@ -86,6 +90,17 @@ export default function HomePage() {
     if (!counted) return;
     void import('../../push/subscribe').then((push) => push.setBadge(badge)).catch(() => undefined);
   }, [counted, badge]);
+
+  // The focus minutes of today with the sessions still in the outbox, against the minutes the morning
+  // planned, else the daily setting. Read beside the day: a page that cannot read them shows no line.
+  const planned = (entries.morning?.answers as { planned_minutes?: unknown } | undefined)?.planned_minutes;
+  const focus =
+    focusSessions.query.data === undefined
+      ? undefined
+      : {
+          minutes: minutesOn(focusSessions.sessions, day),
+          target: focusTarget(typeof planned === 'number' ? planned : null, settings.data?.focus_daily_target_min),
+        };
 
   const plan = habits.today?.plan;
   const insight = summaryInsight(
@@ -148,9 +163,8 @@ export default function HomePage() {
                 <DomainCards outcomes={goals.data?.outcomes ?? []} />
               )}
             </section>
-            <QuickAccess />
-            {/* later: the favourite focus combinations, inside the quick access card */}
-            <DaySummary morning={entries.morning} evening={entries.evening} insight={insight} />
+            <QuickAccess favorites={(focusPlans.data ?? []).filter((p) => p.favorite && p.active)} />
+            <DaySummary morning={entries.morning} evening={entries.evening} insight={insight} focus={focus} />
           </div>
         </div>
       </StateFrame>
