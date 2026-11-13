@@ -18,7 +18,7 @@ from typing import Any
 
 from yawmi.domain.periods import WeekStart, weekday_bit
 from yawmi.goals.models import GoalIndicatorValue
-from yawmi.goals.service import GoalSources, load_goals
+from yawmi.goals.service import GoalSources, load_goals, shown_milestones
 from yawmi.goals.tasks_store import TaskCounts
 from yawmi.habits.models import ReminderIO, domain_logs
 from yawmi.habits.state import habit_state
@@ -182,11 +182,12 @@ async def goal_indicator_notices(ctx: NoticeContext, now: datetime) -> list[Noti
 
 async def _late_titles(sources: GoalSources, day: date, week_start: WeekStart) -> list[str]:
     """Titles of what is late on `day`: open milestones past their due day (oldest first), then
-    the habits whose state is `late` (by code)."""
+    the habits whose state is `late` (by code). The milestones are the shown ones: one closed or
+    moved by a goal edit is not late."""
     overdue = sorted(
         (
             m
-            for m in await sources.goals.milestones()
+            for m in await shown_milestones(sources.goals, sources.edits)
             if not m.done and m.due_date and m.due_date < day
         ),
         key=lambda m: (m.due_date, m.title, m.page_id),

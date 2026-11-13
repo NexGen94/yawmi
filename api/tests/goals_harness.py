@@ -9,6 +9,7 @@ habits it did not create (the seed) are paused, so a test counts only its own, a
 import json
 import os
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -23,6 +24,8 @@ from yawmi.db.pool import create_pool, set_pool
 from yawmi.events.project import GoalTaskMark
 from yawmi.events.store import _MARK_GOAL_TASK as MARK_GOAL_TASK
 from yawmi.events.store import goal_task_mark_args
+from yawmi.goals.edits_memory import InMemoryEditStore
+from yawmi.goals.edits_store import AsyncpgEditStore
 from yawmi.goals.memory import InMemoryGoalsReader, InMemoryGoalTaskStore
 from yawmi.goals.reader import (
     AsyncpgGoalsReader,
@@ -40,8 +43,17 @@ from yawmi.goals.tasks_store import AsyncpgGoalTaskStore
 from yawmi.indicators.memory import InMemoryIndicatorStore
 from yawmi.indicators.models import IndicatorIO
 from yawmi.indicators.store import AsyncpgIndicatorStore
+from yawmi.notion.changes import GoalEditOut, build_edit
 from yawmi.today.memory import InMemoryTodayReader
-from yawmi.today.reader import AsyncpgTodayReader, HabitRow, LogRow
+from yawmi.today.reader import (
+    AsyncpgTodayReader,
+    CardRow,
+    CycleRow,
+    GoalRow,
+    HabitRow,
+    LogRow,
+    MilestoneRow,
+)
 
 PREFIX = "t13_"
 IN_CI = bool(os.environ.get("CI"))
@@ -57,6 +69,7 @@ KPI_CODES = [
 ]
 OUTCOMES = [f"O{n}" for n in range(1, 13)]
 LONG_AGO = datetime(2026, 1, 1, tzinfo=UTC)
+EDIT_TIME = datetime(2026, 11, 11, 8, 0, tzinfo=UTC)
 
 
 async def open_goals_pool() -> asyncpg.Pool:
@@ -109,10 +122,15 @@ class GoalsBackend:
     goals: Any
     tasks: Any
     indicators: Any
+    edits: Any
 
     def sources(self) -> GoalSources:
         return GoalSources(
-            goals=self.goals, today=self.today, tasks=self.tasks, indicators=self.indicators
+            goals=self.goals,
+            today=self.today,
+            tasks=self.tasks,
+            indicators=self.indicators,
+            edits=self.edits,
         )
 
     def install(self, app: FastAPI) -> None:  # memory backend overrides
@@ -134,6 +152,10 @@ class GoalsBackend:
         raise NotImplementedError
 
     async def card(self, key: str, **kw: Any) -> str:
+        raise NotImplementedError
+
+    async def sync(self, kind: str, page_id: str, **values: Any) -> None:
+        """The mirror syncs a page: new values (`edited` is `notion_edited_at`)."""
         raise NotImplementedError
 
     async def cycle(self, no: int, start: date, end: date, review_end: date) -> None:
@@ -165,6 +187,23 @@ class GoalsBackend:
         """A `goal_task_set` event reaches the task, by the rule of the events projection."""
         raise NotImplementedError
 
+    async def edit(
+        self,
+        kind: str,
+        page_id: str,
+        field: str,
+        old: object,
+        new: object,
+        *,
+        applied_at: datetime | None = None,
+    ) -> GoalEditOut:
+        """A goal edit, pending, or applied at `applied_at` (as `apply_pending` records it)."""
+        made = build_edit(kind, page_id, field, old, new, date(2026, 11, 11))
+        row = await self.edits.record(page_id, field, made, None, EDIT_TIME)
+        if applied_at is not None:
+            row = await self.edits.finish(row.id, "applied", applied_at, None)
+        return row
+
     async def task(self, goal_ref: str, title: str, *, done: bool = False) -> str:
         created = await self.tasks.create(goal_ref, title, None, LONG_AGO)
         if done:
@@ -180,12 +219,25 @@ class MemoryGoals(GoalsBackend):
         self.goals = InMemoryGoalsReader()
         self.tasks = InMemoryGoalTaskStore()
         self.indicators = InMemoryIndicatorStore()
+        self.edits = InMemoryEditStore()
 
     def install(self, app: FastAPI) -> None:
         app.state.today = self.today
         app.state.goals = self.goals
         app.state.goal_tasks = self.tasks
         app.state.indicators = self.indicators
+        app.state.goal_edits = self.edits
+
+    async def sync(self, kind: str, page_id: str, **values: Any) -> None:
+        changes = {("notion_edited_at" if k == "edited" else k): v for k, v in values.items()}
+        if kind == "milestone":
+            lists: list[list[Any]] = [self.goals.milestone_rows, self.today.milestone_rows]
+        else:
+            lists = [self.goals.card_rows, self.today.card_rows]
+        for rows in lists:
+            for i, row in enumerate(rows):
+                if row.page_id == page_id:
+                    rows[i] = replace(row, **changes)
 
     async def mark_from_event(self, task_id: UUID, done: bool, logged_at: datetime) -> None:
         await self.tasks.mark_from_event(task_id, done, logged_at)
@@ -201,9 +253,23 @@ class MemoryGoals(GoalsBackend):
                 status=kw.get("status", "active"),
             )
         )
+        o = self.goals.outcome_rows[-1]
+        self.today.goal_rows.append(GoalRow(o.code, o.title, o.target_date, o.status, o.track))
 
     async def milestone(self, key: str, outcome: str | None, **kw: Any) -> str:
         page_id = PREFIX + key
+        self.today.milestone_rows.append(
+            MilestoneRow(
+                page_id=page_id,
+                title=kw.get("title", "محطة " + key),
+                outcome_code=outcome,
+                cycle_no=kw.get("cycle"),
+                due_date=kw.get("due"),
+                done=kw.get("done", False),
+                card_page_ids=tuple(PREFIX + c for c in kw.get("cards", ())),
+                notion_edited_at=kw.get("edited"),
+            )
+        )
         self.goals.milestone_rows.append(
             MilestoneFullRow(
                 page_id=page_id,
@@ -215,20 +281,29 @@ class MemoryGoals(GoalsBackend):
                 done=kw.get("done", False),
                 criterion=kw.get("criterion"),
                 evidence=kw.get("evidence"),
-                notion_edited_at=None,
+                notion_edited_at=kw.get("edited"),
             )
         )
         return page_id
 
     async def card(self, key: str, **kw: Any) -> str:
         page_id = PREFIX + key
+        self.today.card_rows.append(
+            CardRow(
+                page_id=page_id,
+                title=kw.get("title", "بطاقة " + key),
+                status=kw.get("status"),
+                outcome_codes=tuple(kw.get("outcomes", ())),
+                notion_edited_at=kw.get("edited"),
+            )
+        )
         self.goals.card_rows.append(
             CardFullRow(
                 page_id=page_id,
                 title=kw.get("title", "بطاقة " + key),
                 status=kw.get("status"),
                 outcome_codes=tuple(kw.get("outcomes", ())),
-                notion_edited_at=None,
+                notion_edited_at=kw.get("edited"),
             )
         )
         props = kw.get("props") or {}
@@ -248,6 +323,7 @@ class MemoryGoals(GoalsBackend):
         self.goals.cycle_rows.append(
             CycleFullRow(no, 1, start, end, end, review_end, "موضوع", "بوابة")
         )
+        self.today.cycle_rows.append(CycleRow(no, start, end, review_end))
 
     async def kpi(self, code: str, goal_code: str | None, **kw: Any) -> None:
         self.goals.kpi_rows.append(
@@ -285,6 +361,7 @@ class PostgresGoals(GoalsBackend):
         self.goals = AsyncpgGoalsReader(pool)
         self.tasks = AsyncpgGoalTaskStore(pool)
         self.indicators = AsyncpgIndicatorStore(pool)
+        self.edits = AsyncpgEditStore(pool)
         self.paused: list[str] = []
         self.cycles: list[int] = []
 
@@ -326,6 +403,7 @@ class PostgresGoals(GoalsBackend):
             "DELETE FROM yawmi.goal_tasks WHERE goal_ref LIKE $1 OR goal_ref ~ '^O[0-9]+$'", like
         )
         await pool.execute("DELETE FROM yawmi.notice_sends")
+        await pool.execute("DELETE FROM yawmi.goal_edits WHERE page_id LIKE $1", like)
 
     async def mark_from_event(self, task_id: UUID, done: bool, logged_at: datetime) -> None:
         mark = GoalTaskMark(event_id=uuid4(), task_id=task_id, done=done, logged_at=logged_at)
@@ -347,8 +425,8 @@ class PostgresGoals(GoalsBackend):
         page_id = PREFIX + key
         await self.pool.execute(
             "INSERT INTO raqib.notion_milestones (page_id, title, outcome_code, card_page_ids,"
-            " cycle_no, due_date, done, criterion, evidence) VALUES"
-            " ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9)",
+            " cycle_no, due_date, done, criterion, evidence, notion_edited_at) VALUES"
+            " ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10)",
             page_id,
             kw.get("title", "محطة " + key),
             outcome,
@@ -358,21 +436,31 @@ class PostgresGoals(GoalsBackend):
             kw.get("done", False),
             kw.get("criterion"),
             kw.get("evidence"),
+            kw.get("edited"),
         )
         return page_id
 
     async def card(self, key: str, **kw: Any) -> str:
         page_id = PREFIX + key
         await self.pool.execute(
-            "INSERT INTO raqib.notion_cards (page_id, title, status, outcome_codes, props)"
-            " VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)",
+            "INSERT INTO raqib.notion_cards (page_id, title, status, outcome_codes, props,"
+            " notion_edited_at) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6)",
             page_id,
             kw.get("title", "بطاقة " + key),
             kw.get("status"),
             json.dumps(list(kw.get("outcomes", ()))),
             json.dumps(kw.get("props") or {}, ensure_ascii=False),
+            kw.get("edited"),
         )
         return page_id
+
+    async def sync(self, kind: str, page_id: str, **values: Any) -> None:
+        table = "raqib.notion_milestones" if kind == "milestone" else "raqib.notion_cards"
+        columns = [("notion_edited_at" if k == "edited" else k) for k in values]
+        assigns = ", ".join(f"{c} = ${i + 2}" for i, c in enumerate(columns))
+        await self.pool.execute(
+            f"UPDATE {table} SET {assigns} WHERE page_id = $1", page_id, *values.values()
+        )
 
     async def cycle(self, no: int, start: date, end: date, review_end: date) -> None:
         await self.pool.execute(

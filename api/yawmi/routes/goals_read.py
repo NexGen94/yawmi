@@ -13,7 +13,7 @@ from yawmi.auth.deps import USER_KINDS, SettingsDep, require_kind
 from yawmi.domain.days import DEFAULT_TZ, day_key
 from yawmi.errors import FORBIDDEN, INVALID, UNAUTHORIZED, ErrorDetail
 from yawmi.events import models as event_models
-from yawmi.goals.deps import GoalsReaderDep, SourcesDep
+from yawmi.goals.deps import EditStoreDep, GoalsReaderDep, SourcesDep
 from yawmi.goals.models import GoalsOut, PaceOut
 from yawmi.goals.service import load_goals, load_pace
 from yawmi.text import is_storable
@@ -38,7 +38,8 @@ router = APIRouter(
         "قراءة كاملة من مرآة Notion مع العادات والمهام والمؤشرات. مرآة فارغة (قبل نشر المزامنة) "
         "تعطي قوائم فارغة و`synced_at: null`. `completion` المخرج المحطات المنجزة ÷ كلها كما في "
         "Notion، ولا تغيّرها العادات. `target_date` و`next_step` للبطاقة من خاصيتين مسمّاتين "
-        "فقط، ولا يُقرأ غيرهما من خصائصها."
+        "فقط، ولا يُقرأ غيرهما من خصائصها. وفوق المرآة تعديلات يومي: المعلّق أولاً (واسم حقله في "
+        "`pending`)، ثم المطبَّق ما دامت المرآة لم تلحق به، ثم المرآة."
     ),
 )
 async def get_goals(sources: SourcesDep, settings: SettingsDep) -> GoalsOut:
@@ -61,10 +62,11 @@ async def get_goals(sources: SourcesDep, settings: SettingsDep) -> GoalsOut:
 async def get_pace(
     ref: Annotated[str, Path(max_length=64, description="رمز المخرج")],
     goals: GoalsReaderDep,
+    edits: EditStoreDep,
     kpi: Annotated[str | None, Query(max_length=64, description="رمز مؤشر المخرج")] = None,
 ) -> PaceOut:
     today = day_key(event_models.server_now(), DEFAULT_TZ)
-    pace = await load_pace(goals, ref, kpi, today) if is_storable(ref) else None
+    pace = await load_pace(goals, ref, kpi, today, edits) if is_storable(ref) else None
     if pace is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND_MESSAGE)
     return pace

@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from yawmi.db.pool import get_pool
+from yawmi.goals.edits_store import AsyncpgEditStore, EditStore
 from yawmi.goals.reader import AsyncpgGoalsReader, GoalsReader
 from yawmi.goals.service import GoalSources
 from yawmi.goals.tasks_store import AsyncpgGoalTaskStore, GoalTaskStore
@@ -33,8 +34,14 @@ def get_goals_indicators(request: Request) -> IndicatorStore:
     return injected if injected is not None else AsyncpgIndicatorStore(get_pool())
 
 
+def get_edit_store(request: Request) -> EditStore:
+    injected: EditStore | None = getattr(request.app.state, "goal_edits", None)
+    return injected if injected is not None else AsyncpgEditStore(get_pool())
+
+
 GoalsReaderDep = Annotated[GoalsReader, Depends(get_goals_reader)]
 TaskStoreDep = Annotated[GoalTaskStore, Depends(get_task_store)]
+EditStoreDep = Annotated[EditStore, Depends(get_edit_store)]
 
 
 def get_sources(
@@ -42,8 +49,9 @@ def get_sources(
     today: Annotated[TodayReader, Depends(get_goals_today_reader)],
     tasks: TaskStoreDep,
     indicators: Annotated[IndicatorStore, Depends(get_goals_indicators)],
+    edits: EditStoreDep,
 ) -> GoalSources:
-    return GoalSources(goals=goals, today=today, tasks=tasks, indicators=indicators)
+    return GoalSources(goals=goals, today=today, tasks=tasks, indicators=indicators, edits=edits)
 
 
 SourcesDep = Annotated[GoalSources, Depends(get_sources)]

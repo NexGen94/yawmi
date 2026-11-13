@@ -45,6 +45,17 @@ describe('fmt.count: number and counted noun in Arabic grammar', () => {
     [3, 'milestone', '3 محطات'],
     [2, 'milestone', 'محطتان'],
     [12, 'milestone', '12 محطة'],
+    [3, 'habit', '3 عادات'],
+    [2, 'habit', 'عادتان'],
+    [11, 'habit', '11 عادة'],
+    [103, 'habit', '103 عادات'],
+    [21, 'cycle', '21 دورة'],
+    [2, 'cycle', 'دورتان'],
+    [5, 'cycle', '5 دورات'],
+    [3, 'priority', '3 أولويات'],
+    [2, 'priority', 'أولويتان'],
+    [11, 'priority', '11 أولوية'],
+    [103, 'milestone', '103 محطات'],
   ])('count(%d, %s) is %s', (n, noun, expected) => {
     expect(fmt.count(n, noun)).toBe(expected);
   });
