@@ -1,4 +1,5 @@
 import { getLastDeviceId, logout as apiLogout, LogoutError, pair } from '../api/auth';
+import { clearSession } from '../focus/timer';
 import { navigate } from '../lib/navigate';
 import { clearOutbox, clearQuarantine, flush, pending } from '../sync/outbox';
 import { clearCache, kvDelete, kvGet, kvSet } from './cache';
@@ -50,8 +51,8 @@ export async function pairDevice(code: string): Promise<void> {
  * 1. Checks connectivity: signing out requires a connection.
  * 2. Flushes any pending events. If any remain, prompts user for confirmation.
  * 3. Calls POST /v1/auth/logout on the server. On failure, stays signed in and keeps local data.
- * 4. Only after server confirmation: clears outbox, quarantine, cache, unsent journal drafts, and
- *    session in kv.
+ * 4. Only after server confirmation: clears outbox, quarantine, cache, unsent journal drafts, the
+ *    focus session, and session in kv.
  * 5. Navigates to /pair.
  */
 export async function logout(): Promise<void> {
@@ -90,6 +91,8 @@ export async function logout(): Promise<void> {
   await clearCache();
   // Unsent journal drafts are private text in localStorage: they leave with the session.
   clearAllDrafts();
+  // A session in progress (or waiting to be saved) holds a goal, a habit and a plan: it leaves too.
+  await clearSession();
   await kvDelete(DEVICE_ID_KEY);
   await kvDelete(DEVICE_NAME_KEY);
 
