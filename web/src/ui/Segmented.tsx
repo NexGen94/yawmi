@@ -32,9 +32,13 @@ export function Segmented<T extends string>({ label, options, value, onChange, d
     if (disabled) return;
     const n = options.length;
     let next: number;
-    if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = n - 1;
-    else {
+    if (event.key === 'Home' || event.key === 'End') {
+      // The ends of the enabled options: a disabled one is never where the keys land.
+      const enabled = options.map((o, i) => (o.disabled ? -1 : i)).filter((i) => i >= 0);
+      const end = event.key === 'Home' ? enabled[0] : enabled[enabled.length - 1];
+      if (end === undefined) return;
+      next = end;
+    } else {
       const step = rowStep(event.key, event.currentTarget);
       if (step === 0) return;
       next = (index + step + n) % n;
