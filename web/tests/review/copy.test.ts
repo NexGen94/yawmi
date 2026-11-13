@@ -27,11 +27,22 @@ function strings(file: string): string[] {
   return out.filter((s) => /[؀-ۿ]/.test(s));
 }
 
-// Imperative verbs of address (masculine or feminine) that a label or sentence must not start with.
-const IMPERATIVE =
-  /(^|[\s«(])(اكتب|اكتبي|اختر|اختاري|أدخل|ادخل|أدخلي|اضغط|اضغطي|انقر|انقري|تأكد|تأكدي|تحقق|تحققي|جرّب|جرب|جربي|حاول|حاولي|أعد|أعيدي|اترك|اتركي|اقرأ|اقرئي|ارجع|ارجعي|افتح|افتحي|أغلق|أغلقي|انتظر|انتظري|تابع|تابعي|اضف|أضف|أضيفي|احفظ|احفظي|احذف|احذفي)(?=[\s»).,:؟؛،]|$)/;
-// Second-person pronouns and verb endings.
-const ADDRESS = /(^|[\s«(])(أنت|أنتِ|لك|لكِ|عليك|عليكِ|بإمكانك|يمكنك|يمكنكِ|تستطيع|تستطيعين|هل تريد|هل تريدين)(?=[\s»).,:؟؛،]|$)/;
+// Imperative verbs of address (masculine and feminine) that a label or sentence must not start with.
+// The first line is the list of the shared scan; the second is what this page would most likely say
+// (fix round 1, I-2): the verbs of its own buttons and of the app's core action.
+const IMPERATIVE_VERBS = [
+  'اكتب|اكتبي|اختر|اختاري|أدخل|ادخل|أدخلي|اضغط|اضغطي|انقر|انقري|تأكد|تأكدي|تحقق|تحققي|جرّب|جرب|جربي|حاول|حاولي',
+  'أعد|أعيدي|اترك|اتركي|اقرأ|اقرئي|ارجع|ارجعي|افتح|افتحي|أغلق|أغلقي|انتظر|انتظري|تابع|تابعي|اضف|أضف|أضيفي|احفظ|احفظي|احذف|احذفي',
+  'سجّل|سجل|سجّلي|سجلي|ولّد|ولدي|ولّدي|ابدأ|ابدئي|أنشئ|أنشئي|اعرض|اعرضي|راجع|راجعي|استعرض|استعرضي|شغّل|شغّلي|شغل|شغلي',
+].join('|');
+const IMPERATIVE = new RegExp(String.raw`(^|[\s«(])(${IMPERATIVE_VERBS})(?=[\s»).,:؟؛،]|$)`);
+// Second-person pronouns and verb endings, and the attached suffix on the nouns this page names. The
+// suffix is an explicit list (a blanket «ـك» would also match ذلك and تلك).
+const ADDRESS_WORDS = [
+  'أنت|أنتِ|لك|لكِ|عليك|عليكِ|بإمكانك|يمكنك|يمكنكِ|تستطيع|تستطيعين|هل تريد|هل تريدين',
+  '[لبو]?(?:مزاجك|يومك|يوميتك|يومياتك|أسبوعك|عاداتك|عادتك|بياناتك|أهدافك|هدفك|ملاحظاتك|مراجعتك|وقتك|أيامك|مشاعرك)',
+].join('|');
+const ADDRESS = new RegExp(String.raw`(^|[\s«(])(${ADDRESS_WORDS})(?=[\s»).,:؟؛،]|$)`);
 // No praise or blame (CLAUDE.md): a word that judges the week.
 const JUDGING = /(^|[\s«(])(ممتاز|رائع|أحسنت|أحسنتِ|مبروك|فاشل|كسول|تقصير|إهمال|للأسف)(?=[\s»).,:؟؛،]|$)/;
 
@@ -48,6 +59,36 @@ describe('the strings of the review pages', () => {
     expect(ADDRESS.test('يمكنك الكتابة')).toBe(true);
     expect(JUDGING.test('أسبوع ممتاز')).toBe(true);
     expect(IMPERATIVE.test('يمكن عرض المزيد')).toBe(false);
+  });
+
+  it('the scan catches the verbs of this page and the forms with a suffix (the planted cases of the review)', () => {
+    for (const planted of [
+      'سجّل مزاجك اليوم',
+      'سجل مزاجك اليوم',
+      'ولّد مراجعة الأسبوع',
+      'ابدأ يومية الصباح',
+      'أنشئ عادة',
+      'اعرض المزيد',
+      'راجع الأسبوع',
+      'اكتب ملاحظة',
+      'اختر عادة',
+      'سجّلي المزاج',
+      'ولّدي المراجعة',
+      'ابدئي اليوم',
+      'استعرض السجل',
+      'شغّل التنبيه',
+    ]) {
+      expect(IMPERATIVE.test(planted), planted).toBe(true);
+    }
+    for (const planted of ['مزاجك اليوم', 'كيف كان يومك', 'أسبوعك', 'عاداتك', 'بياناتك', 'أنت', 'مراجعة لأسبوعك']) {
+      expect(ADDRESS.test(planted), planted).toBe(true);
+    }
+  });
+
+  it('the scan spares the nouns and labels the page uses', () => {
+    for (const fine of ['السجل', 'تسجيل المزاج', 'بدء يومية الصباح', 'توليد مراجعة الأسبوع', 'إعادة التوليد', 'عرض المزيد', 'مراجعة الأسبوع', 'ملخص الأشهر', 'ذلك', 'تلك', 'للوعي الذاتي']) {
+      expect(IMPERATIVE.test(fine) || ADDRESS.test(fine), fine).toBe(false);
+    }
   });
 
   it.each(all.map((f) => [f.slice(src.length + 1).replaceAll('\\', '/'), f] as const))(
