@@ -284,7 +284,8 @@ async def test_go_deeper_returns_one_question_and_three_options_and_stores_nothi
     resp = await post(client, DEEPER)
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert set(body) == {"question", "options", "source_ids"}
+    assert set(body) == {"question", "options", "source_ids", "refusal"}
+    assert body["refusal"] is None  # a question, so no refusal
     assert body["question"] == "ما الذي يستحق التأمل في هذا الأسبوع؟"
     assert [o["title"] for o in body["options"]] == [
         p["title"] for p in deeper_reply(ai.provider.payload)["priorities"]
@@ -406,16 +407,24 @@ async def test_a_fixed_line_is_a_valid_stored_reply_of_every_kind(
     assert len(ai.provider.calls) == 1
 
 
-@pytest.mark.parametrize("line", [OUT_OF_SCOPE, NO_DATA])
-async def test_go_deeper_answers_a_fixed_line_with_a_null_question(
-    ai: AiBackend, client: httpx.AsyncClient, line: str
+@pytest.mark.parametrize(
+    ("line", "refusal"), [(OUT_OF_SCOPE, "out_of_scope"), (NO_DATA, "no_data")]
+)
+async def test_go_deeper_answers_a_fixed_line_with_a_null_question_and_its_refusal(
+    ai: AiBackend, client: httpx.AsyncClient, line: str, refusal: str
 ) -> None:
+    """`refusal` names the fixed line, set exactly when `question` is null."""
     await seed_day(ai)
     ai.provider.script = [fixed(line)]
     await consent(client)
     resp = await post(client, DEEPER)
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {"question": None, "options": [], "source_ids": []}
+    assert resp.json() == {
+        "question": None,
+        "options": [],
+        "source_ids": [],
+        "refusal": refusal,
+    }
     assert len(ai.provider.calls) == 1
 
 
@@ -534,3 +543,31 @@ async def test_a_stored_morning_refusal_is_renewed_after_its_lens_is_removed(
     assert len(ai.provider.calls) == 2
     today = await client.get("/v1/today", headers=auth())
     assert today.json()["insight"]["lines"] == renewed.json()["lines"]
+
+
+def test_deeper_out_sets_refusal_exactly_when_the_question_is_null() -> None:
+    from pydantic import ValidationError
+
+    from yawmi.ai.cards import DeeperOut
+
+    assert DeeperOut(question="ما الذي؟", options=[], source_ids=[], refusal=None).refusal is None
+    assert DeeperOut(question=None, options=[], source_ids=[], refusal="no_data").question is None
+    for bad in (
+        {"question": None, "refusal": None},
+        {"question": "ما الذي؟", "refusal": "out_of_scope"},
+        {"question": None, "refusal": "other"},
+    ):
+        with pytest.raises(ValidationError):
+            DeeperOut(options=[], source_ids=[], **bad)
+
+
+def test_the_spec_publishes_the_deeper_refusal_codes() -> None:
+    from yawmi.auth.memory_store import InMemoryDeviceStore
+    from yawmi.main import create_app
+
+    schema = create_app(devices=InMemoryDeviceStore()).openapi()["components"]["schemas"]
+    refusal = schema["DeeperOut"]["properties"]["refusal"]
+    codes = {v for option in refusal["anyOf"] for v in option.get("enum", [])}
+    assert codes == {"out_of_scope", "no_data"}
+    assert {"type": "null"} in refusal["anyOf"]
+    assert "refusal" in schema["DeeperOut"]["required"]

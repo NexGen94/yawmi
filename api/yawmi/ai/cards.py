@@ -9,10 +9,10 @@ alike.
 
 from collections.abc import Sequence
 from datetime import date, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from yawmi.ai.schema import InsightResponse, Priority
 
@@ -63,6 +63,18 @@ class DeeperOut(BaseModel):
         max_length=3, description="حتى ثلاثة أسئلة بديلة: العنوان حتى 80 حرفاً، ومعه مصدره"
     )
     source_ids: list[str] = Field(description="مصادر السؤال الأول")
+    refusal: Literal["out_of_scope", "no_data"] | None = Field(
+        description=(
+            "سبب غياب السؤال: `out_of_scope` لسطر «خارج نطاق المتابعة اليومية» و`no_data` لسطر "
+            "«لا بيانات كافية». يُملأ فقط حين يكون `question` بـ`null`، وإلا `null`"
+        )
+    )
+
+    @model_validator(mode="after")
+    def _refusal_exactly_without_a_question(self) -> Self:
+        if (self.question is None) != (self.refusal is not None):
+            raise ValueError("refusal is set exactly when question is null")
+        return self
 
 
 def days_of(cards: Sequence[SourceCard]) -> list[date]:

@@ -60,7 +60,14 @@ from yawmi.ai.reader import (
     StoreGroundingReader,
 )
 from yawmi.ai.schema import InsightKind, InsightRequest, InsightResponse
-from yawmi.ai.service import InsightInvalid, InsightService, build_provider, request_hash
+from yawmi.ai.service import (
+    REFUSALS,
+    InsightInvalid,
+    InsightService,
+    build_provider,
+    is_fixed_reply,
+    request_hash,
+)
 from yawmi.ai.store import (
     CLOSURE_KIND,
     MORNING_KIND,
@@ -509,8 +516,8 @@ async def weekly_insight(
         "يعيد سؤال تأمل واحداً من مصادر الأيام السبعة المنتهية باليوم، وحتى ثلاثة أسئلة بديلة في "
         "`options` (عنوان كل منها حتى 80 حرفاً، ومصدره من المصادر المعطاة). لا يُحفظ شيء، فكل "
         "طلب يستدعي المزوّد. `question` بـ`null` و`options` فارغة فقط حين يكون الرد أحد السطرين "
-        "الثابتين («خارج النطاق» أو «لا بيانات كافية»). يُقبل اليوم الحالي والأيام السبعة قبله. "
-        "يحتاج موافقة سارية للمزوّد الحالي، ورمز الخدمة مرفوض."
+        "الثابتين، و`refusal` يسمّيه حينها (`out_of_scope` أو `no_data`). يُقبل اليوم الحالي "
+        "والأيام السبعة قبله. يحتاج موافقة سارية للمزوّد الحالي، ورمز الخدمة مرفوض."
     ),
     responses=_ERRORS,
 )
@@ -533,10 +540,12 @@ async def deeper_insight(
     result = await _generate(service, req, prefs.ai_lines)
     if isinstance(result, JSONResponse):
         return result
+    refusal = REFUSALS[result.lines[0]] if is_fixed_reply(result) else None
     return DeeperOut(
         question=result.question,
         options=list(result.priorities),
         source_ids=list(result.source_ids),
+        refusal=refusal,  # type: ignore[arg-type]
     )
 
 

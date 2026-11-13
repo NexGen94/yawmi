@@ -147,6 +147,7 @@ MIN_THEME_JOURNALS = 2
 OUT_OF_SCOPE_LINE = "هذا خارج نطاق المتابعة اليومية، والمختص هو المرجع المناسب."
 NO_DATA_LINE = "لا بيانات كافية."
 FIXED_LINES = (OUT_OF_SCOPE_LINE, NO_DATA_LINE)
+REFUSALS = {OUT_OF_SCOPE_LINE: "out_of_scope", NO_DATA_LINE: "no_data"}
 
 
 def is_fixed_reply(response: InsightResponse) -> bool:
