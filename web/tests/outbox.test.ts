@@ -847,8 +847,9 @@ describe('scheduleFlush', () => {
     scheduleFlush(20, send);
     expect(send).not.toHaveBeenCalled();
 
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    expect(send).toHaveBeenCalledTimes(1);
+    // The timer fires after 20 ms, then the flush reads the queue: wait for the call, not for a
+    // fixed 80 ms that a busy machine can exceed.
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1), { timeout: 5000 });
   });
 });
 
