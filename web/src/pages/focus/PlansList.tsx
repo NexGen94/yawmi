@@ -93,7 +93,7 @@ export function PlansList(props: PlansListProps) {
   };
 
   return (
-    <Card title="خطط التركيز" class="focus-plans">
+    <Card title="خطط التركيز" class="focus-plans" id="focus-plans">
       {plans.length === 0 ? (
         <p class="focus-note">لا خطط بعد</p>
       ) : (
@@ -101,7 +101,9 @@ export function PlansList(props: PlansListProps) {
           {plans.map((plan) => (
             <li key={plan.id} class="focus-plan">
               <div class="focus-plan-text">
-                <p class="focus-plan-title">{plan.title_ar}</p>
+                <p class="focus-plan-title">
+                  <bdi>{plan.title_ar}</bdi>
+                </p>
                 <p class="focus-note">{minutesText(plan.minutes)}</p>
               </div>
               <div class="focus-plan-actions">
@@ -152,7 +154,9 @@ export function StoppedPlans({ plans, online, onChanged }: StoppedPlansProps) {
         {plans.map((plan) => (
           <li key={plan.id} class="focus-plan">
             <div class="focus-plan-text">
-              <p class="focus-plan-title">{plan.title_ar}</p>
+              <p class="focus-plan-title">
+                  <bdi>{plan.title_ar}</bdi>
+                </p>
               <p class="focus-note">{minutesText(plan.minutes)}</p>
             </div>
             <Button

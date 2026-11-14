@@ -22,7 +22,7 @@ export function ReviewList({ items, maxLines }: ReviewListProps) {
   return (
     <Card title="المراجعات السابقة">
       {items.length === 0 ? (
-        <p class="review-none">لا مراجعات سابقة</p>
+        <p class="review-none">لا مراجعات سابقة. تُحفظ كل مراجعة بعد توليدها بالزر أعلاه.</p>
       ) : (
         <ul class="review-previous">
           {items.map((item) => {

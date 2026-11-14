@@ -10,6 +10,7 @@
 
 /* The chart keeps a readable width and scrolls by itself on a phone; the page never scrolls sideways. */
 .timeline-scroll {
+  display: flex;
   max-inline-size: 100%;
   overflow-x: auto;
   padding: var(--sp-3);
@@ -21,10 +22,6 @@
 .timeline-scroll:focus-visible {
   outline: 2px solid transparent;
   box-shadow: var(--focus);
-}
-
-.timeline-scroll {
-  display: flex;
 }
 
 /* The outcome codes of the lanes: a layer at the start of the view that stays there while the chart
@@ -81,18 +78,22 @@
 }
 
 .timeline-cycle {
+  /* The cycles are ticks with a number, not buttons: no box, only the band of the current cycle. */
+  fill: transparent;
+  stroke: none;
+}
+
+.timeline-cycle-now {
   fill: var(--c-blue-pale);
+}
+
+.timeline-cycle-tick {
   stroke: var(--c-blue);
   stroke-width: 1;
 }
 
-.timeline-cycle-now {
-  fill: var(--c-ink);
-  stroke: var(--c-ink);
-}
-
 .timeline-cycle-no-now {
-  fill: var(--c-bg);
+  fill: var(--c-ink);
   font-weight: 600;
 }
 
@@ -112,7 +113,7 @@
 
 .timeline-today-line {
   stroke: var(--c-ink);
-  stroke-width: 2;
+  stroke-width: 1.5;
   stroke-dasharray: 4 3;
 }
 

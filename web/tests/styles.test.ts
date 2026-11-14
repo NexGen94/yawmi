@@ -390,3 +390,16 @@ describe('main.tsx', () => {
     expect(main).not.toContain("'./styles/base.css'");
   });
 });
+
+describe('media queries (Task 24)', () => {
+  it('use width, never inline-size or block-size: those are container features, and a rule under them never applies', () => {
+    const all = walk(src).filter((file) => file.endsWith('.css'));
+    expect(all.length).toBeGreaterThan(10);
+    for (const file of all) {
+      const text = read(file).replace(/\/\*[\s\S]*?\*\//g, '');
+      for (const [query] of text.matchAll(/@media[^{]*\{/g)) {
+        expect(query, `${rel(file)}`).not.toMatch(/(?:min-|max-)?(?:inline|block)-size\s*[:<>=]/);
+      }
+    }
+  });
+});

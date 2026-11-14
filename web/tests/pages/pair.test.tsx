@@ -31,7 +31,7 @@ describe('PairPage', () => {
     render(<PairPage />);
     expect(screen.getByRole('heading', { level: 1, name: 'الإقران' })).toBeTruthy();
     expect(screen.getByRole('textbox')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'إقران الجهاز' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'إقران هذا الجهاز' })).toBeTruthy();
   });
 
   it('disables button while submitting', async () => {
@@ -44,7 +44,7 @@ describe('PairPage', () => {
 
     render(<PairPage />);
     const input = screen.getByRole('textbox');
-    const button = screen.getByRole('button', { name: 'إقران الجهاز' });
+    const button = screen.getByRole('button', { name: 'إقران هذا الجهاز' });
 
     fireEvent.input(input, { target: { value: 'ABCD1234' } });
     fireEvent.click(button);
@@ -60,7 +60,7 @@ describe('PairPage', () => {
 
     render(<PairPage />);
     const input = screen.getByRole('textbox');
-    const button = screen.getByRole('button', { name: 'إقران الجهاز' });
+    const button = screen.getByRole('button', { name: 'إقران هذا الجهاز' });
 
     fireEvent.input(input, { target: { value: 'BAD' } });
     fireEvent.click(button);
@@ -74,7 +74,7 @@ describe('PairPage', () => {
 
     render(<PairPage />);
     const input = screen.getByRole('textbox');
-    const button = screen.getByRole('button', { name: 'إقران الجهاز' });
+    const button = screen.getByRole('button', { name: 'إقران هذا الجهاز' });
 
     fireEvent.input(input, { target: { value: 'GOODCODE' } });
     fireEvent.click(button);
@@ -89,7 +89,7 @@ describe('PairPage', () => {
 
     render(<PairPage />);
     const input = screen.getByRole('textbox');
-    const button = screen.getByRole('button', { name: 'إقران الجهاز' });
+    const button = screen.getByRole('button', { name: 'إقران هذا الجهاز' });
 
     fireEvent.input(input, { target: { value: 'NETFAIL' } });
     fireEvent.click(button);

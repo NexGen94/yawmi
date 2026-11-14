@@ -8,7 +8,7 @@ import { BreathBubble } from '../../charts/BreathBubble';
 import { fmt } from '../../lib/format';
 import { OFFLINE_NOTE } from '../../lib/notes';
 import { Button } from '../../ui/Button';
-import { Chips } from '../../ui/Chips';
+import { Switch } from '../../ui/Switch';
 import { Segmented } from '../../ui/Segmented';
 import { Slider } from '../../ui/Slider';
 
@@ -52,14 +52,9 @@ export function SessionSheet({ choice, onChange, disabled, online, saveFailed, o
         onChange={(minutes) => onChange({ minutes })}
         valueText={(minutes) => fmt.count(minutes, 'minute')}
       />
-      <Chips
-        label="الصوت"
-        options={[{ value: 'on', label: SOUND_LABEL }]}
-        selected={choice.sound ? ['on'] : []}
-        onChange={(next) => onChange({ sound: next.includes('on') })}
-      />
+      <Switch checked={choice.sound} onChange={(sound) => onChange({ sound })} label={SOUND_LABEL} />
       <div class="breath-actions">
-        <button ref={startRef} type="button" class="btn btn-primary" disabled={disabled} onClick={onStart}>
+        <button ref={startRef} type="button" class="btn btn-primary btn-start" disabled={disabled} onClick={onStart}>
           بدء
         </button>
         {!online && <span class="breath-hint">{`حفظ الاختيارات: ${OFFLINE_NOTE}`}</span>}

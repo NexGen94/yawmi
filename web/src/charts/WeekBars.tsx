@@ -9,6 +9,8 @@ export interface WeekBarsProps {
   values: number[];
   /** What the bars count, in Arabic. */
   label: string;
+  /** Draw this many slots: a shorter series gets empty slots (2 px stubs) before its oldest value. */
+  slots?: number;
 }
 
 const W = 320;
@@ -18,7 +20,9 @@ const BASE = H - 2; // the baseline, with room for its hairline
 
 /** Bars for the last periods. Only the latest bar carries its number; each bar has a tooltip
  *  (title) with its own value. */
-export function WeekBars({ values, label }: WeekBarsProps) {
+export function WeekBars({ values: given, label, slots }: WeekBarsProps) {
+  const values = slots !== undefined && given.length < slots ? [...new Array<number>(slots - given.length).fill(Number.NaN), ...given] : given;
+  const padding = values.length - given.length;
   const svgRef = useRef<SVGSVGElement>(null);
   const [w, setW] = useState(W);
 
@@ -58,7 +62,7 @@ export function WeekBars({ values, label }: WeekBarsProps) {
   const maxBar = Math.max(0, max);
   const rawLast = values[n - 1];
   const lastFinite = rawLast !== undefined && Number.isFinite(rawLast) ? rawLast : undefined;
-  const missingCount = n - finite.length;
+  const missingCount = n - padding - finite.length;
   const hasNegative = finite.some((v) => v < 0);
   const bar = Math.min(24, (w / n) * 0.6);
   // A zero (or clamped negative) draws a 2px stub on the baseline, so its slot is visible.
@@ -90,9 +94,12 @@ export function WeekBars({ values, label }: WeekBarsProps) {
     >
       <line class="bars-base" x1="0" y1={BASE} x2={w} y2={BASE} />
       {values.map((v, i) => {
-        if (!Number.isFinite(v)) return null;
-        const h = heightOf(v);
         const slotX = x(i, n, w);
+        if (!Number.isFinite(v)) {
+          // an empty slot of the period: a pale 2 px stub, so the slots are all there
+          return i < padding ? <rect key={slotX} class="bars-empty" x={slotX - bar / 2} y={BASE - 2} width={bar} height={2} rx="1" /> : null;
+        }
+        const h = heightOf(v);
         return (
           <rect
             key={slotX}

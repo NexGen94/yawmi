@@ -19,9 +19,13 @@ export interface SegmentedProps<T extends string> {
   disabled?: boolean;
 }
 
+/** Up to this many options are one track; more are separate chips that wrap (Task 24: a track of
+ *  five or six wrapped inside its pill and clipped its labels at 390). */
+const MAX_TRACK = 4;
+
 /** One choice among a few, as a radio group: one Tab stop, arrow keys move and select (in the
  *  visual direction: ArrowLeft goes forward in RTL), Home and End jump to the ends. The selected
- *  segment is the ink capsule. */
+ *  segment is white with a blue border. */
 export function Segmented<T extends string>({ label, options, value, onChange, disabled = false }: SegmentedProps<T>) {
   const selected = Math.max(
     0,
@@ -55,7 +59,7 @@ export function Segmented<T extends string>({ label, options, value, onChange, d
   };
 
   return (
-    <div class="segmented" role="radiogroup" aria-label={label}>
+    <div class={options.length > MAX_TRACK ? 'segmented segmented-chips' : 'segmented'} role="radiogroup" aria-label={label}>
       {options.map((option, i) => (
         <button
           key={option.value}

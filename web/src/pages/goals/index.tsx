@@ -1,11 +1,12 @@
 import { useLocation } from 'preact-iso';
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { Timeline } from '../../charts/Timeline';
 import { type GoalTable, TABLES } from '../../goals/columns';
 import { useGoalColumns } from '../../goals/columnsData';
 import { isEmptyMirror, useGoals, useOnline, useToday } from '../../goals/data';
 import { centerInScroller } from '../../goals/scroll';
+import { Button } from '../../ui/Button';
 import { Segmented } from '../../ui/Segmented';
 import { Skeleton } from '../../ui/Skeleton';
 import { StateFrame } from '../../ui/StateFrame';
@@ -41,7 +42,7 @@ function GoalsSkeleton() {
         <Skeleton blockSize="180px" />
         <Skeleton blockSize="180px" />
       </div>
-      <Skeleton blockSize="var(--hit)" inlineSize="420px" />
+      <Skeleton blockSize="var(--hit)" inlineSize="min(100%, 420px)" />
       <Skeleton blockSize="240px" />
     </div>
   );
@@ -49,6 +50,8 @@ function GoalsSkeleton() {
 
 export default function GoalsPage() {
   const switchBox = useRef<HTMLDivElement>(null);
+  // The timeline opens on the plan year that holds today; «الخطة كاملة» shows all five years.
+  const [fullPlan, setFullPlan] = useState(false);
   const goals = useGoals();
   const location = useLocation();
   const today = useToday();
@@ -58,16 +61,32 @@ export default function GoalsPage() {
   const table = parseTable(location.query?.table);
   const data = goals.data;
 
-  // Five views do not fit one row on a phone: when the view changes, the chosen one is centred in the
-  // switch. Only the switch scrolls; never the window, and never on the first load.
-  const shownView = useRef(view);
+  // Five views do not fit one row on a phone: the chosen one is centred in the switch, when the
+  // switch first appears (a direct load of ?view=horizons opened with it out of sight) and whenever
+  // the view changes. Only the switch scrolls; never the window.
+  const centred = useRef<View | null>(null);
+  const switchShown = data !== undefined;
   useEffect(() => {
-    if (shownView.current === view) return;
-    shownView.current = view;
     const box = switchBox.current;
-    const chip = box?.querySelector<HTMLElement>('[aria-checked="true"]');
-    if (box && chip) centerInScroller(box, chip);
-  }, [view]);
+    if (!box) {
+      centred.current = null; // the switch is gone (loading again): its next one starts at the edge
+      return;
+    }
+    if (centred.current === view) return;
+    centred.current = view;
+    const centre = (): void => {
+      const chip = box.querySelector<HTMLElement>('[aria-checked="true"]');
+      if (chip) centerInScroller(box, chip);
+    };
+    centre();
+    // The labels change width when the font or the stylesheet arrives (offline, or on a slow load):
+    // centre again whenever the row changes size, so that the chosen chip is not left where it was
+    // before the labels grew.
+    const row = box.firstElementChild;
+    const watch = typeof ResizeObserver === 'undefined' || row === null ? undefined : new ResizeObserver(centre);
+    if (row !== null) watch?.observe(row);
+    return () => watch?.disconnect();
+  }, [view, switchShown]);
 
   const choose = (next: { view?: View; table?: GoalTable }): void => {
     const query = new URLSearchParams({ view: next.view ?? view });
@@ -112,7 +131,20 @@ export default function GoalsPage() {
               )}
               {view === 'due' && <DueReport milestones={data.milestones} today={today} />}
               {view === 'timeline' && (
-                <Timeline cycles={data.cycles} milestones={data.milestones} today={today} label="الخط الزمني للخطة" />
+                <>
+                  <div class="timeline-range">
+                    <Button onClick={() => setFullPlan(!fullPlan)} aria-pressed={fullPlan ? 'true' : 'false'}>
+                      {fullPlan ? 'السنة الحالية' : 'الخطة كاملة'}
+                    </Button>
+                  </div>
+                  <Timeline
+                    cycles={data.cycles}
+                    milestones={data.milestones}
+                    today={today}
+                    label="الخط الزمني للخطة"
+                    range={fullPlan ? 'full' : 'year'}
+                  />
+                </>
               )}
               {view === 'horizons' && <Horizons goals={data} today={today} />}
             </div>

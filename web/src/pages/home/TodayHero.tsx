@@ -15,7 +15,7 @@ export function TodayHero({ done, due }: TodayHeroProps) {
     <HeroCard title="عادات اليوم" class="today-hero">
       {due > 0 ? (
         <div class="hero-body">
-          <Ring value={done / due} label="إنجاز اليوم" size={120} />
+          <Ring value={done / due} label="إنجاز اليوم" size={120} figure={false} />
           <div class="hero-figures">
             <p class="hero-count">{`${fmt.num(done)} من ${fmt.num(due)}`}</p>
             <p class="hero-note">عادات منجزة اليوم</p>

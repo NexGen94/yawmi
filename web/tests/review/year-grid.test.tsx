@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, screen, within } from '@testing-library/preact';
+import { fireEvent, render, screen, within } from '@testing-library/preact';
 import { describe, expect, it } from 'vitest';
 
 import { YearGrid } from '../../src/charts/YearGrid';
@@ -55,16 +55,16 @@ describe('YearGrid', () => {
       />,
     );
     expect(container.querySelectorAll('[data-score]')).toHaveLength(2);
-    expect(cell(container, '2026-11-01').getAttribute('fill-opacity')).toBe('0.2');
-    expect(cell(container, '2026-11-02').getAttribute('fill-opacity')).toBe('1');
+    expect(cell(container, '2026-11-01').getAttribute('class')).toContain('year-grade-1');
+    expect(cell(container, '2026-11-02').getAttribute('class')).toContain('year-grade-5');
     expect(cell(container, '2026-11-03').getAttribute('data-score')).toBeNull();
     expect(cell(container, '2026-11-02').textContent).toContain('2 نوفمبر: 5');
   });
 
   it('a score outside 1 to 5 is drawn at the nearest grade', () => {
     const { container } = render(<YearGrid year={2026} days={[{ day: '2026-02-01', score: 9 }, { day: '2026-02-02', score: 0 }]} label="س" />);
-    expect(cell(container, '2026-02-01').getAttribute('fill-opacity')).toBe('1');
-    expect(cell(container, '2026-02-02').getAttribute('fill-opacity')).toBe('0.2');
+    expect(cell(container, '2026-02-01').getAttribute('class')).toContain('year-grade-5');
+    expect(cell(container, '2026-02-02').getAttribute('class')).toContain('year-grade-1');
   });
 
   it('the key names the five grades and the empty cell', () => {
@@ -72,5 +72,51 @@ describe('YearGrid', () => {
     const key = screen.getByRole('list', { name: 'مفتاح درجات المزاج' });
     expect(within(key).getAllByRole('listitem')).toHaveLength(5);
     expect(screen.getByText('الخانة الفارغة يوم بلا تسجيل للمزاج')).toBeTruthy();
+  });
+
+  // Task 24: the value of a day was only in the title of a cell (a hover), out of reach of a
+  // keyboard and a finger.
+  describe('the value of a day, without a hover', () => {
+    const days = [
+      { day: '2026-11-01', score: 2 },
+      { day: '2026-11-02', score: 5 },
+    ];
+
+    it('a tap on a day with a mood says its day and its grade in a line under the grid', () => {
+      const { container } = render(<YearGrid year={2026} days={days} label="س" />);
+      const readout = screen.getByRole('status');
+      expect(readout.textContent).toBe('');
+      fireEvent.click(cell(container, '2026-11-02'));
+      expect(readout.textContent).toContain('2 نوفمبر');
+      expect(readout.textContent).toContain('5');
+      fireEvent.click(cell(container, '2026-11-01'));
+      expect(readout.textContent).toContain('1 نوفمبر');
+      expect(readout.textContent).toContain('2');
+    });
+
+    it('a tap on an empty day says there is no mood for it', () => {
+      const { container } = render(<YearGrid year={2026} days={days} label="س" />);
+      fireEvent.click(cell(container, '2026-11-03'));
+      expect(screen.getByRole('status').textContent).toContain('3 نوفمبر');
+      expect(screen.getByRole('status').textContent).toContain('بلا تسجيل');
+    });
+
+    it('the days with a mood are also a list in a disclosure, newest first, reachable by keyboard', () => {
+      render(<YearGrid year={2026} days={days} label="س" />);
+      const summary = screen.getByText('أيام المزاج المسجّلة');
+      expect(summary.closest('summary')).not.toBeNull();
+      const list = screen.getByRole('list', { name: 'أيام المزاج المسجّلة' });
+      const items = within(list).getAllByRole('listitem').map((li) => li.textContent ?? '');
+      expect(items).toHaveLength(2);
+      expect(items[0]).toContain('2 نوفمبر');
+      expect(items[0]).toContain('5');
+      expect(items[1]).toContain('1 نوفمبر');
+      expect(items[1]).toContain('2');
+    });
+
+    it('with no mood there is no list to open', () => {
+      render(<YearGrid year={2026} days={[]} label="س" />);
+      expect(screen.queryByText('أيام المزاج المسجّلة')).toBeNull();
+    });
   });
 });

@@ -87,6 +87,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Wide: the four cards share their rows (title, headline, figure, outcomes), so the big numbers sit
+   on one line whatever the length of the English headline of the career card (Task 24). */
+@media (width >= 1180px) {
+  .domain-card {
+    grid-row: span 4;
+    display: grid;
+    grid-template-rows: subgrid;
+    row-gap: var(--sp-3);
+    align-content: start;
+  }
+}
+
 @media (width < 1180px) {
   .domain-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -94,7 +106,15 @@
 }
 
 @media (width < 700px) {
+  /* A phone gets four tiles, two by two, with the figure of each: the outcomes of a domain are in the
+     tree below, and the chosen view was 2,000 px down the page (Task 24). */
   .domain-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .domain-outcomes,
+  .domain-headline,
+  .domain-none {
+    display: none;
   }
 }

@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 
 import { EditError, FAILED_MESSAGE, isReplaced, OFFLINE_NOTE } from '../../goals/edits';
 import { DASH, editedDay, fieldLabel } from '../../goals/format';
+import { fmt } from '../../lib/format';
 import { Iso } from '../../goals/Iso';
 import type { GoalEditOut } from '../../goals/types';
 import { Badge } from '../../ui/Badge';
@@ -23,9 +24,11 @@ const STATUS_HINTS: Partial<Record<GoalEditOut['status'], string>> = {
   failed: 'لم يُطبَّق؛ يمكن تعديل الحقل من جديد',
 };
 
-function valueText(value: GoalEditOut['new_value']): string {
+/** A value of an edit as the log says it: a day in words, a boolean as its state. */
+export function valueText(value: GoalEditOut['new_value']): string {
   if (typeof value === 'boolean') return value ? 'منجزة' : 'مفتوحة';
-  return value === null || value === '' ? DASH : value;
+  if (value === null || value === '') return DASH;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? fmt.day(value) : value;
 }
 
 export interface EditLogProps {

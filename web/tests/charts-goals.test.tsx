@@ -2,7 +2,7 @@
 import { render } from '@testing-library/preact';
 import { describe, expect, it } from 'vitest';
 
-import { PaceLine } from '../src/charts/PaceLine';
+import { PaceLine, paceNum } from '../src/charts/PaceLine';
 import { Timeline } from '../src/charts/Timeline';
 import type { PaceOut } from '../src/goals/types';
 import { cycles, milestone, milestones, TODAY } from './helpers/goals-fixtures';
@@ -273,16 +273,32 @@ describe('PaceLine', () => {
     expect(Number(word.getAttribute('y'))).toBeLessThan(Number(dot.getAttribute('cy')));
   });
 
-  it('never writes a value that is not zero as «0»: a small expected value keeps two decimals', () => {
+  it('says «أقل من 1» for a pace value between 0 and 1, never «0» and never «0.01» (Task 24)', () => {
     const { svg } = drawPace({ current_value: 0, expected_today: 0.014, on_pace: false, projected_end: null, readings: [] });
     const label = svg.getAttribute('aria-label') ?? '';
-    expect(label).toContain('المتوقع اليوم 0.01');
+    expect(label).toContain('المتوقع اليوم أقل من 1');
     expect(label).not.toMatch(/المتوقع اليوم 0(،|$)/);
+    expect(label).not.toContain('0.01');
   });
 
-  it('says «أقل من 0.01» for a value smaller than that, never «0»', () => {
+  it('says «أقل من 1» for a value smaller than that too', () => {
     const { svg } = drawPace({ current_value: 0, expected_today: 0.001, on_pace: false, projected_end: null, readings: [] });
-    expect(svg.getAttribute('aria-label')).toContain('المتوقع اليوم أقل من 0.01');
+    expect(svg.getAttribute('aria-label')).toContain('المتوقع اليوم أقل من 1');
+  });
+
+  it('never shows an expected end above the target: «2 من 2», not «134.8 من 2»', () => {
+    const { svg } = drawPace({ target_value: 2, projected_end: 134.8 });
+    const label = svg.getAttribute('aria-label') ?? '';
+    expect(label).toContain('المتوقع عند الموعد 2 من 2');
+    expect(label).not.toContain('134');
+  });
+
+  it('rounds: one decimal under 10, a whole number from 10', () => {
+    expect(paceNum(0)).toBe('0');
+    expect(paceNum(3.04)).toBe('3');
+    expect(paceNum(3.46)).toBe('3.5');
+    expect(paceNum(12.4)).toBe('12');
+    expect(paceNum(134.8)).toBe('135');
   });
 
   it('keeps one decimal for values of 1 and over, and writes a whole number without decimals', () => {
@@ -290,5 +306,33 @@ describe('PaceLine', () => {
     const label = svg.getAttribute('aria-label') ?? '';
     expect(label).toContain('القيمة 2،');
     expect(label).toContain('المتوقع اليوم 3،');
+  });
+});
+
+describe('Timeline: the plan year (Task 24)', () => {
+  it('draws only the plan year that holds today, with the cycles and milestones of it', () => {
+    const full = draw();
+    const year = draw({ range: 'year' });
+    const marks = (c: Element): number => c.querySelectorAll('[data-milestone]').length;
+    expect(marks(year.container)).toBeLessThan(marks(full.container));
+    expect(year.container.querySelectorAll('rect.timeline-cycle').length).toBeLessThan(21);
+    // the first year: no Gregorian year label but 2027, which the plan year ends on
+    expect(Array.from(year.container.querySelectorAll('text.timeline-year')).map((t) => t.textContent)).toEqual(['2027']);
+    // the milestones that are drawn have room: none is within 2 px of its neighbour in the same lane at this scale
+    expect(year.container.querySelector('.timeline-today')).not.toBeNull();
+  });
+
+  it('a cycle is a tick and a number, not a box', () => {
+    const { container } = draw();
+    expect(container.querySelectorAll('line.timeline-cycle-tick')).toHaveLength(21);
+  });
+
+  it('the today line is drawn before (under) the marks of the milestones', () => {
+    const { container } = draw();
+    const all = Array.from(container.querySelectorAll('svg > *'));
+    const today = all.findIndex((e) => e.classList.contains('timeline-today'));
+    const firstMark = all.findIndex((e) => e.hasAttribute('data-milestone'));
+    expect(today).toBeGreaterThan(-1);
+    expect(today).toBeLessThan(firstMark);
   });
 });

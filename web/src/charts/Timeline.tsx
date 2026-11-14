@@ -14,6 +14,9 @@ export interface TimelineProps {
   today: Day;
   /** What the chart shows, in Arabic. */
   label: string;
+  /** `year`: the plan year that holds today (365 days from the start of the plan, at most), so the
+   *  cycles and the milestones have room; `full` (default): the whole plan. */
+  range?: 'year' | 'full';
 }
 
 // Geometry. The plan runs from 2026-10-31 (the right edge of the plot, where reading starts) to
@@ -30,12 +33,28 @@ const TOP = AXIS_H + CYCLE_H + 14;
 const START = toOrdinal(PLAN_START);
 const SPAN = toOrdinal(PLAN_END) - START;
 
-/** The horizontal position of a day: every day of the plan is one slot of the plot, slot 0 at the
- *  start (the right), through x() of rtl.ts. Days outside the plan are held at the nearest end. */
-function xOf(day: Day): number {
-  const index = Math.min(SPAN, Math.max(0, toOrdinal(day) - START));
-  return PAD_END + x(index, SPAN + 1, PLOT);
+interface Window {
+  /** The ordinal of the first day drawn, and how many days after it the last one is. */
+  start: number;
+  span: number;
 }
+
+/** The days the chart draws: the whole plan, or the plan year that holds `today`. */
+function windowOf(range: 'year' | 'full', today: Day): Window {
+  if (range === 'full') return { start: START, span: SPAN };
+  const year = Math.min(Math.floor(Math.max(0, toOrdinal(today) - START) / 365), Math.floor(SPAN / 365));
+  const start = START + year * 365;
+  return { start, span: Math.min(START + SPAN, start + 364) - start };
+}
+
+/** The horizontal position of a day: every day of the window is one slot of the plot, slot 0 at the
+ *  start (the right), through x() of rtl.ts. Days outside it are held at the nearest end. */
+function xIn(win: Window, day: Day): number {
+  const index = Math.min(win.span, Math.max(0, toOrdinal(day) - win.start));
+  return PAD_END + x(index, win.span + 1, PLOT);
+}
+
+const inside = (win: Window, day: Day): boolean => toOrdinal(day) >= win.start && toOrdinal(day) <= win.start + win.span;
 
 type PointState = 'done' | 'open' | 'late';
 
@@ -93,13 +112,15 @@ const codeNo = (code: string): number => Number(code.replace(/\D/g, '')) || 0;
 
 /** The plan on one time axis: the cycles as bars, one lane per outcome with its milestones as points,
  *  years in both calendars, and today as a line. Horizontal order follows the reading direction. */
-export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
+export function Timeline({ cycles, milestones, today, label, range = 'full' }: TimelineProps) {
+  const win = windowOf(range, today);
+  const xOf = (day: Day): number => xIn(win, day);
   if (cycles.length === 0 && milestones.length === 0) {
     return <svg class="chart timeline" role="img" aria-label={emptyLabel(label)} viewBox={`0 0 ${W} 40`} focusable="false" />;
   }
 
-  const dated = milestones.filter((m) => m.due_date !== null);
-  const undated = milestones.length - dated.length;
+  const dated = milestones.filter((m) => m.due_date !== null && (range === 'full' || inside(win, m.due_date)));
+  const undated = milestones.filter((m) => m.due_date === null).length;
   const codes = [...new Set(dated.map((m) => m.outcome_code ?? ''))].sort((a, b) => {
     if (a === '' || b === '') return a === '' ? 1 : -1;
     return codeNo(a) - codeNo(b);
@@ -108,8 +129,8 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
   const height = TOP + Math.max(1, codes.length) * LANE_H + 8;
   const done = milestones.filter((m) => m.done).length;
   const todayX = xOf(today);
-  const years = gregorianYearStarts();
-  const hijri = hijriYearStarts();
+  const years = gregorianYearStarts().filter((y) => inside(win, y.day));
+  const hijri = hijriYearStarts().filter((y) => inside(win, y.day));
   const sentence =
     `${label}: ${cyclesText(cycles.length)}، ${fmt.num(done)} من ${fmt.num(milestones.length)} محطة منجزة، ` +
     `اليوم ${fmt.day(today)}`;
@@ -149,7 +170,7 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
             </text>
           ))}
 
-          {cycles.map((c) => {
+          {cycles.filter((c) => toOrdinal(c.end_date) >= win.start && toOrdinal(c.start_date) <= win.start + win.span).map((c) => {
             const right = xOf(c.start_date);
             const left = xOf(c.end_date);
             const isNow = current?.cycle_no === c.cycle_no;
@@ -167,6 +188,7 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
                 >
                   <title>{`الدورة ${fmt.num(c.cycle_no)} · ${c.theme} · ${fmt.day(c.start_date)} إلى ${fmt.day(c.end_date)}`}</title>
                 </rect>
+                <line class="timeline-cycle-tick" x1={right} x2={right} y1={AXIS_H - 2} y2={AXIS_H + CYCLE_H + 2} />
                 {width >= 18 && (
                   <text
                     class={isNow ? 'timeline-cycle-no timeline-cycle-no-now' : 'timeline-cycle-no'}
@@ -188,6 +210,14 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
             </g>
           ))}
 
+          <g class="timeline-today" data-x={todayX}>
+            <title>{`اليوم: ${fmt.day(today)}`}</title>
+            <line class="timeline-today-line" x1={todayX} x2={todayX} y1={AXIS_H - 6} y2={height} />
+            <text class="timeline-today-label" x={todayX} y={AXIS_H - 10} text-anchor="middle" direction="rtl">
+              اليوم
+            </text>
+          </g>
+
           {dated.map((m) => {
             const state = stateOf(m, today);
             const cx = xOf(m.due_date as Day);
@@ -200,13 +230,6 @@ export function Timeline({ cycles, milestones, today, label }: TimelineProps) {
             );
           })}
 
-          <g class="timeline-today" data-x={todayX}>
-            <title>{`اليوم: ${fmt.day(today)}`}</title>
-            <line class="timeline-today-line" x1={todayX} x2={todayX} y1={AXIS_H - 6} y2={height} />
-            <text class="timeline-today-label" x={todayX} y={AXIS_H - 10} text-anchor="middle" direction="rtl">
-              اليوم
-            </text>
-          </g>
         </svg>
       </section>
       <ul class="timeline-key">

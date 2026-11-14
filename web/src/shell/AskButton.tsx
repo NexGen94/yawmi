@@ -12,7 +12,7 @@ export function AskButton() {
       <span>اسأل</span>
       {/* Drawn by CSS from data-keys: the keys are a hint for the eye (aria-keyshortcuts tells
           assistive technology), not part of the button's name, so the visible text stays «اسأل». */}
-      <kbd class="ask-kbd" dir="ltr" aria-hidden="true" data-keys="Ctrl K" />
+      <kbd class="ask-kbd" dir="ltr" aria-hidden="true" data-keys="Ctrl+K" />
     </button>
   );
 }

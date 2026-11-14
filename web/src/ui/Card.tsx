@@ -7,18 +7,20 @@ export interface CardProps {
   /** Heading level of the title (default 2). */
   headingLevel?: 2 | 3;
   class?: string;
+  /** The id of the card, for a link that points at it. */
+  id?: string;
   children: ComponentChildren;
 }
 
 /** A card on a given surface. `Card` and `HeroCard` share it; only the class differs. */
 export function CardBase(props: CardProps & { base: string }) {
-  const { title, headingLevel = 2, class: extra, children, base } = props;
+  const { title, headingLevel = 2, class: extra, id: cardId, children, base } = props;
   const id = useId();
   const cls = [base, extra].filter(Boolean).join(' ');
-  if (title === undefined) return <div class={cls}>{children}</div>;
+  if (title === undefined) return <div class={cls} id={cardId}>{children}</div>;
   const Heading = headingLevel === 3 ? 'h3' : 'h2';
   return (
-    <section class={cls} aria-labelledby={id}>
+    <section class={cls} id={cardId} aria-labelledby={id}>
       <Heading id={id} class="card-title">
         {title}
       </Heading>

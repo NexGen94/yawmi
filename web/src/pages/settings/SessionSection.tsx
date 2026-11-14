@@ -34,46 +34,31 @@ export function SessionSection({ deviceName, disabled, paired = true, onLogout }
   };
 
   return (
-    <section class="settings-section" aria-labelledby="session-heading">
-      <Card>
-        <h2 id="session-heading" style={{ fontSize: 'var(--fs-title)', marginBottom: '0.75rem' }}>
-          هذا الجهاز
-        </h2>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <p style={{ margin: 0, fontWeight: 500 }}>{deviceName || '—'}</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <Button
-              variant="quiet"
-              onClick={() => void handleLogout()}
-              disabled={disabled || !paired || loggingOut}
-              title={disabled ? 'يحتاج اتصالاً' : undefined}
-            >
-              خروج
-            </Button>
-            {disabled && (
-              <span style={{ fontSize: 'var(--fs-note)', color: 'var(--c-muted)' }}>
-                يحتاج اتصالاً
-              </span>
-            )}
-            {!paired && !disabled && (
-              <span style={{ fontSize: 'var(--fs-note)', color: 'var(--c-muted)' }}>هذا الجهاز غير مقترن</span>
-            )}
-          </div>
+    <Card title="هذا الجهاز" class="settings-card">
+      <div class="settings-device">
+        <p class="settings-device-name">{deviceName || '—'}</p>
+        <div class="settings-actions">
+          <Button
+            variant="quiet"
+            onClick={() => void handleLogout()}
+            disabled={disabled || !paired || loggingOut}
+            title={disabled ? 'يحتاج اتصالاً' : undefined}
+          >
+            خروج
+          </Button>
+          {disabled && <span class="settings-hint">يحتاج اتصالاً</span>}
+          {!paired && !disabled && <span class="settings-hint">هذا الجهاز غير مقترن</span>}
         </div>
+      </div>
 
-        {logoutError && (
-          <div role="alert" style={{ marginTop: '0.75rem' }}>
-            <p style={{ color: 'var(--c-signal)', margin: '0 0 0.5rem 0', fontSize: 'var(--fs-note)' }}>
-              {logoutError}
-            </p>
-            <Button variant="quiet" onClick={() => void handleLogout()} disabled={disabled}>
-              إعادة المحاولة
-            </Button>
-          </div>
-        )}
-      </Card>
-    </section>
+      {logoutError && (
+        <div class="settings-alert" role="alert">
+          <p class="settings-error">{logoutError}</p>
+          <Button variant="quiet" onClick={() => void handleLogout()} disabled={disabled}>
+            إعادة المحاولة
+          </Button>
+        </div>
+      )}
+    </Card>
   );
 }

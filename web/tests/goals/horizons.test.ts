@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { dueReport, relativeDays } from '../../src/goals/due';
-import { horizonLines } from '../../src/goals/horizons';
+import { cycleLengthOf, horizonLines } from '../../src/goals/horizons';
 import { EMPTY_GOALS, goals, milestone, TODAY } from '../helpers/goals-fixtures';
 
 const lines = (over: Parameters<typeof horizonLines>[0]) => Object.fromEntries(horizonLines(over).map((l) => [l.key, l.text]));
@@ -120,5 +120,16 @@ describe('due report', () => {
     expect(relativeDays(2)).toBe('بعد يومين');
     expect(relativeDays(5)).toBe('بعد 5 أيام');
     expect(relativeDays(11)).toBe('بعد 11 يوماً');
+  });
+});
+
+describe('cycleLengthOf: one length for the cycle, whoever says it (Task 24)', () => {
+  it('is the length of the mirror cycle with that number: 57 for the first, the same as the goals page says', () => {
+    expect(cycleLengthOf(goals(), 1)).toBe(57);
+  });
+
+  it('is undefined for a cycle the mirror does not have, so a page says no length instead of a guess', () => {
+    expect(cycleLengthOf(goals(), 99)).toBeUndefined();
+    expect(cycleLengthOf(EMPTY_GOALS, 1)).toBeUndefined();
   });
 });

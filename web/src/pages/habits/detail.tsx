@@ -10,7 +10,8 @@ import { combine } from '../../data/combine';
 import { toDomainLogs } from '../../data/pending';
 import { useQuery } from '../../data/query';
 import { fromOrdinal, toOrdinal } from '../../domain/days';
-import { useOnline } from '../../goals/data';
+import { useGoals, useOnline } from '../../goals/data';
+import { cycleLengthOf } from '../../goals/horizons';
 import { amount, lateWord, PERIOD_WORD } from '../../habits/amount';
 import { abstainNote } from '../../habits/HabitRow';
 import { type HabitTodayItem, useHabitsToday } from '../../habits/useHabitsToday';
@@ -19,6 +20,7 @@ import { useIndicators } from '../../indicators/data';
 import { fmt } from '../../lib/format';
 import { habitIndicator } from '../../progress/indicator';
 import type { HabitState } from '../../progress/state';
+import { LinkButton } from '../home/LinkButton';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
@@ -68,10 +70,10 @@ function reminderDays(mask: number): string {
 
 /** A count of periods: «3 أيام»، «أسبوعان»، «5 أشهر». */
 function periods(n: number, period: 'day' | 'week' | 'month'): string {
-  if (period === 'day') return fmt.count(n, 'day');
+  if (period === 'day') return fmt.stat(n, 'day');
   const forms = period === 'week' ? ['أسبوع', 'أسبوعان', 'أسابيع', 'أسبوعاً'] : ['شهر', 'شهران', 'أشهر', 'شهراً'];
-  if (n === 1) return forms[0] ?? '';
-  if (n === 2) return forms[1] ?? '';
+  if (n === 1) return `${fmt.num(1)} ${forms[0] ?? ''}`;
+  if (n === 2) return `${fmt.num(2)} ${forms[2] ?? ''}`;
   const last2 = Number.isInteger(n) ? n % 100 : -1;
   return `${fmt.num(n)} ${last2 >= 3 && last2 <= 10 ? forms[2] : forms[3]}`;
 }
@@ -130,6 +132,7 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
   const note = useLogNote(habits);
   const stored = useIndicators();
   const online = useOnline();
+  const goals = useGoals();
   const { state, stale } = combine(habits, progress);
 
   const item = habits.items.find((i) => i.habit.code === code);
@@ -141,7 +144,11 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
   const missing = state === 'ready' && (item === undefined || indicators === undefined);
   const habit = item?.habit;
   const badge = item && stateBadge(item);
-  const grid = gridStart(habits.day, habits.today?.plan.day_in_cycle);
+  // The grid is the whole cycle, as long as the mirror says it is (57 days for the first): the same
+  // number the home and goals pages give. Without the mirror it is the 56 days of the default.
+  const plan = habits.today?.plan;
+  const cycleLength = goals.data === undefined || plan?.cycle == null ? undefined : cycleLengthOf(goals.data, plan.cycle);
+  const grid = gridStart(habits.day, plan?.day_in_cycle, cycleLength);
   const gridNote = habit && gridNoteOf(habit);
   // Not on a day the habit is not scheduled, as on the list.
   const live = item !== undefined && item.dueToday && item.state !== 'archived' && item.state !== 'ended' && item.state !== 'upcoming';
@@ -213,10 +220,15 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
                   <WeekBars
                     label="نسبة إنجاز آخر 8 فترات"
                     values={indicators.last_8_periods.map((v) => Math.round(v * 100))}
+                    slots={8}
                   />
+                  <p class="bars-axis" aria-hidden="true">
+                    <span>الأقدم</span>
+                    <span>الأحدث</span>
+                  </p>
                 </Card>
                 <Card title={grid.cycle ? 'أيام الدورة' : 'آخر 56 يوماً'}>
-                  <Heatmap label={grid.cycle ? 'أيام الدورة' : 'آخر 56 يوماً'} days={dayStates(habit, habits.logs, grid.first, habits.day)} />
+                  <Heatmap label={grid.cycle ? 'أيام الدورة' : 'آخر 56 يوماً'} days={dayStates(habit, habits.logs, grid.first, habits.day, grid.days)} />
                   {habit.period !== 'day' && (
                     <PeriodMarks period={habit.period} marks={periodMarks(habit, habits.logs, grid.first, habits.day)} />
                   )}
@@ -231,7 +243,7 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
                       <dt>{habit.polarity === 'abstain' ? 'اليوم' : 'الفترة الحالية'}</dt>
                       <dd>
                         {habit.polarity === 'abstain'
-                          ? abstainNote(item)
+                          ? abstainNote(item, { dated: false })
                           : `${fmt.num(item.progress.done)} من ${amount(item.progress.target, habit.kind === 'boolean' ? '' : habit.unit)} ${PERIOD_WORD[habit.period]}`}
                       </dd>
                     </div>
@@ -258,7 +270,10 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
                 <Card title="المرسى والتذكيرات">
                   <p class="detail-anchor">{ANCHOR[habit.anchor]}</p>
                   {habit.reminders.length === 0 ? (
-                    <p class="detail-note">لا تذكيرات.</p>
+                    <>
+                      <p class="detail-note">لا تذكيرات.</p>
+                      <LinkButton href={`/habits/${encodeURIComponent(habit.code)}/edit`}>إضافة تذكير</LinkButton>
+                    </>
                   ) : (
                     <ul class="reminders">
                       {habit.reminders.map((r) => (

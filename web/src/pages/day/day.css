@@ -235,83 +235,11 @@
   color: var(--c-ink-2);
 }
 
-/* ---------- The one-minute switch ---------- */
-
-.day-switch {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  inline-size: fit-content;
-  min-block-size: var(--hit);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--c-ink);
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-
-.day-switch:focus-visible {
-  outline: 2px solid transparent;
-  box-shadow: var(--focus);
-  border-radius: var(--radius-pill);
-}
-
-.day-switch-track {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: flex-start;
-  inline-size: 52px;
-  block-size: 30px;
-  padding: 3px;
-  border: 1px solid var(--c-blue);
-  border-radius: var(--radius-pill);
-  background: var(--c-surface);
-}
-
-.day-switch-thumb {
-  inline-size: 22px;
-  block-size: 22px;
-  border-radius: 50%;
-  background: var(--c-blue);
-}
-
-.day-switch[aria-checked='true'] .day-switch-track {
-  justify-content: flex-end;
-  border-color: var(--c-ink);
-  background: var(--c-ink);
-}
-
-.day-switch[aria-checked='true'] .day-switch-thumb {
-  background: var(--c-surface);
-}
-
-.day-switch-text {
-  display: grid;
-}
-
-.day-switch-label {
-  font-size: var(--fs-body);
-  font-weight: 600;
-}
-
-.day-switch-hint {
-  font-size: var(--fs-note);
-  color: var(--c-ink-2);
-}
-
 /* ---------- Sliders and the outcome select ---------- */
 
 .day-scores {
   display: grid;
   gap: var(--sp-4);
-}
-
-/* A slider nobody moved keeps its middle position but looks unset. */
-.day-score[data-unset='true'] .slider-input {
-  opacity: 0.55;
 }
 
 .day-select {
@@ -429,4 +357,24 @@
   .day-suggestion-actions {
     inline-size: 100%;
   }
+}
+
+/* ---------- A closed day: what was written, read-only ---------- */
+
+.day-closed-list {
+  display: grid;
+  gap: var(--sp-3);
+  margin: 0;
+}
+
+.day-closed-list dt {
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
+  font-weight: 600;
+}
+
+.day-closed-list dd {
+  margin: 0;
+  font-size: var(--fs-body);
+  overflow-wrap: anywhere;
 }

@@ -108,6 +108,13 @@ export const fmt = {
   /** A number in the current digits, grouped; `options` goes straight to `Intl.NumberFormat`. */
   num,
 
+  /** `text` isolated as left-to-right inside a right-to-left sentence. After Arabic words a number
+   *  takes the Arabic-number class and its percent sign lands on the wrong side («%50»); inside the
+   *  isolate it reads «50%». Use it for a percentage that follows words (Task 24). */
+  ltr(text: string): string {
+    return `\u2066${text}\u2069`;
+  },
+
   /** A ratio (0.5) as a whole percentage ("50%"). A missing or infinite ratio gives a dash. */
   pct(x: number): string {
     if (!Number.isFinite(x)) return MISSING;
@@ -133,6 +140,13 @@ export const fmt = {
     const date = isoDayToDate(iso);
     if (!date) return MISSING;
     return dateFormat('islamic-umalqura', { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
+  },
+
+  /** A figure with its unit, for a number slot (a card, a fact): 1 and 2 keep their numeral
+   *  («1 يوم», «2 أيام»), where `count` says «يوم» and «يومان» in a sentence. */
+  stat(n: number, word: Noun): string {
+    if (word === 'second' || (n !== 1 && n !== 2)) return noun(n, word);
+    return `${num(n)} ${n === 1 ? NOUNS[word].one : NOUNS[word].few}`;
   },
 
   /** A count with its noun: "يوم"، "يومان"، "3 أيام"، "11 يوماً". */

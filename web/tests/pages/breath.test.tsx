@@ -184,7 +184,7 @@ describe('the choices are kept with PATCH /v1/settings (breath_prefs)', () => {
     fireEvent.click(radio('الأسلوب', 'بعد العمل'));
     fireEvent.click(radio(RATE_GROUP, '6'));
     chooseMinutes(3);
-    fireEvent.click(screen.getByRole('button', { name: 'نغمة عند تبدّل المرحلة' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'نغمة عند تبدّل المرحلة' }));
     start();
     await waitFor(() => expect(s.of('PATCH', '/v1/settings')).toHaveLength(1));
     expect(s.of('PATCH', '/v1/settings')[0]?.body).toEqual({ breath_prefs: { pattern: 'unwind', minutes: 3, rate: 6, sound: true } });
@@ -197,7 +197,7 @@ describe('the choices are kept with PATCH /v1/settings (breath_prefs)', () => {
     await waitFor(() => expect(checked('الأسلوب')).toBe('بعد العمل'));
     expect(checked(RATE_GROUP)).toBe('6');
     expect(screen.getByRole('slider', { name: 'المدة' }).getAttribute('aria-valuetext')).toBe(fmt.count(3, 'minute'));
-    expect(screen.getByRole('button', { name: 'نغمة عند تبدّل المرحلة' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('switch', { name: 'نغمة عند تبدّل المرحلة' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('nothing is sent when the choices are the ones already saved', async () => {
@@ -220,7 +220,7 @@ describe('the choices are kept with PATCH /v1/settings (breath_prefs)', () => {
   it('the sound is off at first', async () => {
     serve();
     await openPage();
-    expect(screen.getByRole('button', { name: 'نغمة عند تبدّل المرحلة' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('switch', { name: 'نغمة عند تبدّل المرحلة' }).getAttribute('aria-checked')).toBe('false');
   });
 });
 
@@ -500,7 +500,7 @@ describe('reduced motion and sound', () => {
     serve();
     await openPage();
     fireEvent.click(radio('الأسلوب', 'تهدئة'));
-    fireEvent.click(screen.getByRole('button', { name: 'نغمة عند تبدّل المرحلة' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'نغمة عند تبدّل المرحلة' }));
     expect(made).not.toHaveBeenCalled(); // choosing it is not yet a sound
     start();
     await screen.findByRole('img', { name: /فقاعة التنفّس/ });
@@ -773,7 +773,7 @@ describe('the safety text and the four states', () => {
     expect(screen.getByRole('button', { name: 'بدء' }).hasAttribute('disabled')).toBe(false);
     fail = false;
     fireEvent.click(screen.getByRole('button', { name: 'إعادة المحاولة' }));
-    await screen.findByText(fmt.count(2, 'minute'));
+    await screen.findByText(fmt.stat(2, 'minute'));
   });
 
   it('offline with a saved copy: the copy and the badge', async () => {

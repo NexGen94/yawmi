@@ -10,12 +10,19 @@ export function ScheduledBlocks({ plans }: { plans: FocusPlanOut[] }) {
   return (
     <Card title="الكتل المجدولة" class="focus-blocks">
       {blocks.length === 0 ? (
-        <p class="focus-note">لا كتل مجدولة بعد</p>
+        <>
+          <p class="focus-note">لا كتل مجدولة بعد</p>
+          <a class="btn btn-quiet" href="#focus-plans">
+            جدولة كتلة
+          </a>
+        </>
       ) : (
         <ul class="focus-block-list">
           {blocks.map((p) => (
             <li key={p.id}>
-              <span class="focus-plan-title">{p.title_ar}</span>
+              <span class="focus-plan-title">
+                <bdi>{p.title_ar}</bdi>
+              </span>
               <span class="focus-note">{` · ${scheduleText(p.weekday_mask ?? 0, p.start_time ?? '')} · ${fmt.count(p.minutes, 'minute')}`}</span>
             </li>
           ))}

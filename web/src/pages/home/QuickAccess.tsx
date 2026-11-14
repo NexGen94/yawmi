@@ -27,7 +27,8 @@ export function QuickAccess({ favorites = [], session = null }: QuickAccessProps
         <LinkButton href="/habits/new?source=goal">عادة من هدف</LinkButton>
         {favorites.map((plan) => (
           <LinkButton key={plan.id} href={`/focus?plan=${encodeURIComponent(plan.id)}`}>
-            {`${plan.title_ar} · ${fmt.count(plan.minutes, 'minute')}`}
+            <bdi>{plan.title_ar}</bdi>
+            {` · ${fmt.count(plan.minutes, 'minute')}`}
           </LinkButton>
         ))}
         <Button onClick={openAsk}>سؤال</Button>

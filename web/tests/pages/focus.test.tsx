@@ -310,7 +310,7 @@ describe('the duration habit of a plan', () => {
     renderPage();
     await screen.findByText(/الإنجليزية العميقة/);
     await screen.findByText(/الإنجليزية \(أولوية عالية\)/); // the goal, by its title
-    click('بدء');
+    await start();
     await screen.findByRole('timer');
     expect((await ofType('focus_started'))[0]?.payload).toEqual({
       planned_minutes: 25,
@@ -328,7 +328,7 @@ describe('the duration habit of a plan', () => {
     // The habits of the day are read before the session ends.
     await waitFor(() => expect(fetchMock.mock.calls.some(([r]) => new URL((r as Request).url).pathname === '/v1/habit-logs')).toBe(true));
     await new Promise((resolve) => setTimeout(resolve, 20));
-    click('بدء');
+    await start();
     await screen.findByRole('timer');
     await moveClockTo(at(31));
     click('إنهاء');
@@ -358,7 +358,7 @@ describe('the habit minutes and the order of the save', () => {
 
   it('the habit log of a same-day session has no day of its own', async () => {
     await loadPlanPage();
-    click('بدء');
+    await start();
     await screen.findByRole('timer');
     await moveClockTo(at(31));
     click('إنهاء');
@@ -369,7 +369,7 @@ describe('the habit minutes and the order of the save', () => {
 
   it('the session is cleared as soon as focus_ended is queued: a habit log that fails cannot leave a second save', async () => {
     await loadPlanPage();
-    click('بدء');
+    await start();
     await screen.findByRole('timer');
     await moveClockTo(at(31));
     click('إنهاء');
@@ -388,7 +388,7 @@ describe('the habit minutes and the order of the save', () => {
   it("a session that began before midnight logs the habit on the day it began, with that day's value", async () => {
     vi.setSystemTime(new Date('2026-11-10T20:50:00Z')); // 23:50 in Riyadh
     await loadPlanPage();
-    click('بدء');
+    await start();
     await screen.findByRole('timer');
     await moveClockTo(Date.parse('2026-11-10T21:21:00Z')); // 00:21 the next day
     click('إنهاء');
@@ -409,7 +409,7 @@ describe('the goal of the link', () => {
     routeFocus(fetchMock, { withGoals: true });
     renderPage();
     expect(await screen.findByText(/الإنجليزية \(أولوية عالية\)/)).toBeTruthy();
-    click('بدء');
+    await start();
     await screen.findByRole('timer');
     expect((await ofType('focus_started'))[0]?.payload).toEqual({ planned_minutes: 25, goal_ref: 'O7' });
   });
@@ -419,7 +419,7 @@ describe('the goal of the link', () => {
     routeFocus(fetchMock);
     renderPage();
     await screen.findByRole('button', { name: 'بدء' });
-    click('بدء');
+    await start();
     await screen.findByRole('timer');
     expect((await ofType('focus_started'))[0]?.payload).toEqual({ planned_minutes: 25, goal_ref: 'abc-123' });
   });
@@ -433,7 +433,7 @@ describe('the three durations and the favourite combinations', () => {
     expect(within(group).getAllByRole('radio').map((r) => r.textContent)).toEqual(['25 دقيقة', '50 دقيقة', '90 دقيقة']);
     expect(screen.getByText(/تفضيل، لا قاعدة/)).toBeTruthy();
     fireEvent.click(within(group).getByRole('radio', { name: '50 دقيقة' }));
-    click('بدء');
+    await start();
     await screen.findByRole('timer');
     expect((await ofType('focus_started'))[0]?.payload).toEqual({ planned_minutes: 50 });
   });
@@ -593,7 +593,7 @@ describe('the four states', () => {
     routeFocus(fetchMock, {}, { fail: 'network' });
     renderPage();
     expect(await screen.findByText('لا نسخة محفوظة بعد')).toBeTruthy();
-    click('بدء');
+    await start();
     expect(await screen.findByRole('timer')).toBeTruthy();
     expect(await ofType('focus_started')).toHaveLength(1);
   });
@@ -606,7 +606,7 @@ describe('digits', () => {
     renderPage();
     const group = await screen.findByRole('radiogroup', { name: 'المدة' });
     expect(within(group).getByRole('radio', { name: /٢٥/ })).toBeTruthy();
-    click('بدء');
+    await start();
     expect((await screen.findByRole('timer')).textContent).toBe('٢٥:٠٠');
   });
 });

@@ -14,15 +14,37 @@ const count = (days: ReturnType<typeof dayStates>, state: string) => days.filter
 
 describe('gridStart: the 56 days of the cycle', () => {
   it('starts on day 1 of the cycle: today minus (day in the cycle - 1)', () => {
-    expect(gridStart(TODAY, 11)).toEqual({ first: '2026-10-31', cycle: true });
-    expect(gridStart(TODAY, 1)).toEqual({ first: TODAY, cycle: true });
-    expect(gridStart(TODAY, 56)).toEqual({ first: '2026-09-16', cycle: true });
+    expect(gridStart(TODAY, 11)).toEqual({ first: '2026-10-31', cycle: true, days: 56 });
+    expect(gridStart(TODAY, 1)).toEqual({ first: TODAY, cycle: true, days: 56 });
+    expect(gridStart(TODAY, 56)).toEqual({ first: '2026-09-16', cycle: true, days: 56 });
   });
 
   it('falls back to the last 56 days when the plan does not say, or says something impossible', () => {
     for (const day of [null, undefined, 0, 57, 1.5]) {
-      expect(gridStart(TODAY, day)).toEqual({ first: '2026-09-16', cycle: false });
+      expect(gridStart(TODAY, day)).toEqual({ first: '2026-09-16', cycle: false, days: 56 });
     }
+  });
+});
+
+describe('the grid follows the length of the cycle (Task 24, design review #8)', () => {
+  it('a 57-day cycle (the first, 31 October to 26 December) is 57 cells, the same length the home and goals pages say', () => {
+    const grid = gridStart(TODAY, 11, 57);
+    expect(grid).toEqual({ first: '2026-10-31', cycle: true, days: 57 });
+    const walk = habit('walk', 'المشي', { start_day: '2026-11-01' });
+    const days = dayStates(walk, [], grid.first, TODAY, grid.days);
+    expect(days).toHaveLength(57);
+    expect(days[56]?.day).toBe('2026-12-26');
+  });
+
+  it('an 84-day cycle is 84 cells, and day 57 of it is a day of the cycle', () => {
+    const grid = gridStart(TODAY, 57, 84);
+    expect(grid.cycle).toBe(true);
+    expect(grid.days).toBe(84);
+  });
+
+  it('without a length (no mirror yet) it is the 56 days it always was', () => {
+    expect(gridStart(TODAY, 11)).toEqual({ first: '2026-10-31', cycle: true, days: 56 });
+    expect(gridStart(TODAY, null)).toEqual({ first: '2026-09-16', cycle: false, days: 56 });
   });
 });
 

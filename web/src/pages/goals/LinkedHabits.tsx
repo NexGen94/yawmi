@@ -61,7 +61,7 @@ export function LinkedHabits({ habits, items, newHabitHref, onTick, onAdd }: Lin
               <li key={h.code} class="lh-row" data-habit={h.code}>
                 <div class="lh-main">
                   <a href={`/habits/${encodeURIComponent(h.code)}`}>{h.title_ar}</a>
-                  {h.total_done !== null && <span class="lh-meta">{`الالتزام ${pctOrDash(h.adherence)} · ${amount(h.total_done, '')}`}</span>}
+                  {h.total_done !== null && <span class="lh-meta">{`الالتزام ${fmt.ltr(pctOrDash(h.adherence))} · ${amount(h.total_done, '')}`}</span>}
                   {item?.valueToday != null && <span class="lh-meta">{`اليوم ${amount(item.valueToday, unit)}`}</span>}
                 </div>
                 {item && <Action item={item} title={h.title_ar} onTick={() => onTick(h.code)} onAdd={(step) => onAdd(h.code, step)} />}

@@ -14,6 +14,7 @@ import { Card } from '../../ui/Card';
 import { CheckRow } from '../../ui/CheckRow';
 import { Field } from '../../ui/Field';
 import { Slider } from '../../ui/Slider';
+import { Switch } from '../../ui/Switch';
 import { ActivityChips } from './ActivityChips';
 import { ClosureAi, type Summary } from './ClosureAi';
 import { ClosureCard } from './ClosureCard';
@@ -159,6 +160,7 @@ function Score(props: { label: string; value: number | null; onChange(v: number)
         min={1}
         max={10}
         value={value ?? 5}
+        unset={value === null}
         onChange={onChange}
         valueText={(v) => `${fmt.num(v)} من ${fmt.num(10)}`}
       />
@@ -187,7 +189,6 @@ export function EveningForm(props: EveningFormProps) {
   const latest = useRef(state);
   latest.current = state;
   const outcomeId = useId();
-  const switchId = useId();
   const ai = useAi();
   const [summary, setSummary] = useState<Summary>({ kind: 'none' });
   const linesNow = useRef(aiLines);
@@ -195,6 +196,9 @@ export function EveningForm(props: EveningFormProps) {
   const turn = useRef(0);
   /** The ids of the closing while its events wait in the queue (the window of «تراجع», then the send). */
   const [waitingIds, setWaitingIds] = useState<string[] | null>(null);
+  /** A closed day shows what was written as a summary; «تعديل الإغلاق» opens the form again. */
+  const [reopened, setReopened] = useState(false);
+  const folded = (closure.closed || closure.waiting) && !reopened;
 
   /** The AI summary of the day just closed. It is asked for only after the server has accepted the
    *  closing (so it is built from what was written) and never if the closing was taken back. A failure
@@ -325,7 +329,8 @@ export function EveningForm(props: EveningFormProps) {
           clearSaved(day, 'evening');
           touched.current = true;
           writeDraft(day, 'evening', latest.current);
-          // Taken back: nothing was sent, so no summary is asked for.
+          // Taken back: nothing was sent, so no summary is asked for, and the form is open again.
+          setReopened(true);
           setWaitingIds(null);
           setSummary({ kind: 'none' });
         },
@@ -371,164 +376,195 @@ export function EveningForm(props: EveningFormProps) {
         />
       )}
 
-      <section class="day-section">
-        <button
-          type="button"
-          role="switch"
-          class="day-switch"
-          aria-checked={state.oneMinute ? 'true' : 'false'}
-          aria-labelledby={`${switchId}-label`}
-          aria-describedby={`${switchId}-hint`}
-          onClick={() => update({ oneMinute: !state.oneMinute })}
-        >
-          <span class="day-switch-track" aria-hidden="true">
-            <span class="day-switch-thumb" />
-          </span>
-          <span class="day-switch-text">
-            <span id={`${switchId}-label`} class="day-switch-label">
-              دقيقة واحدة
-            </span>
-            <span id={`${switchId}-hint`} class="day-switch-hint">
-              يُخفي منزلقات الحالة وحقل «تعلّمت»
-            </span>
-          </span>
-        </button>
-      </section>
-
-      <section class="day-section" aria-labelledby="e-mood">
-        <h3 id="e-mood" class="day-h">
-          المزاج
-        </h3>
-        <MoodScale value={state.score} onChange={(s) => update({ score: s })} />
-        <div class="day-group">
-          <p class="day-sub">المشاعر</p>
-          <FeelingChips selected={state.feelings} onChange={(feelings) => update({ feelings })} />
-        </div>
-        <div class="day-group">
-          <p class="day-sub">الأنشطة</p>
-          <ActivityChips
-            habits={habits}
-            selected={activities}
-            unavailable={!habitsKnown}
-            onChange={(next) => update({ activities: next })}
-          />
-        </div>
-        <div class="day-actions">
-          <Button disabled={!moodDirty || busy} onClick={() => void saveMood()}>
-            تسجيل المزاج
-          </Button>
-        </div>
-      </section>
-
-      <section class="day-section" aria-labelledby="e-priorities">
-        <h3 id="e-priorities" class="day-h">
-          أولويات الصباح
-        </h3>
-        {state.priorities.length === 0 ? (
-          <div class="state-message">
-            <p class="state-text">لا أولويات من الصباح.</p>
-            <a class="btn btn-quiet" href="/day/morning">
-              كتابة أولويات الصباح
-            </a>
-          </div>
-        ) : (
-          <ul class="day-priorities">
-            {state.priorities.map((p, i) => (
-              <li key={p.title} class="day-priority">
-                <CheckRow
-                  shape="square"
-                  label={p.title}
-                  note={p.state === 'moved' ? 'نُقلت إلى الغد' : undefined}
-                  checked={p.state === 'done'}
-                  onToggle={(checked) => setPriority(i, checked ? 'done' : 'open')}
-                />
-                <Button
-                  aria-pressed={p.state === 'moved' ? 'true' : 'false'}
-                  onClick={() => setPriority(i, p.state === 'moved' ? 'open' : 'moved')}
-                >
-                  نقل للغد
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {!state.oneMinute && (
-        <section class="day-section" aria-labelledby="e-sliders">
-          <h3 id="e-sliders" class="day-h">
-            الحالة اليوم
+      {folded ? (
+        <section class="day-section day-closed" aria-labelledby="e-closed">
+          <h3 id="e-closed" class="day-h">
+            ما سُجّل اليوم
           </h3>
-          <div class="day-scores">
-            <Score label="الهدوء" value={state.calm} onChange={(calm) => update({ calm })} />
-            <Score label="التشتت" value={state.distraction} onChange={(distraction) => update({ distraction })} />
-            <Score label="الحضور" value={state.presence} onChange={(presence) => update({ presence })} />
+          <dl class="day-closed-list">
+            {state.score !== null && (
+              <div>
+                <dt>المزاج</dt>
+                <dd>{`${fmt.num(state.score)} من ${fmt.num(5)}`}</dd>
+              </div>
+            )}
+            {state.win.trim() !== '' && (
+              <div>
+                <dt>إنجاز اليوم</dt>
+                <dd>{state.win}</dd>
+              </div>
+            )}
+            {state.learned.trim() !== '' && (
+              <div>
+                <dt>تعلّمت</dt>
+                <dd>{state.learned}</dd>
+              </div>
+            )}
+            {state.gratitude.some((g) => g.trim() !== '') && (
+              <div>
+                <dt>الامتنان</dt>
+                <dd>{state.gratitude.filter((g) => g.trim() !== '').join('، ')}</dd>
+              </div>
+            )}
+            {state.note.trim() !== '' && (
+              <div>
+                <dt>اليومية</dt>
+                <dd>{state.note}</dd>
+              </div>
+            )}
+          </dl>
+          <div class="day-actions">
+            <Button onClick={() => setReopened(true)}>تعديل الإغلاق</Button>
           </div>
         </section>
-      )}
+      ) : (
+        <>
+        <section class="day-section">
+          <Switch
+            checked={state.oneMinute}
+            onChange={(oneMinute) => update({ oneMinute })}
+            label="دقيقة واحدة"
+            hint="يُخفي منزلقات الحالة وحقل «تعلّمت»"
+          />
+        </section>
 
-      <section class="day-section" aria-labelledby="e-win">
-        <h3 id="e-win" class="day-h">
-          الإنجاز
-        </h3>
-        <Field label="إنجاز اليوم" value={state.win} maxLength={LIMITS.win} onInput={(win) => update({ win })} />
-        <div class="field">
-          <label class="field-label" for={outcomeId}>
-            المخرج
-          </label>
-          <select
-            id={outcomeId}
-            class="field-input day-select"
-            value={state.winOutcome}
-            onChange={(event) => update({ winOutcome: event.currentTarget.value })}
-          >
-            <option value="">بلا مخرج</option>
-            {OUTCOMES.map((code) => (
-              <option key={code} value={code}>
-                {code}
-              </option>
-            ))}
-          </select>
-        </div>
-      </section>
+        <section class="day-section" aria-labelledby="e-mood">
+          <h3 id="e-mood" class="day-h">
+            المزاج
+          </h3>
+          <MoodScale value={state.score} onChange={(s) => update({ score: s })} />
+          <div class="day-group">
+            <p class="day-sub">المشاعر</p>
+            <FeelingChips selected={state.feelings} onChange={(feelings) => update({ feelings })} />
+          </div>
+          <div class="day-group">
+            <p class="day-sub">الأنشطة</p>
+            <ActivityChips
+              habits={habits}
+              selected={activities}
+              unavailable={!habitsKnown}
+              onChange={(next) => update({ activities: next })}
+            />
+          </div>
+          <div class="day-actions">
+            <Button disabled={!moodDirty || busy} onClick={() => void saveMood()}>
+              تسجيل المزاج
+            </Button>
+            {!moodDirty && state.score !== null && <span class="day-note">سُجّل المزاج</span>}
+          </div>
+        </section>
 
-      {!state.oneMinute && (
+        <section class="day-section" aria-labelledby="e-priorities">
+          <h3 id="e-priorities" class="day-h">
+            أولويات الصباح
+          </h3>
+          {state.priorities.length === 0 ? (
+            <div class="state-message">
+              <p class="state-text">لا أولويات من الصباح.</p>
+              <a class="btn btn-quiet" href="/day/morning">
+                كتابة أولويات الصباح
+              </a>
+            </div>
+          ) : (
+            <ul class="day-priorities">
+              {state.priorities.map((p, i) => (
+                <li key={p.title} class="day-priority">
+                  <CheckRow
+                    shape="square"
+                    label={p.title}
+                    note={p.state === 'moved' ? 'نُقلت إلى الغد' : undefined}
+                    checked={p.state === 'done'}
+                    onToggle={(checked) => setPriority(i, checked ? 'done' : 'open')}
+                  />
+                  <Button
+                    aria-pressed={p.state === 'moved' ? 'true' : 'false'}
+                    onClick={() => setPriority(i, p.state === 'moved' ? 'open' : 'moved')}
+                  >
+                    نقل للغد
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {!state.oneMinute && (
+          <section class="day-section" aria-labelledby="e-sliders">
+            <h3 id="e-sliders" class="day-h">
+              الحالة اليوم
+            </h3>
+            <div class="day-scores">
+              <Score label="الهدوء" value={state.calm} onChange={(calm) => update({ calm })} />
+              <Score label="التشتت" value={state.distraction} onChange={(distraction) => update({ distraction })} />
+              <Score label="الحضور" value={state.presence} onChange={(presence) => update({ presence })} />
+            </div>
+          </section>
+        )}
+
+        <section class="day-section" aria-labelledby="e-win">
+          <h3 id="e-win" class="day-h">
+            الإنجاز
+          </h3>
+          <Field label="إنجاز اليوم" value={state.win} maxLength={LIMITS.win} onInput={(win) => update({ win })} />
+          <div class="field">
+            <label class="field-label" for={outcomeId}>
+              المخرج
+            </label>
+            <select
+              id={outcomeId}
+              class="field-input day-select"
+              value={state.winOutcome}
+              onChange={(event) => update({ winOutcome: event.currentTarget.value })}
+            >
+              <option value="">بلا مخرج</option>
+              {OUTCOMES.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+          </div>
+        </section>
+
+        {!state.oneMinute && (
+          <section class="day-section">
+            <Field
+              label="تعلّمت"
+              value={state.learned}
+              maxLength={LIMITS.learned}
+              onInput={(learned) => update({ learned })}
+              multiline
+            />
+          </section>
+        )}
+
+        <section class="day-section" aria-labelledby="e-gratitude">
+          <h3 id="e-gratitude" class="day-h">
+            الامتنان
+          </h3>
+          <GratitudeFields values={state.gratitude} onChange={(gratitude) => update({ gratitude })} />
+        </section>
+
+        <OnThisDay day={day} entries={entries} />
+
         <section class="day-section">
           <Field
-            label="تعلّمت"
-            value={state.learned}
-            maxLength={LIMITS.learned}
-            onInput={(learned) => update({ learned })}
+            label="اليومية"
+            hint="نص حر. يبقى مسودة على هذا الجهاز حتى يقبله الخادم"
             multiline
+            value={state.note}
+            maxLength={LIMITS.note}
+            onInput={(note) => update({ note })}
           />
         </section>
+
+        <div class="day-actions">
+          <Button variant="primary" disabled={busy} onClick={() => void close()}>
+            إغلاق اليوم
+          </Button>
+        </div>
+        </>
       )}
-
-      <section class="day-section" aria-labelledby="e-gratitude">
-        <h3 id="e-gratitude" class="day-h">
-          الامتنان
-        </h3>
-        <GratitudeFields values={state.gratitude} onChange={(gratitude) => update({ gratitude })} />
-      </section>
-
-      <OnThisDay day={day} entries={entries} />
-
-      <section class="day-section">
-        <Field
-          label="اليومية"
-          hint="نص حر. يبقى مسودة على هذا الجهاز حتى يقبله الخادم"
-          multiline
-          value={state.note}
-          maxLength={LIMITS.note}
-          onInput={(note) => update({ note })}
-        />
-      </section>
-
-      <div class="day-actions">
-        <Button variant="primary" disabled={busy} onClick={() => void close()}>
-          إغلاق اليوم
-        </Button>
-      </div>
       {ai.dialog}
     </Card>
   );

@@ -156,3 +156,24 @@ describe('fmt.dayShort', () => {
     expect(fmt.dayShort('not a day')).toBe('—');
   });
 });
+
+describe('fmt.ltr (Task 24)', () => {
+  it('isolates a text as left-to-right, so a percentage after Arabic words reads «50%» and not «%50»', () => {
+    const isolated = fmt.ltr('50%');
+    expect(isolated.startsWith('\u2066')).toBe(true);
+    expect(isolated.endsWith('\u2069')).toBe(true);
+    expect(isolated.slice(1, -1)).toBe('50%');
+  });
+});
+
+describe('fmt.stat: a figure always has its numeral (Task 24)', () => {
+  it('writes 1 and 2 with their numeral, so a card never shows only «يوم» where a number belongs', () => {
+    expect(fmt.stat(1, 'day')).toBe('1 يوم');
+    expect(fmt.stat(2, 'day')).toBe('2 أيام');
+    expect(fmt.stat(1, 'minute')).toBe('1 دقيقة');
+  });
+
+  it('is the count for the rest', () => {
+    for (const n of [0, 3, 10, 11, 100]) expect(fmt.stat(n, 'day')).toBe(fmt.count(n, 'day'));
+  });
+});

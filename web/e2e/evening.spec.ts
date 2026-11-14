@@ -1,5 +1,5 @@
 import { expectNoSeriousA11y } from './a11y';
-import { expect, PROJECT_DATA, riyadhToday, SYNC_TIMEOUT, test } from './fixtures';
+import { expect, openEveningForm, PROJECT_DATA, riyadhToday, SYNC_TIMEOUT, test } from './fixtures';
 import { expectNoHorizontalScroll, shot } from './shots';
 
 interface MoodList {
@@ -19,7 +19,7 @@ test('the evening logs the mood of the project and closes the day', async ({ pai
   await page.getByRole('link', { name: /إغلاق اليوم/ }).click();
   await expect(page).toHaveURL(/\/day\/evening$/);
   await expect(page.getByRole('heading', { level: 1, name: 'اليوم' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'يومية المساء' })).toBeVisible();
+  await openEveningForm(page);
 
   // The mood scale is one radio group; a step is named by its numeral.
   await page.getByRole('radio', { name: String(mood), exact: true }).check();

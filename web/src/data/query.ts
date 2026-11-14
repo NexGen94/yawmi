@@ -37,10 +37,12 @@ export function useQuery<T>(key: string, fetcher: () => Promise<T>): QueryResult
   }, []);
 
   // The connection is back: a page that shows its saved copy asks the server again, so the badge
-  // «نسخة محفوظة · بلا اتصال» clears without a reload. One place for every page.
+  // «نسخة محفوظة · بلا اتصال» clears without a reload. So does a page whose first request is still
+  // out: it went out offline, and when it fails it would put the saved copy over a live page (the
+  // reload cancels it). One place for every page.
   useEffect(() => {
     const onOnline = (): void => {
-      if (stateRef.current === 'offline') reload();
+      if (stateRef.current === 'offline' || stateRef.current === 'loading') reload();
     };
     window.addEventListener('online', onOnline);
     return () => window.removeEventListener('online', onOnline);

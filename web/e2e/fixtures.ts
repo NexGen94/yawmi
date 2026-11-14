@@ -1,7 +1,10 @@
 import { expect, test as base, type APIRequestContext, type Page } from '@playwright/test';
 
+import { acquire } from './exclusive';
+import { PORTS } from './ports';
+
 /** The test API, by address (not through the web proxy): the suite's own server on this machine. */
-export const API_URL = 'http://127.0.0.1:8000';
+export const API_URL = `http://127.0.0.1:${PORTS.api}`;
 
 /** How long a saved entry may take to reach the server: the app sends the outbox five seconds after
  *  a save (the undo window), and a slow machine needs some room besides. */
@@ -64,6 +67,15 @@ async function pairedApi(request: APIRequestContext): Promise<Api> {
   };
 }
 
+/** The evening form open for writing. A day that is already closed (an earlier test closed it: the two
+ *  projects share one user) opens as a read-only summary with «تعديل الإغلاق»; this opens the form. */
+export async function openEveningForm(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { name: 'يومية المساء' })).toBeVisible();
+  const reopen = page.getByRole('button', { name: 'تعديل الإغلاق' });
+  if (await reopen.isVisible()) await reopen.click();
+  await expect(page.getByRole('button', { name: 'إغلاق اليوم' })).toBeVisible();
+}
+
 /** Today's date in Riyadh, `YYYY-MM-DD`: the plan's day, whatever the machine's zone. */
 export function riyadhToday(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' }).format(new Date());
@@ -87,11 +99,29 @@ export const test = base.extend<Fixtures>({
     const code = await newPairCode(request);
     await page.goto('/pair');
     await page.getByLabel('كود الإقران').fill(code);
-    await page.getByRole('button', { name: 'إقران الجهاز' }).click();
+    await page.getByRole('button', { name: 'إقران هذا الجهاز' }).click();
     await page.waitForURL((url) => url.pathname === '/');
     await expect(page.getByRole('heading', { level: 1, name: 'الرئيسية' })).toBeVisible();
     await use(page);
   },
+});
+
+/** `test` for a spec that changes what every device of the user shares (the AI consent and memory):
+ *  each of its tests holds a lock for the API it talks to, so that two workers never withdraw the
+ *  consent under each other (the flake of ask.spec under `--workers=2` or more). */
+export const sharedStateTest = test.extend<{ sharedState: void }>({
+  sharedState: [
+    async ({}, use) => {
+      const release = await acquire(`state-${PORTS.api}`);
+      try {
+        await use();
+      } finally {
+        await release();
+      }
+    },
+    // Waiting for the lock is not the test's time: the fixture has its own timeout.
+    { auto: true, timeout: 12 * 60_000 },
+  ],
 });
 
 export { expect };

@@ -23,13 +23,12 @@ export function centeredScrollLeft({ chipStart, chipSize, viewSize, contentSize,
   return held || 0; // never -0
 }
 
-/** Brings `chip` to the middle of `scroller`, moving the scroller alone. */
+/** Brings `chip` to the middle of `scroller`, moving the scroller alone. It reads where the chip is
+ *  on screen and moves the scroller by the difference: that holds in either direction and whatever the
+ *  metrics (a font or a stylesheet that arrives late) the arithmetic of `centeredScrollLeft` assumed.
+ *  The scroller clamps the result to what it can reach. */
 export function centerInScroller(scroller: HTMLElement, chip: HTMLElement): void {
-  scroller.scrollLeft = centeredScrollLeft({
-    chipStart: chip.offsetLeft,
-    chipSize: chip.offsetWidth,
-    viewSize: scroller.clientWidth,
-    contentSize: scroller.scrollWidth,
-    rtl: getComputedStyle(scroller).direction === 'rtl',
-  });
+  const view = scroller.getBoundingClientRect();
+  const box = chip.getBoundingClientRect();
+  scroller.scrollLeft = scroller.scrollLeft + (box.left + box.width / 2 - (view.left + view.width / 2));
 }

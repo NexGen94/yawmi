@@ -47,10 +47,12 @@
   margin-block-start: var(--sp-2);
 }
 
+/* The sources are rows inside the card that holds them: the label, then the number, with a hairline
+   between rows. They were bordered cards inside a card (Task 24). */
 .ai-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: var(--sp-2);
+  gap: 0 var(--sp-5);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -61,10 +63,8 @@
   flex-direction: column;
   gap: var(--sp-1);
   min-inline-size: 0;
-  padding: var(--sp-3);
-  border: 1px solid var(--c-blue-pale);
-  border-radius: var(--radius-card);
-  background: var(--c-surface);
+  padding-block: var(--sp-3);
+  border-block-start: 1px solid var(--c-blue-pale);
 }
 
 .ai-card-label {

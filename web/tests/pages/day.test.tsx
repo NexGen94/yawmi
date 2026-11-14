@@ -369,10 +369,30 @@ describe('the evening page', () => {
     await waitFor(async () => expect(await pendingOf('journal_saved')).toHaveLength(1));
     expect(await pendingOf('mood_logged')).toHaveLength(1);
 
-    // the same day again, mood already logged: closing again adds the journal only
+    // The closed day is a summary now; «تعديل الإغلاق» opens the form again (Task 24). The same day
+    // again, mood already logged: nothing new to log.
+    click('تعديل الإغلاق');
     click('تسجيل المزاج'); // mood unchanged since it was logged: nothing new to log
     await act(async () => {});
     expect(await pendingOf('mood_logged')).toHaveLength(1);
+  });
+
+  it('after the close the form folds into a summary of what was written, and «تعديل الإغلاق» opens it again (Task 24)', async () => {
+    stubEvening();
+    await openDay('/day/evening');
+    await screen.findByRole('button', { name: 'إغلاق اليوم' });
+    click('4', 'radio');
+    fireEvent.input(screen.getByLabelText('إنجاز اليوم'), { target: { value: 'أنجزت التقرير' } });
+    click('إغلاق اليوم');
+    await screen.findByRole('heading', { name: 'ما سُجّل اليوم' });
+    // one closing button is enough: the second «إغلاق اليوم» is gone with the form
+    expect(screen.queryByRole('button', { name: 'إغلاق اليوم' })).toBeNull();
+    expect(screen.queryByLabelText('إنجاز اليوم')).toBeNull();
+    expect(screen.getByText('أنجزت التقرير')).toBeTruthy();
+    expect(screen.getByText('4 من 5')).toBeTruthy();
+    click('تعديل الإغلاق');
+    expect(screen.getByLabelText('إنجاز اليوم')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'إغلاق اليوم' })).toBeTruthy();
   });
 
   it('says what is missing when the morning left no priorities, with the way to write them', async () => {

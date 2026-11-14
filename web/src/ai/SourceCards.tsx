@@ -44,7 +44,7 @@ export function SourceCards({ cards, days = [] }: SourceCardsProps) {
                     {card.text}
                   </span>
                 )}
-                {trend.some((v) => Number.isFinite(v)) && <Sparkline values={trend} label={`آخر الأيام · ${card.label}`} />}
+                {trend.filter((v) => Number.isFinite(v)).length >= 2 && <Sparkline values={trend} label={`آخر الأيام · ${card.label}`} />}
               </li>
             );
           })}

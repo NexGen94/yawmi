@@ -112,6 +112,12 @@ async function open(data: Parameters<typeof routeFetch>[1] = {}, code = 'english
   return view;
 }
 
+/** The parts of each mark of a list: the name of the period, its days, its outcome. */
+const markParts = (list: HTMLElement): string[][] =>
+  within(list)
+    .getAllByRole('listitem')
+    .map((li) => [...li.children].map((c) => c.textContent ?? ''));
+
 describe('habit detail: the strength', () => {
   it('shows strength 0.756582 as 76, in a ring named «درجة القوة»', async () => {
     await open();
@@ -216,20 +222,22 @@ describe('habit detail: the 56 days of the cycle', () => {
     expect(label).toContain('لم يُنجز 0');
     expect(label).toContain('منجز 4');
     const marks = screen.getByRole('list', { name: 'نتيجة كل أسبوع' });
-    const items = within(marks)
-      .getAllByRole('listitem')
-      .map((li) => li.textContent);
-    expect(items).toEqual(['الأسبوع 1تحقق', 'الأسبوع 2تحقق']);
+    // Each week says its own days in the line (Task 11 N-2: the weeks are Sunday to Saturday and the
+    // grid's rows start at the cycle's first day, so the number alone did not point to a row).
+    expect(markParts(marks)).toEqual([
+      ['الأسبوع 1', '1 نوفمبر – 7 نوفمبر', 'تحقق'],
+      ['الأسبوع 2', '8 نوفمبر – 14 نوفمبر', 'تحقق'],
+    ]);
   });
 
   it('marks a week that fell short «لم يتحقق» and the open one «جارٍ»', async () => {
     serve();
     mount();
     await screen.findByRole('img', { name: /أيام الدورة/ });
-    const items = within(screen.getByRole('list', { name: 'نتيجة كل أسبوع' }))
-      .getAllByRole('listitem')
-      .map((li) => li.textContent);
-    expect(items).toEqual(['الأسبوع 1لم يتحقق', 'الأسبوع 2جارٍ']);
+    expect(markParts(screen.getByRole('list', { name: 'نتيجة كل أسبوع' }))).toEqual([
+      ['الأسبوع 1', '1 نوفمبر – 7 نوفمبر', 'لم يتحقق'],
+      ['الأسبوع 2', '8 نوفمبر – 14 نوفمبر', 'جارٍ'],
+    ]);
   });
 
   it('a daily habit has no week marks', async () => {
@@ -372,11 +380,13 @@ describe('habit detail: the rest of the page', () => {
     expect(screen.queryByText('متأخرة')).toBeNull();
   });
 
-  it('an abstain habit says «نظيف اليوم» for today, not a build target', async () => {
+  it('an abstain habit says «نظيف» for today, not a build target (and not «اليوم: نظيف اليوم», Task 11 M-2)', async () => {
     const abstain = habit('no_sugar', 'ترك السكر', { polarity: 'abstain', start_day: '2026-11-01' });
     serve({ habits: [abstain], logs: [], progress: { no_sugar: PROGRESS } });
     mount('no_sugar');
-    await screen.findByText('نظيف اليوم');
+    const term = await screen.findByText('اليوم', { selector: 'dt' });
+    expect(term.nextElementSibling?.textContent).toBe('نظيف');
+    expect(screen.queryByText('نظيف اليوم')).toBeNull();
     expect(screen.queryByText(/من 1 مرة/)).toBeNull();
   });
 

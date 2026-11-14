@@ -170,7 +170,18 @@ describe('service worker handlers', () => {
     const t = target();
     const bad = { json: () => { throw new SyntaxError('x'); } };
     await run((waitUntil) => handlePush({ data: bad, waitUntil }, t));
-    expect(t.shown).toEqual([['يومي', { lang: 'ar', dir: 'rtl', data: { navigate: '/' } }]]);
+    // A notification with a title alone says nothing: the neutral one has a message too (Task 24).
+    expect(t.shown).toEqual([['يومي', { body: 'تنبيه جديد', lang: 'ar', dir: 'rtl', data: { navigate: '/' } }]]);
+  });
+
+  it('a payload with no notification at all is neutral too, and one with a title keeps its own words', async () => {
+    const t = target();
+    await run((waitUntil) => handlePush({ data: { json: () => ({}) }, waitUntil }, t));
+    await run((waitUntil) => handlePush({ data: { json: () => ({ notification: { title: 'المتأخر' } }) }, waitUntil }, t));
+    expect(t.shown).toEqual([
+      ['يومي', { body: 'تنبيه جديد', lang: 'ar', dir: 'rtl', data: { navigate: '/' } }],
+      ['المتأخر', { lang: 'ar', dir: 'rtl', data: { navigate: '/' } }],
+    ]);
   });
 
   it('notificationclick opens navigate in an open window, else a new one, and never another origin', async () => {

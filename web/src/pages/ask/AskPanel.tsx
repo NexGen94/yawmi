@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 // (for the stylesheet import below: the test tsconfig does not load vite client types itself)
 
-import { useCallback, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import { acceptInsight, type GroundedInsight, UNAVAILABLE_TEXT } from '../../ai/guard';
 import { ConsentNotice } from '../../ai/ConsentDialog';
@@ -48,7 +48,13 @@ function noteText(insight: GroundedInsight): string {
 /** The panel of «اسأل» (design 4): the question, the range, three ready questions, and the answer in
  *  two lines with the cards of its sources. The browser sends the question and the range, and the
  *  server builds the sources. Used by the side panel and by the /ask page. */
-export function AskPanel() {
+export interface AskPanelProps {
+  /** In the side panel the question button is in the pinned actions of the drawer, not in the form:
+   *  the drawer gives a ref this panel fills with «ask now», and hears when a question is out. */
+  pinned?: { submitRef: { current: (() => void) | null }; onBusy(busy: boolean): void };
+}
+
+export function AskPanel({ pinned }: AskPanelProps = {}) {
   const settings = useSettings();
   const maxLines = settings.data?.ai_lines ?? 2;
   const ai = useAi();
@@ -104,6 +110,11 @@ export function AskPanel() {
   };
 
   const busy = phase.kind === 'loading';
+  if (pinned) pinned.submitRef.current = () => void send(question);
+  const tellBusy = pinned?.onBusy;
+  useEffect(() => {
+    tellBusy?.(busy);
+  }, [busy, tellBusy]);
   let body;
   switch (phase.kind) {
     case 'idle':
@@ -179,11 +190,13 @@ export function AskPanel() {
       >
         <Field label="السؤال" value={question} maxLength={QUESTION_MAX} onInput={setQuestion} />
         <RangeChips value={range} onChange={setRange} disabled={busy} />
-        <div class="ask-actions">
-          <Button type="submit" variant="primary" disabled={busy}>
-            سؤال
-          </Button>
-        </div>
+        {!pinned && (
+          <div class="ask-actions">
+            <Button type="submit" variant="primary" disabled={busy}>
+              سؤال
+            </Button>
+          </div>
+        )}
       </form>
       <fieldset class="ask-ready" aria-label="أسئلة جاهزة">
         {READY_QUESTIONS.map((q) => (

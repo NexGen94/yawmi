@@ -47,11 +47,18 @@
 
 .review-figures {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  /* Four tiles are 2 x 2, or four in a row when there is room: never three and an orphan. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--sp-3);
   margin: var(--sp-3) 0 0;
   padding: 0;
   list-style: none;
+}
+
+@media (width >= 1100px) {
+  .review-figures {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .review-figure {
@@ -88,13 +95,6 @@
   color: var(--c-ink-2);
   font-size: var(--fs-body);
   font-variant-numeric: tabular-nums;
-}
-
-.review-figure-code {
-  align-self: flex-start;
-  color: var(--c-ink-2);
-  font-family: var(--font-code);
-  font-size: var(--fs-note);
 }
 
 /* ---------- Done, blocked, next ---------- */
@@ -236,4 +236,10 @@
 .review-more {
   display: flex;
   justify-content: center;
+}
+
+.review-hint {
+  align-self: center;
+  color: var(--c-ink-2);
+  font-size: var(--fs-note);
 }

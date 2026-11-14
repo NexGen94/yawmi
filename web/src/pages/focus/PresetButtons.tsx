@@ -1,5 +1,4 @@
 import { fmt } from '../../lib/format';
-import { Button } from '../../ui/Button';
 import { Segmented } from '../../ui/Segmented';
 import { PRESET_MINUTES, type FocusPlanOut } from '../../focus/calc';
 
@@ -25,9 +24,10 @@ export function PresetButtons({ minutes, onMinutes, favorites, onStartPlan }: Pr
       {favorites.length > 0 && (
         <fieldset class="focus-favorites" aria-label="التركيبات المفضلة">
           {favorites.map((plan) => (
-            <Button key={plan.id} onClick={() => onStartPlan(plan)}>
-              {`${plan.title_ar} · ${minutesLabel(plan.minutes)}`}
-            </Button>
+            <button key={plan.id} type="button" class="chip" onClick={() => onStartPlan(plan)}>
+              <bdi>{plan.title_ar}</bdi>
+              {` · ${minutesLabel(plan.minutes)}`}
+            </button>
           ))}
         </fieldset>
       )}

@@ -67,7 +67,10 @@ function Idle({ focus, plans, selection, goalTitle, onMinutes, onClearPlan, onCl
       </div>
       {plan && (
         <p class="focus-line">
-          <span>{`${plan.title_ar} · ${minutesText(plan.minutes)}`}</span>
+          <span>
+            <bdi>{plan.title_ar}</bdi>
+            {` · ${minutesText(plan.minutes)}`}
+          </span>
           <button type="button" class="focus-link" onClick={onClearPlan}>
             إزالة الخطة
           </button>
@@ -78,6 +81,7 @@ function Idle({ focus, plans, selection, goalTitle, onMinutes, onClearPlan, onCl
       <div class="focus-actions">
         <Button
           variant="primary"
+          class="btn-start"
           onClick={() =>
             void focus.start({ minutes, goalRef, habitCode: plan?.habit_code ?? null, planId: plan?.id ?? null })
           }
@@ -102,9 +106,9 @@ function Active({ focus, plans, goalTitle }: SessionTimerProps) {
   return (
     <div class="focus-active" data-phase={current}>
       <div class="focus-visual">
-        <Ring value={minutes / planned} label="تقدّم الجلسة" size={120} />
+        <Ring value={minutes / planned} label="تقدّم الجلسة" size={120} figure={false} />
         <div class="focus-figures">
-          <p class="focus-name">{plan?.title_ar ?? 'جلسة تركيز'}</p>
+          <p class="focus-name">{plan ? <bdi>{plan.title_ar}</bdi> : 'جلسة تركيز'}</p>
           <p class="focus-clock" role="timer" aria-label="الوقت" data-phase={current}>
             {clock}
           </p>

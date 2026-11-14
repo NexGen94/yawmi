@@ -30,6 +30,10 @@ function MilestoneRow({ m, today }: { m: MilestoneFull; today: Day }) {
   );
 }
 
+/** «نعم أو لا» is the kind of the criterion, the same under all twelve outcomes: it is said once, in the
+ *  detail of the outcome, and not in every row of the tree (Task 24). A real criterion stays in the head. */
+const isBinaryMarker = (acceptance: string): boolean => acceptance.trim() === 'نعم أو لا';
+
 function Outcome({ outcome, goals, today }: { outcome: GoalOutcome; goals: GoalsOut; today: Day }) {
   const milestones = goals.milestones.filter((m) => m.outcome_code === outcome.code).sort(byDate);
   const cards = goals.cards.filter((c) => c.outcome_codes.includes(outcome.code));
@@ -44,14 +48,17 @@ function Outcome({ outcome, goals, today }: { outcome: GoalOutcome; goals: Goals
         </span>
         <span class="tree-pct">{pctOrDash(outcome.completion)}</span>
       </span>
-      <span class="tree-acceptance">
-        <Iso text={outcome.acceptance} />
-      </span>
+      {!isBinaryMarker(outcome.acceptance) && (
+        <span class="tree-acceptance">
+          <Iso text={outcome.acceptance} />
+        </span>
+      )}
     </>
   );
   return (
     <li class="tree-outcome" data-outcome={outcome.code}>
       <Disclosure summary={head}>
+        {isBinaryMarker(outcome.acceptance) && <p class="tree-link">{`المعيار: ${outcome.acceptance}`}</p>}
         <p class="tree-link">
           <a href={`/goals/${encodeURIComponent(outcome.code)}`}>تفاصيل المخرج</a>
         </p>
@@ -64,7 +71,7 @@ function Outcome({ outcome, goals, today }: { outcome: GoalOutcome; goals: Goals
               <li key={h.code} class="tree-row">
                 <a href={`/habits/${encodeURIComponent(h.code)}`}>{h.title_ar}</a>
                 <span class="tree-meta">
-                  <span>{`الالتزام ${pctOrDash(h.adherence)}`}</span>
+                  <span>{`الالتزام ${fmt.ltr(pctOrDash(h.adherence))}`}</span>
                   <span>{fmt.count(h.total_done, 'time')}</span>
                 </span>
               </li>

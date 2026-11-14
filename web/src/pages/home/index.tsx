@@ -14,6 +14,7 @@ import { Skeleton } from '../../ui/Skeleton';
 import { StateFrame } from '../../ui/StateFrame';
 import { Toast } from '../../ui/Toast';
 import { DomainCards } from '../../goals/DomainCards';
+import { cycleLengthOf } from '../../goals/horizons';
 import { DayCards } from './DayCards';
 import { DaySummary, type SummaryInsight } from './DaySummary';
 import { DueHabits } from './DueHabits';
@@ -26,8 +27,6 @@ import { type DayEntries, useDayEntries } from './useDayEntries';
 import { useLogNote } from './useLogNote';
 import './home.css';
 
-/** Days in a cycle (design section 4, the 56-day grid). */
-const CYCLE_DAYS = 56;
 /** The firm rule of the plan: the week starts on Sunday (design 13). */
 const WEEK_START = 'sun';
 
@@ -56,6 +55,14 @@ function summaryInsight(
     cards: accepted.cards ?? [],
     days: accepted.days ?? [],
   };
+}
+
+/** «الدورة 1 · اليوم 15 من 57»: the length is the mirror's, the same as the goals page says; without
+ *  the mirror there is no length rather than a guess. */
+function cycleText(cycle: number, day: number, goals: Parameters<typeof cycleLengthOf>[0] | undefined): string {
+  const length = goals === undefined ? undefined : cycleLengthOf(goals, cycle);
+  const of = length === undefined ? '' : ` من ${fmt.num(length)}`;
+  return `الدورة ${fmt.num(cycle)} · اليوم ${fmt.num(day)}${of}`;
 }
 
 export default function HomePage() {
@@ -119,7 +126,7 @@ export default function HomePage() {
           <span>{fmt.day(day)}</span> <span>{fmt.hijri(day)}</span>
         </p>
         {plan?.cycle != null && plan.day_in_cycle != null && (
-          <p class="home-cycle">{`الدورة ${fmt.num(plan.cycle)} · اليوم ${fmt.num(plan.day_in_cycle)} من ${fmt.num(CYCLE_DAYS)}`}</p>
+          <p class="home-cycle">{cycleText(plan.cycle, plan.day_in_cycle, goals.data)}</p>
         )}
       </div>
       <StateFrame

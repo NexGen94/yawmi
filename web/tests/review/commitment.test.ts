@@ -51,3 +51,36 @@ describe('monthCommitment: the daily habit days kept in a month, up to today', (
     expect(monthCommitment({ ...base, habits: [], logs: [], month: '2026-11' })).toBeNull();
   });
 });
+
+describe('monthCommitment: archiving a habit does not change a month that is over (Task 21 N-1)', () => {
+  const octDays = (from: number, to: number): string[] =>
+    Array.from({ length: to - from + 1 }, (_, i) => `2026-10-${String(from + i).padStart(2, '0')}`);
+
+  it('an archived habit still counts: a month before its last logged day is the same before and after', () => {
+    const logs = [...octDays(1, 20), '2026-11-03', '2026-11-04'].map((d) => log('walk', d));
+    const live = habit('walk', 'المشي', { start_day: '2026-10-01' });
+    const archived = { ...live, active: false };
+    const before = monthCommitment({ ...base, habits: [live], logs, month: '2026-10' });
+    expect(before).toEqual({ reached: 20, total: 31 });
+    expect(monthCommitment({ ...base, habits: [archived], logs, month: '2026-10' })).toEqual(before);
+  });
+
+  it('but only up to the last day it was logged: the days after are not owed', () => {
+    const logs = octDays(1, 20).map((d) => log('walk', d));
+    const archived = habit('walk', 'المشي', { start_day: '2026-10-01', active: false });
+    expect(monthCommitment({ ...base, habits: [archived], logs, month: '2026-10' })).toEqual({ reached: 20, total: 20 });
+    expect(monthCommitment({ ...base, habits: [archived], logs, month: '2026-11' })).toBeNull();
+  });
+
+  it('an archived habit with no log at all stays out (nothing says it was ever kept)', () => {
+    const archived = habit('walk', 'المشي', { start_day: '2026-10-01', active: false });
+    expect(monthCommitment({ ...base, habits: [archived], logs: [], month: '2026-10' })).toBeNull();
+  });
+
+  it('an archived habit is counted with the others of its month', () => {
+    const walk = habit('walk', 'المشي', { start_day: '2026-10-01', active: false });
+    const read = habit('read', 'القراءة', { start_day: '2026-10-01' });
+    const logs = [...octDays(1, 10).map((d) => log('walk', d)), ...octDays(1, 31).map((d) => log('read', d))];
+    expect(monthCommitment({ ...base, habits: [walk, read], logs, month: '2026-10' })).toEqual({ reached: 41, total: 41 });
+  });
+});

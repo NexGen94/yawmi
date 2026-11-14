@@ -29,7 +29,7 @@ export function PendingBadge({ goals }: { goals: GoalsOut }) {
   return (
     <>
       <button type="button" class="pending-badge" aria-haspopup="dialog" onClick={() => setOpen(true)}>
-        <Badge tone="signal">{`تعديلات معلّقة: ${fmt.num(count)}`}</Badge>
+        <Badge>{`تعديلات معلّقة: ${fmt.num(count)}`}</Badge>
       </button>
       <Drawer open={open} title="تعديلات معلّقة" onClose={() => setOpen(false)}>
         <p class="pending-note">تعديلات أُجريت هنا وتنتظر تطبيقها على Notion. تبقى معروضة بقيمتها الجديدة حتى تلحقها المرآة.</p>

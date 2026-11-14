@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/preact';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/preact';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { useState } from 'preact/hooks';
@@ -376,6 +376,45 @@ describe('CheckRow', () => {
   });
 });
 
+describe('Slider that nobody moved (Task 24)', () => {
+  it('shows «—» and no fill instead of a number it will not save, and a number once it is set', () => {
+    const { container, rerender } = render(<Slider label="الهدوء" min={1} max={10} value={5} unset onChange={() => undefined} />);
+    expect(container.querySelector('.slider-value')?.textContent).toBe('—');
+    expect(container.querySelector('.slider')?.getAttribute('data-unset')).toBe('true');
+    rerender(<Slider label="الهدوء" min={1} max={10} value={5} onChange={() => undefined} />);
+    expect(container.querySelector('.slider-value')?.textContent).toBe('5');
+    expect(container.querySelector('.slider')?.getAttribute('data-unset')).toBeNull();
+  });
+
+  it('the filled part of the track follows the value, as a percentage of the range', () => {
+    const { container } = render(<Slider label="س" min={0} max={10} value={4} onChange={() => undefined} />);
+    expect((container.querySelector('.slider-fill') as HTMLElement).style.inlineSize).toBe('40%');
+  });
+});
+
+describe('Segmented with many options (Task 24)', () => {
+  const many = (n: number) => Array.from({ length: n }, (_, i) => ({ value: `v${i}`, label: `خيار ${i}` }));
+  const css = readFileSync(join(resolve(import.meta.dirname, '../../src/styles'), 'components.css'), 'utf8');
+
+  it('is a track of up to four options and separate chips beyond that, with the same radio semantics', () => {
+    const { container, rerender } = render(<Segmented label="س" options={many(4)} value="v0" onChange={() => undefined} />);
+    expect(container.querySelector('.segmented')?.classList.contains('segmented-chips')).toBe(false);
+    rerender(<Segmented label="س" options={many(5)} value="v0" onChange={() => undefined} />);
+    const group = screen.getByRole('radiogroup', { name: 'س' });
+    expect(group.classList.contains('segmented-chips')).toBe(true);
+    expect(within(group).getAllByRole('radio')).toHaveLength(5);
+  });
+
+  it('a track is held inside its container (it wraps only as a fallback), and the chips of five or more wrap by design', () => {
+    const rule = (selector: string): string =>
+      css.split('}').map((block) => block.split('{')).find(([head]) => (head ?? '').trim().endsWith(selector))?.[1] ?? '';
+    expect(rule('.segmented')).toContain('max-inline-size: 100%');
+    expect(rule('.segmented')).toContain('flex-wrap: wrap');
+    expect(rule('.segmented-chips')).toContain('flex-wrap: wrap');
+    expect(rule('.segmented-chips')).not.toContain('background: var(--c-blue-pale)');
+  });
+});
+
 describe('Segmented', () => {
   const options = [
     { value: 'day', label: 'اليوم' },
@@ -458,9 +497,59 @@ describe('Chips', () => {
 });
 
 describe('Field', () => {
-  it.each(['text', 'number', 'date', 'time'] as const)('renders a labelled %s input', (type) => {
+  it.each(['text', 'number'] as const)('renders a labelled %s input', (type) => {
     render(<Field label="القيمة" type={type} value="" onInput={() => undefined} />);
     expect((screen.getByLabelText('القيمة') as HTMLInputElement).type).toBe(type);
+  });
+
+  // The browser's own date and time controls spoke English («mm/dd/yyyy», «08:00 PM») on an Arabic
+  // page (Task 24): a date and a time are a text field with an Arabic placeholder, 24 hours, and the
+  // value the callers always had («2026-12-08», «20:00»).
+  describe('date and time', () => {
+    it('are text fields with an Arabic placeholder, read from left to right', () => {
+      render(
+        <>
+          <Field label="الوقت" type="time" value="" onInput={() => undefined} />
+          <Field label="اليوم" type="date" value="" onInput={() => undefined} />
+        </>,
+      );
+      const time = screen.getByLabelText('الوقت') as HTMLInputElement;
+      const date = screen.getByLabelText('اليوم') as HTMLInputElement;
+      expect([time.type, date.type]).toEqual(['text', 'text']);
+      expect(time.placeholder).toBe('ساعة:دقيقة');
+      expect(date.placeholder).toBe('سنة-شهر-يوم');
+      expect([time.getAttribute('dir'), date.getAttribute('dir')]).toEqual(['ltr', 'ltr']);
+    });
+
+    it('a time reports «HH:MM» once it is a time, and an empty value until then; Arabic-Indic digits count', () => {
+      const onInput = vi.fn();
+      render(<Field label="الوقت" type="time" value="" onInput={onInput} />);
+      const input = screen.getByLabelText('الوقت');
+      for (const typed of ['2', '20:', '8:05', '٢٠:٣٠', '24:00', '12:60', 'abc']) fireEvent.input(input, { target: { value: typed } });
+      expect(onInput.mock.calls.map((c) => c[0])).toEqual(['', '', '08:05', '20:30', '', '', '']);
+    });
+
+    it('a date reports «YYYY-MM-DD» once it is a real day, and an empty value until then', () => {
+      const onInput = vi.fn();
+      render(<Field label="اليوم" type="date" value="" onInput={onInput} />);
+      const input = screen.getByLabelText('اليوم');
+      for (const typed of ['2026', '2026-12', '2026-12-08', '٢٠٢٦-١٢-٠٩', '2026-02-30', '2026-13-01']) fireEvent.input(input, { target: { value: typed } });
+      expect(onInput.mock.calls.map((c) => c[0])).toEqual(['', '', '2026-12-08', '2026-12-09', '', '']);
+    });
+
+    it('keeps what is being typed, and follows the value when the page changes it', () => {
+      const { rerender } = render(<Field label="اليوم" type="date" value="" onInput={() => undefined} />);
+      const input = screen.getByLabelText('اليوم') as HTMLInputElement;
+      fireEvent.input(input, { target: { value: '2026-1' } });
+      expect(input.value).toBe('2026-1');
+      rerender(<Field label="اليوم" type="date" value="2026-12-31" onInput={() => undefined} />);
+      expect(input.value).toBe('2026-12-31');
+    });
+
+    it('says a valid date in words under the field', () => {
+      render(<Field label="اليوم" type="date" value="2026-11-14" onInput={() => undefined} />);
+      expect(screen.getByText('السبت، 14 نوفمبر 2026')).toBeTruthy();
+    });
   });
 
   it('reports the typed value', () => {
@@ -869,9 +958,10 @@ describe('components.css', () => {
     expect(sheet).toMatch(
       /:is\(\.hero-card,\s*\.on-ink\)\s+\.chip\[aria-pressed='true'\]\s*\{[^}]*border-color:\s*var\(--c-blue-light\);[^}]*background:\s*var\(--c-ink-2\);/s,
     );
-    expect(sheet).toMatch(
-      /:is\(\.dialog,\s*\.drawer\)\s+\.chip\[aria-pressed='true'\]\s*\{[^}]*border-color:\s*var\(--c-ink\);[^}]*background:\s*var\(--c-ink\);/s,
-    );
+    // Off the ink surfaces a pressed chip is white with an ink border, never the navy fill that the
+    // one prominent button of a view has (Task 24 ruling); a dialog needs no rule of its own.
+    expect(sheet).toMatch(/\.chip\[aria-pressed='true'\]\s*\{[^}]*border-color:\s*var\(--c-ink\);[^}]*background:\s*var\(--c-surface\);/s);
+    expect(sheet).not.toMatch(/:is\(\.dialog,\s*\.drawer\)\s+\.chip\[aria-pressed='true'\]/);
 
     withStyles();
     render(

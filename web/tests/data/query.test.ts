@@ -143,6 +143,31 @@ describe('useQuery', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it('asks again when the connection returns while the first request is still out, and keeps the new answer (Task 9)', async () => {
+    vi.restoreAllMocks();
+    await writeCache('inflight-key', { message: 'نسخة سابقة' });
+    let failFirst: (error: Error) => void = () => undefined;
+    const fetcher = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => { failFirst = reject; }))
+      .mockResolvedValue({ message: 'من الخادم' });
+
+    render(h(QueryHarness, { queryKey: 'inflight-key', fetcher }));
+    await screen.findByText('loading');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    // The request that went out offline is still pending when the connection comes back.
+    fireEvent(window, new Event('online'));
+    await screen.findByText('ready');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+
+    // It fails late: its failure must not put the saved copy over the answer of the server.
+    failFirst(new TypeError('Failed to fetch'));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.getByTestId('data').textContent).toBe(JSON.stringify({ message: 'من الخادم' }));
+    expect(screen.getByTestId('stale').textContent).toBe('false');
+  });
+
   it('stops listening for online when the page unmounts', async () => {
     vi.restoreAllMocks();
     const fetcher = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));

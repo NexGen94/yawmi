@@ -278,6 +278,11 @@
 }
 
 .lh-main a {
+  /* the title of the row is a target of its own: 44 px, not the 40 of two lines of text */
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-block-size: var(--hit);
   font-size: var(--fs-body);
   font-weight: 600;
 }

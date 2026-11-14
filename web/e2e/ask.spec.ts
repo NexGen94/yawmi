@@ -1,10 +1,12 @@
 import { expectNoSeriousA11y } from './a11y';
-import { expect, riyadhToday, SYNC_TIMEOUT, test } from './fixtures';
+import { expect, openEveningForm, riyadhToday, sharedStateTest as test, SYNC_TIMEOUT } from './fixtures';
 import { expectNoHorizontalScroll, shot } from './shots';
 
 // The first web consumer of the server AI, against the fake provider of the test server (no
 // network, no key). Each test starts from a withdrawn consent so the dialog is always seen, and
-// leaves the memory empty and the consent withdrawn for the tests after it.
+// leaves the memory empty and the consent withdrawn for the tests after it. The consent is the
+// user's, not a device's: `sharedStateTest` makes the tests of this file (and of review.spec) take
+// turns when the suite runs with more than one worker.
 
 const QUESTION = 'ما حالة أهدافي هذا الأسبوع؟';
 const FAKE_LINES = ['ملخص تجريبي لليوم.', 'هذا رد ثابت من مزوّد وهمي للاختبار.'];
@@ -142,6 +144,7 @@ test('a slow refresh after the reload: the 401 is sent again by the app, and the
 test('closing the day with the consent in place shows the summary of the provider', async ({ paired: page, api }) => {
   await api.send('PUT', '/v1/ai/consent', { provider: 'anthropic', personal_text: false });
   await page.goto('/day/evening');
+  await openEveningForm(page);
   await expect(page.getByRole('heading', { name: 'يومية المساء' })).toBeVisible();
 
   // The day may already hold a summary (the other project closed it): the region then shows that one
@@ -184,6 +187,7 @@ test('taking the closing back within its window sends nothing and asks for no su
   // queue) are run past the window at once, so a summary that should not be asked for would be.
   await page.clock.install();
   await page.goto('/day/evening');
+  await openEveningForm(page);
   await expect(page.getByRole('heading', { name: 'يومية المساء' })).toBeVisible();
   // Different in every run: only this closing could put it on the server.
   const marker = `إنجاز تراجع ${Date.now()}`;

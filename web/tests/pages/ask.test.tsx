@@ -97,6 +97,28 @@ describe('the ask panel: opening and closing', () => {
   });
 });
 
+describe('the ask panel: the pinned action (Task 24, design review N1)', () => {
+  it('in the side panel «سؤال» is in the pinned actions under the content, and it asks', async () => {
+    const s = serve();
+    const dialog = await openPanel();
+    const button = within(dialog).getByRole('button', { name: 'سؤال' });
+    expect(button.closest('.layer-actions')).not.toBeNull();
+    expect(button.closest('form')).toBeNull();
+    fireEvent.input(within(dialog).getByLabelText('السؤال'), { target: { value: 'ما حالة أهدافي؟' } });
+    fireEvent.click(button);
+    await waitFor(() => expect(s.of('POST', '/v1/ask')).toHaveLength(1));
+  });
+
+  it('on the /ask page it stays in the form, next to the field', async () => {
+    serve();
+    history.replaceState(null, '', '/ask');
+    render(<App />);
+    const button = await screen.findByRole('button', { name: 'سؤال' });
+    expect(button.closest('form')).not.toBeNull();
+    expect(button.closest('.layer-actions')).toBeNull();
+  });
+});
+
 describe('the ask panel: the question', () => {
   it('the default range is «7 أيام»', async () => {
     serve();

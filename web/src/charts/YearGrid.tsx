@@ -1,9 +1,12 @@
 /// <reference types="vite/client" />
 // (for the stylesheet import below: the test tsconfig does not load vite client types itself)
 
+import { useState } from 'preact/hooks';
+
 import { fromOrdinal, toOrdinal, weekdayOf } from '../domain/days';
 import type { Day } from '../domain/types';
 import { fmt } from '../lib/format';
+import { Disclosure } from '../ui/Disclosure';
 import { x } from './rtl';
 import './year-grid.css';
 
@@ -20,9 +23,10 @@ const CELL = 12;
 const GAP = 3;
 const ROWS = 7;
 
-/** The five grades are five lightnesses of one blue: the fill opacity of the cell, never another hue
- *  (and never red). The word and the number of the grade are in the key and in each day's title. */
-export const SHADES: Readonly<Record<number, number>> = { 1: 0.2, 2: 0.4, 3: 0.6, 4: 0.8, 5: 1 };
+/** The five grades are five steps of the palette's own blues, from the palest to the ink (the
+ *  classes `year-grade-1` to `-5` in year-grid.css): mixed tints were off the palette, and the first
+ *  step could not be told from an empty cell. Never red. The word and the number of the grade are in
+ *  the key and in each day's title. */
 
 /** The words beside a grade in the key: the two ends say what they are. */
 function keyWord(score: number): string {
@@ -31,7 +35,7 @@ function keyWord(score: number): string {
   return fmt.num(score);
 }
 
-const shade = (score: number): number => SHADES[Math.min(5, Math.max(1, Math.round(score)))] ?? SHADES[3] ?? 0.6;
+const grade = (score: number): number => Math.min(5, Math.max(1, Math.round(score)));
 
 /** The mood of a year as a calendar of weeks (a column a week, Sunday on top, the first week at the
  *  right edge), with a text key under it. Only the days with a mood are shaded; the others stay empty
@@ -45,6 +49,17 @@ export function YearGrid({ year, days, label }: YearGridProps) {
   const width = columns * slot - GAP;
   const height = ROWS * slot - GAP;
   const scores = new Map(days.map((d) => [d.day, d.score]));
+  // The value of a day was only in the title of its cell (a hover). A tap or a click on a day says
+  // it in a line under the grid; the list below the key says every recorded day to a keyboard.
+  const [picked, setPicked] = useState<Day | null>(null);
+  const pick = (event: MouseEvent): void => {
+    const day = ((event.target as Element).closest('[data-day]') as HTMLElement | SVGElement | null)?.dataset.day;
+    if (day) setPicked(day);
+  };
+  const pickedScore = picked === null ? undefined : scores.get(picked);
+  let readout = '';
+  if (picked !== null) readout = `${fmt.dayShort(picked)}: ${pickedScore === undefined ? 'بلا تسجيل للمزاج' : fmt.num(pickedScore)}`;
+  const recorded = [...days].sort((a, b) => b.day.localeCompare(a.day));
 
   const cells = [];
   for (let k = 0; k < length; k += 1) {
@@ -61,10 +76,9 @@ export function YearGrid({ year, days, label }: YearGridProps) {
       ) : (
         <rect
           key={day}
-          class="year-cell"
+          class={`year-cell year-grade-${grade(score)}`}
           data-day={day}
           data-score={score}
-          fill-opacity={shade(score)}
           x={left}
           y={top}
           width={CELL}
@@ -79,20 +93,39 @@ export function YearGrid({ year, days, label }: YearGridProps) {
 
   return (
     <div class="year-grid">
-      <svg class="chart year-svg" role="img" aria-label={label} viewBox={`0 0 ${width} ${height}`} focusable="false">
+      <svg
+        class="chart year-svg"
+        role="img"
+        aria-label={label}
+        viewBox={`0 0 ${width} ${height}`}
+        focusable="false"
+        onClick={pick}
+      >
         {cells}
       </svg>
       <ul class="year-key" aria-label="مفتاح درجات المزاج">
         {SCORES.map((score) => (
           <li key={score}>
             <svg class="year-key-swatch" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-              <rect class="year-cell" fill-opacity={SHADES[score]} x="1" y="1" width="14" height="14" rx="3" />
+              <rect class={`year-cell year-grade-${score}`} x="1" y="1" width="14" height="14" rx="3" />
             </svg>
             {keyWord(score)}
           </li>
         ))}
       </ul>
       <p class="year-note">الخانة الفارغة يوم بلا تسجيل للمزاج</p>
+      <p class="year-readout" role="status">
+        {readout}
+      </p>
+      {recorded.length > 0 ? (
+        <Disclosure summary="أيام المزاج المسجّلة">
+          <ul class="year-days" aria-label="أيام المزاج المسجّلة">
+            {recorded.map((d) => (
+              <li key={d.day}>{`${fmt.dayShort(d.day)}: ${fmt.num(d.score)}`}</li>
+            ))}
+          </ul>
+        </Disclosure>
+      ) : null}
     </div>
   );
 }

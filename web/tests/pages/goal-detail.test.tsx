@@ -247,9 +247,10 @@ describe('goal detail: the edit log', () => {
     expect(within(entry('11111111-1111-4111-8111-111111111114')).getByText('لم يُطبَّق؛ يمكن تعديل الحقل من جديد')).toBeTruthy();
     const first = entry('11111111-1111-4111-8111-111111111111');
     expect(first.textContent).toContain('من');
-    expect(first.textContent).toContain('2026-11-08');
+    // a day is written in words in the log, not as an ISO text (Task 24)
+    expect(first.textContent).toContain(fmt.day('2026-11-08'));
     expect(first.textContent).toContain('إلى');
-    expect(first.textContent).toContain('2026-11-14');
+    expect(first.textContent).toContain(fmt.day('2026-11-14'));
     expect(first.textContent).toContain('قياس خط الأساس');
   });
 
