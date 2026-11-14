@@ -1,7 +1,7 @@
 # Yawmi API and web through the Hostinger API (connector), no terminal: variant of yawmi-api.api.yml (D-072).
 # Differences: the JWT secret is generated on the server into yawmi_secrets (project yawmi-secrets) and read at
 # start, so no person or agent ever sees it; the AI key is left out until Abdullah adds it (AI routes answer 503);
-# the images are pulled by compose with the server's own GHCR login, not by hand.
+# both images come from the public yawmi-api package, so compose pulls them with no GHCR login.
 # Project environment (not secret): YAWMI_API_HOST, YAWMI_DB_HOST, N8N_NETWORK, TRAEFIK_CERT_RESOLVER,
 # optional TRAEFIK_ENTRYPOINT, RAQIB_NETWORK, YAWMI_DB_NAME. To add the AI key later, add under environment
 #   YAWMI_ANTHROPIC_API_KEY: ${YAWMI_ANTHROPIC_API_KEY:?YAWMI_ANTHROPIC_API_KEY is required}
@@ -77,7 +77,8 @@ services:
 
   # The PWA: everything on the API host that is not /v1 (priority 1; the API routers are 100/200).
   yawmi-web:
-    image: ghcr.io/nexgen94/yawmi-web:0.1.0
+    # the same image as yawmi-web, from the public yawmi-api package (web-image.yml pushes both)
+    image: ghcr.io/nexgen94/yawmi-api:web-0.1.1
     container_name: yawmi-web
     restart: unless-stopped
     networks:
