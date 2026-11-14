@@ -1388,13 +1388,25 @@ def test_connector_variant_keeps_everything_else_of_the_hand_variant() -> None:
     hand = _yaml(API_COMPOSE)
     conn = _yaml(API_COMPOSE_CONNECTOR)
     for name in ("yawmi-api", "yawmi-web"):
-        skip = ("pull_policy", "environment", "entrypoint")
+        skip = ("pull_policy", "environment", "entrypoint", "image")
         a = {k: v for k, v in hand["services"][name].items() if k not in skip}
         b = {k: v for k, v in conn["services"][name].items() if k not in skip}
         assert a == b
+    # both images from the public yawmi-api package; the web one is the same build, tagged web-X.Y.Z
+    assert conn["services"]["yawmi-api"]["image"] == hand["services"]["yawmi-api"]["image"]
+    assert re.fullmatch(
+        r"ghcr\.io/nexgen94/yawmi-api:web-\d+\.\d+\.\d+", conn["services"]["yawmi-web"]["image"]
+    )
     hand_env = dict(hand["services"]["yawmi-api"]["environment"])
     for secret in ("YAWMI_JWT_SECRET", "YAWMI_ANTHROPIC_API_KEY"):
         hand_env.pop(secret)
     assert conn["services"]["yawmi-api"]["environment"] == hand_env
     assert conn["networks"] == hand["networks"]
     assert conn["volumes"] == hand["volumes"]
+
+
+def test_web_workflow_also_pushes_the_web_image_into_the_public_package() -> None:
+    text = WEB_WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert 'docker push "$IMAGE:$VERSION"' in text  # the private yawmi-web image stays
+    assert 'docker tag "$IMAGE:$VERSION" "ghcr.io/nexgen94/yawmi-api:web-$VERSION"' in text
+    assert 'docker push "ghcr.io/nexgen94/yawmi-api:web-$VERSION"' in text
