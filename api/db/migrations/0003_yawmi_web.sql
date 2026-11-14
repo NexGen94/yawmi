@@ -1,3 +1,5 @@
+-- مجمَّد منذ 2026-11-14: أي تغيير بعده ترحيل 0004.
+-- Frozen since 2026-11-14: any later change is a new migration 0004.
 -- 0003_yawmi_web.sql: the desktop web round (ten tables, four columns, one view).
 --
 -- Requires: 0001 (schema yawmi) and 0002 (role yawmi_api), and the Raqib mirror table
