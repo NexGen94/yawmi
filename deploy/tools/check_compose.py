@@ -21,6 +21,7 @@ from pathlib import Path
 MAX_CHARS = 8192
 
 _IPV4 = re.compile(r"\b\d{1,3}(\.\d{1,3}){3}\b")
+_ANY_ADDRESS = ".".join(("0",) * 4)  # a listen address (uvicorn --host), not a server's
 _API_KEY_PREFIX = re.compile(r"\bsk-")
 _IMAGE_LINE = re.compile(r"^\s*image:\s*(?P<ref>[^\s#]+)")
 
@@ -53,6 +54,8 @@ def check_text(text: str) -> list[str]:
     if "\r" in text:
         problems.append(f"سطر {_line_of(text, text.index(chr(13)))}: فيه \\r، والمطلوب LF فقط")
     for match in _IPV4.finditer(text):
+        if match.group(0) == _ANY_ADDRESS:
+            continue  # the bind-to-every-interface address names no server
         problems.append(f"سطر {_line_of(text, match.start())}: نمط عنوان IP")
     for match in _API_KEY_PREFIX.finditer(text):
         problems.append(f"سطر {_line_of(text, match.start())}: بادئة مفتاح sk-")

@@ -1,0 +1,121 @@
+# Yawmi API and web through the Hostinger API (connector), no terminal: variant of yawmi-api.api.yml (D-072).
+# Differences: the JWT secret is generated on the server into yawmi_secrets (project yawmi-secrets) and read at
+# start, so no person or agent ever sees it; the AI key is left out until Abdullah adds it (AI routes answer 503);
+# the images are pulled by compose with the server's own GHCR login, not by hand.
+# Project environment (not secret): YAWMI_API_HOST, YAWMI_DB_HOST, N8N_NETWORK, TRAEFIK_CERT_RESOLVER,
+# optional TRAEFIK_ENTRYPOINT, RAQIB_NETWORK, YAWMI_DB_NAME. To add the AI key later, add under environment
+#   YAWMI_ANTHROPIC_API_KEY: ${YAWMI_ANTHROPIC_API_KEY:?YAWMI_ANTHROPIC_API_KEY is required}
+# and type the key in the Docker Manager yourself.
+name: yawmi-api
+
+services:
+  yawmi-api:
+    image: ghcr.io/nexgen94/yawmi-api:0.1.0
+    container_name: yawmi-api
+    # the JWT secret is read from the secrets volume at every start; it is never a project variable
+    entrypoint:
+      - /bin/sh
+      - -c
+      - 'YAWMI_JWT_SECRET="$$(cat /run/yawmi/yawmi_jwt_secret)" && export YAWMI_JWT_SECRET && exec /usr/local/bin/yawmi-entrypoint uvicorn yawmi.main:app --host 0.0.0.0 --port 8000 --no-access-log'
+    restart: unless-stopped
+    environment:
+      YAWMI_DB_HOST: ${YAWMI_DB_HOST:?YAWMI_DB_HOST is required}
+      YAWMI_DB_NAME: ${YAWMI_DB_NAME:-raqib}
+      YAWMI_LOG_BODIES: "false"
+      YAWMI_SEND_RAW_HEALTH: "false"
+      # Web Push (RUNBOOK 11e): off until the key exists and both variables are set by hand.
+      YAWMI_PUSH_ENABLED: ${YAWMI_PUSH_ENABLED:-false}
+      YAWMI_VAPID_SUBJECT: ${YAWMI_VAPID_SUBJECT:-}
+      YAWMI_VAPID_PRIVATE_KEY_FILE: /run/yawmi/vapid_private.pem
+      # allowed push services; empty keeps the default (Apple, FCM, Mozilla, Windows)
+      YAWMI_PUSH_HOSTS: ${YAWMI_PUSH_HOSTS:-}
+    networks:
+      - n8n
+      - raqib
+    volumes:
+      - yawmi_secrets:/run/yawmi:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${N8N_NETWORK}"
+      - "traefik.http.services.yawmi-api.loadbalancer.server.port=8000"
+      # 60 requests a minute (burst 20) for everything under /v1.
+      - "traefik.http.middlewares.yawmi-rl.ratelimit.average=60"
+      - "traefik.http.middlewares.yawmi-rl.ratelimit.period=1m"
+      - "traefik.http.middlewares.yawmi-rl.ratelimit.burst=20"
+      - "traefik.http.routers.yawmi-api.rule=Host(`${YAWMI_API_HOST:?YAWMI_API_HOST is required}`) && PathPrefix(`/v1`)"
+      - "traefik.http.routers.yawmi-api.priority=100"
+      - "traefik.http.routers.yawmi-api.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.yawmi-api.tls=true"
+      - "traefik.http.routers.yawmi-api.tls.certresolver=${TRAEFIK_CERT_RESOLVER:?TRAEFIK_CERT_RESOLVER is required}"
+      - "traefik.http.routers.yawmi-api.middlewares=yawmi-rl"
+      - "traefik.http.routers.yawmi-api.service=yawmi-api"
+      # Pairing is the only unauthenticated write: 10 a minute (burst 5), and it wins on priority.
+      - "traefik.http.middlewares.yawmi-rl-pair.ratelimit.average=10"
+      - "traefik.http.middlewares.yawmi-rl-pair.ratelimit.period=1m"
+      - "traefik.http.middlewares.yawmi-rl-pair.ratelimit.burst=5"
+      - "traefik.http.routers.yawmi-pair.rule=Host(`${YAWMI_API_HOST:?YAWMI_API_HOST is required}`) && Path(`/v1/devices/pair`)"
+      - "traefik.http.routers.yawmi-pair.priority=200"
+      - "traefik.http.routers.yawmi-pair.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.yawmi-pair.tls=true"
+      - "traefik.http.routers.yawmi-pair.tls.certresolver=${TRAEFIK_CERT_RESOLVER:?TRAEFIK_CERT_RESOLVER is required}"
+      - "traefik.http.routers.yawmi-pair.middlewares=yawmi-rl-pair"
+      - "traefik.http.routers.yawmi-pair.service=yawmi-api"
+
+  # The PWA: everything on the API host that is not /v1 (priority 1; the API routers are 100/200).
+  yawmi-web:
+    image: ghcr.io/nexgen94/yawmi-web:0.1.0
+    container_name: yawmi-web
+    restart: unless-stopped
+    networks:
+      - n8n
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    cpus: 0.25
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${N8N_NETWORK}"
+      - "traefik.http.services.yawmi-web.loadbalancer.server.port=8080"
+      - "traefik.http.routers.yawmi-web.rule=Host(`${YAWMI_API_HOST:?YAWMI_API_HOST is required}`)"
+      - "traefik.http.routers.yawmi-web.priority=1"
+      - "traefik.http.routers.yawmi-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.yawmi-web.tls=true"
+      - "traefik.http.routers.yawmi-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER:?TRAEFIK_CERT_RESOLVER is required}"
+      - "traefik.http.routers.yawmi-web.service=yawmi-web"
+
+volumes:
+  yawmi_secrets:
+    name: yawmi_secrets
+    external: true
+
+networks:
+  n8n:
+    name: ${N8N_NETWORK:?N8N_NETWORK is required}
+    external: true
+  raqib:
+    name: ${RAQIB_NETWORK:-raqib_internal}
+    external: true

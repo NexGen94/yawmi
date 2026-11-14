@@ -111,7 +111,15 @@ def test_checker_rejects_ips_and_api_key_prefixes(tmp_path: Path, leak: str) -> 
     assert check_compose.main([str(tmp_path)]) == 1
 
 
-@pytest.mark.parametrize("fine", ["tag 1.2.3", "task-12 risk-free disk-usage", "version 0.1.0"])
+@pytest.mark.parametrize(
+    "fine",
+    [
+        "tag 1.2.3",
+        "task-12 risk-free disk-usage",
+        "version 0.1.0",
+        "--host " + ".".join(("0",) * 4),
+    ],
+)
 def test_checker_does_not_flag_look_alikes(tmp_path: Path, fine: str) -> None:
     _write(tmp_path, GOOD + f"# {fine}\n")
     assert check_compose.main([str(tmp_path)]) == 0
@@ -1357,3 +1365,36 @@ async def test_loader_3_script_restores_the_delete_grants_after_0002_is_reapplie
     finally:
         await conn.execute("RESET ROLE")
         await conn.close()
+
+
+# --- D-072: the connector variant (no terminal, no hand-typed secret) ------------------------------
+
+API_COMPOSE_CONNECTOR = COMPOSE_DIR / "yawmi-api.hostinger-api.yml"
+
+
+def test_connector_variant_reads_the_jwt_secret_from_the_volume_and_types_no_secret() -> None:
+    api = _yaml(API_COMPOSE_CONNECTOR)["services"]["yawmi-api"]
+    env = api["environment"]
+    assert "YAWMI_JWT_SECRET" not in env
+    assert "YAWMI_ANTHROPIC_API_KEY" not in env  # left out until Abdullah adds it himself
+    assert api["entrypoint"][:2] == ["/bin/sh", "-c"]
+    script = api["entrypoint"][2]
+    assert '"$$(cat /run/yawmi/yawmi_jwt_secret)"' in script
+    assert "exec /usr/local/bin/yawmi-entrypoint uvicorn yawmi.main:app" in script
+    assert "yawmi_secrets:/run/yawmi:ro" in api["volumes"]
+
+
+def test_connector_variant_keeps_everything_else_of_the_hand_variant() -> None:
+    hand = _yaml(API_COMPOSE)
+    conn = _yaml(API_COMPOSE_CONNECTOR)
+    for name in ("yawmi-api", "yawmi-web"):
+        skip = ("pull_policy", "environment", "entrypoint")
+        a = {k: v for k, v in hand["services"][name].items() if k not in skip}
+        b = {k: v for k, v in conn["services"][name].items() if k not in skip}
+        assert a == b
+    hand_env = dict(hand["services"]["yawmi-api"]["environment"])
+    for secret in ("YAWMI_JWT_SECRET", "YAWMI_ANTHROPIC_API_KEY"):
+        hand_env.pop(secret)
+    assert conn["services"]["yawmi-api"]["environment"] == hand_env
+    assert conn["networks"] == hand["networks"]
+    assert conn["volumes"] == hand["volumes"]
