@@ -78,6 +78,18 @@ export function cycleDayText({ phase, index, length }: CyclePosition, joiner = '
   return phase === 'review' ? `أسبوع المراجعة${joiner}${day}` : day;
 }
 
+/**
+ * «الدورة 1 · اليوم 15 من 57», or «الدورة 1 · أسبوع المراجعة · اليوم 2 من 7» in the review week after
+ * the cycle (the server counts that week in the cycle, so its own day number runs on to 64). The
+ * words come from the mirror, the same on every page; without the mirror there is the server's day
+ * alone rather than a guess, and without a day just the cycle.
+ */
+export function cycleWords(cycle: number, dayInCycle: number | null, today: Day, goals: GoalsOut | undefined): string {
+  const position = goals === undefined ? undefined : cyclePosition(goals, today);
+  if (position !== undefined && position.cycle.cycle_no === cycle) return `الدورة ${fmt.num(cycle)} · ${cycleDayText(position, ' · ')}`;
+  return dayInCycle === null ? `الدورة ${fmt.num(cycle)}` : `الدورة ${fmt.num(cycle)} · اليوم ${fmt.num(dayInCycle)}`;
+}
+
 /** The length of cycle `no` in days, from the mirror: the home page and the goals page say the same
  *  number (the home page had a constant of 56 while the first cycle is 57 days). */
 export function cycleLengthOf(goals: GoalsOut, no: number): number | undefined {

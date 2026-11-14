@@ -254,7 +254,7 @@ export default function DayPage() {
           {body}
           {status.node}
         </div>
-        {live && data.today && <ContextColumn plan={data.today.plan} />}
+        {live && data.today && <ContextColumn plan={data.today.plan} day={viewDay} settings={settings.data} settingsState={settings.query.state} />}
       </div>
     </div>
   );

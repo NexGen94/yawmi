@@ -67,9 +67,41 @@ export interface Api {
   mood: () => Response | Promise<Response>;
 }
 
+export type MemoryItem = components['schemas']['MemoryItem'];
+
+/** A memory item as `GET /v1/ai/memory` lists it. */
+export const memoryItem = (kind: 'rule' | 'note', text: string, active = true, id = '00000000-0000-7000-8000-000000000001'): MemoryItem => ({
+  active,
+  created_at: '2026-11-01T08:00:00Z',
+  id,
+  kind,
+  text,
+});
+
+/** The settings of the person as `GET /v1/settings` answers, the keys given over the defaults. */
+export const settingsBody = (over: Record<string, unknown> = {}) => ({
+  ai_checkin: 'evening',
+  ai_lines: 2,
+  ai_tone: 'direct',
+  digits: 'latn',
+  late_notice_enabled: false,
+  late_notice_time: '20:00',
+  mission: '',
+  vision: '',
+  ...over,
+});
+
 /** Answers GET /v1/today, /v1/journal and /v1/mood from the given bodies; a handler may throw. */
 export function stubApi(
-  data: { today?: TodayOut; journal?: JournalEntryOut[]; mood?: MoodLogOut[] } = {},
+  data: {
+    today?: TodayOut;
+    journal?: JournalEntryOut[];
+    mood?: MoodLogOut[];
+    /** `GET /v1/settings`, `GET /v1/ai/memory` and `GET /v1/goals`: unread (404) unless given. */
+    settings?: Record<string, unknown>;
+    memory?: MemoryItem[];
+    goals?: unknown;
+  } = {},
   over: Partial<Api> = {},
 ) {
   const handlers: Api = {
@@ -85,6 +117,9 @@ export function stubApi(
     if (url.pathname === '/v1/today') return handlers.today();
     if (url.pathname === '/v1/journal') return handlers.journal();
     if (url.pathname === '/v1/mood') return handlers.mood();
+    if (url.pathname === '/v1/settings' && data.settings) return json(data.settings);
+    if (url.pathname === '/v1/ai/memory' && data.memory) return json({ items: data.memory, attached: { mission: false, vision: false } });
+    if (url.pathname === '/v1/goals' && data.goals) return json(data.goals);
     return json({ detail: 'not found' }, 404);
   });
   vi.stubGlobal('fetch', fetchMock);
