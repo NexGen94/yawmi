@@ -169,6 +169,34 @@ describe('applyPendingFocus: an ended session still in the outbox counts at once
     expect(applyPendingFocus([held], [event({ actual_minutes: 30 })])).toHaveLength(1);
   });
 
+  // F-069: the hour boundary. A session belongs to the Riyadh day it started on (the server's `day`),
+  // so a session saved in the evening counts toward that day, and one that runs across midnight stays
+  // on the day it started, not on the day it ended.
+  it('puts an evening session on its own Riyadh day (20:45 in Riyadh is 17:45 UTC)', () => {
+    const out = applyPendingFocus(
+      [],
+      [event({ actual_minutes: 31, started_at: '2026-11-10T17:45:00Z', ended_at: '2026-11-10T18:16:00Z' })],
+    );
+    expect(out[0]?.day).toBe('2026-11-10');
+    expect(minutesOn(out, '2026-11-10')).toBe(31);
+  });
+
+  it('keeps a session that runs across Riyadh midnight on the day it started', () => {
+    const out = applyPendingFocus(
+      [],
+      [event({ actual_minutes: 31, started_at: '2026-11-10T20:50:00Z', ended_at: '2026-11-10T21:21:00Z' })],
+    );
+    expect(out[0]?.day).toBe('2026-11-10'); // 23:50 in Riyadh; it ended at 00:21 on the 11th
+    expect(minutesOn(out, '2026-11-10')).toBe(31);
+    expect(minutesOn(out, '2026-11-11')).toBe(0);
+  });
+
+  it('starts the next Riyadh day at 21:00 UTC, to the minute', () => {
+    const at = (start: string) => applyPendingFocus([], [event({ actual_minutes: 5, started_at: start, ended_at: start })])[0]?.day;
+    expect(at('2026-11-10T20:59:00Z')).toBe('2026-11-10');
+    expect(at('2026-11-10T21:00:00Z')).toBe('2026-11-11');
+  });
+
   it('ignores other event types', () => {
     const other = { ...event({}), type: 'habit_logged' as const };
     expect(applyPendingFocus([], [other])).toEqual([]);
