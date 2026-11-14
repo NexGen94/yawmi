@@ -79,13 +79,13 @@ export default function GoalsPage() {
       if (chip) centerInScroller(box, chip);
     };
     centre();
-    // The labels change width when the font arrives (offline, or on a slow load): centre again, so
-    // that the chosen chip is not left where it was before the labels grew.
-    let alive = true;
-    void document.fonts?.ready.then(() => alive && centre());
-    return () => {
-      alive = false;
-    };
+    // The labels change width when the font or the stylesheet arrives (offline, or on a slow load):
+    // centre again whenever the row changes size, so that the chosen chip is not left where it was
+    // before the labels grew.
+    const row = box.firstElementChild;
+    const watch = typeof ResizeObserver === 'undefined' || row === null ? undefined : new ResizeObserver(centre);
+    if (row !== null) watch?.observe(row);
+    return () => watch?.disconnect();
   }, [view, switchShown]);
 
   const choose = (next: { view?: View; table?: GoalTable }): void => {
