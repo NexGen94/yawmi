@@ -8,12 +8,15 @@ export async function expectNoSeriousA11y(page: Page): Promise<void> {
   // Colours are read at rest: a button that is fading from one colour to another (a 150 ms transition)
   // would be measured halfway. A skeleton shimmer never ends, so only the finite animations are awaited.
   await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
+    Promise.race([
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity) // a skeleton shimmer never ends
+          .map((a) => a.finished.catch(() => undefined)),
+      ),
+      new Promise((resolve) => setTimeout(resolve, 1500)), // a long animation (a timer, a plant) does not hold the test
+    ]),
   );
   const { violations } = await new AxeBuilder({ page }).analyze();
   const blocking = violations

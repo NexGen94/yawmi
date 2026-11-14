@@ -86,12 +86,15 @@ export async function expectTargets44(page: Page): Promise<void> {
 export async function expectLayerFits(page: Page): Promise<void> {
   // Measured at rest: the panel slides in for 200 ms.
   await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity) // a skeleton shimmer never ends
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
+    Promise.race([
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity) // a skeleton shimmer never ends
+          .map((a) => a.finished.catch(() => undefined)),
+      ),
+      new Promise((resolve) => setTimeout(resolve, 1500)), // a long animation (a timer, a plant) does not hold the test
+    ]),
   );
   const report = await page.evaluate(() => {
     const panel = document.querySelector<HTMLElement>('.dialog, .drawer');
