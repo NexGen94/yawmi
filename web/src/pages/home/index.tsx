@@ -6,6 +6,8 @@ import { combine } from '../../data/combine';
 import { useFocusPlans, useFocusSessions, useStoredSession } from '../../focus/data';
 import { focusTarget, minutesOn } from '../../focus/today';
 import { useGoals } from '../../goals/data';
+import type { GoalsOut } from '../../goals/types';
+import type { Day } from '../../domain/types';
 import { useHabitsToday } from '../../habits/useHabitsToday';
 import { fmt } from '../../lib/format';
 import { lateItems } from '../../progress/impact';
@@ -14,7 +16,7 @@ import { Skeleton } from '../../ui/Skeleton';
 import { StateFrame } from '../../ui/StateFrame';
 import { Toast } from '../../ui/Toast';
 import { DomainCards } from '../../goals/DomainCards';
-import { cycleLengthOf } from '../../goals/horizons';
+import { cycleDayText, cyclePosition } from '../../goals/horizons';
 import { DayCards } from './DayCards';
 import { DaySummary, type SummaryInsight } from './DaySummary';
 import { DueHabits } from './DueHabits';
@@ -57,12 +59,16 @@ function summaryInsight(
   };
 }
 
-/** «الدورة 1 · اليوم 15 من 57»: the length is the mirror's, the same as the goals page says; without
- *  the mirror there is no length rather than a guess. */
-function cycleText(cycle: number, day: number, goals: Parameters<typeof cycleLengthOf>[0] | undefined): string {
-  const length = goals === undefined ? undefined : cycleLengthOf(goals, cycle);
-  const of = length === undefined ? '' : ` من ${fmt.num(length)}`;
-  return `الدورة ${fmt.num(cycle)} · اليوم ${fmt.num(day)}${of}`;
+/** «الدورة 1 · اليوم 15 من 57», or «الدورة 1 · أسبوع المراجعة · اليوم 2 من 7» in the review week after the
+ *  cycle (the server counts that week in the cycle, so its own day number runs on to 64). The words come
+ *  from the mirror, the same as the goals page says them; without the mirror there is the server's day
+ *  alone rather than a guess. */
+function cycleText(cycle: number, day: number, today: Day, goals: GoalsOut | undefined): string {
+  const position = goals === undefined ? undefined : cyclePosition(goals, today);
+  if (position !== undefined && position.cycle.cycle_no === cycle) {
+    return `الدورة ${fmt.num(cycle)} · ${cycleDayText(position, ' · ')}`;
+  }
+  return `الدورة ${fmt.num(cycle)} · اليوم ${fmt.num(day)}`;
 }
 
 export default function HomePage() {
@@ -126,7 +132,7 @@ export default function HomePage() {
           <span>{fmt.day(day)}</span> <span>{fmt.hijri(day)}</span>
         </p>
         {plan?.cycle != null && plan.day_in_cycle != null && (
-          <p class="home-cycle">{cycleText(plan.cycle, plan.day_in_cycle, goals.data)}</p>
+          <p class="home-cycle">{cycleText(plan.cycle, plan.day_in_cycle, day, goals.data)}</p>
         )}
       </div>
       <StateFrame

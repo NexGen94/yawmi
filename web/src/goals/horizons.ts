@@ -45,15 +45,37 @@ function dueIn(goals: GoalsOut, today: Day, period: 'week' | 'month') {
   return dueReport(goals.milestones, today).upcoming.filter((i) => i.milestone.due_date !== null && i.milestone.due_date <= end);
 }
 
-/** The cycle the day falls in, with the day's number in it and the cycle's length. */
-export function currentCycle(
-  goals: GoalsOut,
-  today: Day,
-): { cycle: GoalsOut['cycles'][number]; index: number; length: number } | undefined {
+export interface CyclePosition {
+  cycle: GoalsOut['cycles'][number];
+  /** `work`: a day of the cycle. `review`: a day of the 7-day review week after it, which the server
+   *  counts in the cycle too (`day_in_cycle` runs on through it: 58 to 64 for the first cycle). */
+  phase: 'work' | 'review';
+  /** The day's number in its phase: in the cycle, or in the review week. */
+  index: number;
+  /** The length of the phase in days: the cycle's, or the review week's (7). */
+  length: number;
+}
+
+/**
+ * Where the day falls in the cycles: the same rule as the server's (`current_cycle` in
+ * api/yawmi/today/assemble.py): the cycle whose span, review week included, holds the day (the lowest
+ * number on overlap). `undefined` before the plan, or past its last review week.
+ */
+export function cyclePosition(goals: GoalsOut, today: Day): CyclePosition | undefined {
   const now = toOrdinal(today);
-  const cycle = goals.cycles.find((c) => now >= toOrdinal(c.start_date) && now <= toOrdinal(c.end_date));
+  const cycles = [...goals.cycles].sort((a, b) => a.cycle_no - b.cycle_no);
+  const cycle = cycles.find((c) => now >= toOrdinal(c.start_date) && now <= toOrdinal(c.review_end));
   if (cycle === undefined) return undefined;
-  return { cycle, index: now - toOrdinal(cycle.start_date) + 1, length: toOrdinal(cycle.end_date) - toOrdinal(cycle.start_date) + 1 };
+  const end = toOrdinal(cycle.end_date);
+  if (now <= end) return { cycle, phase: 'work', index: now - toOrdinal(cycle.start_date) + 1, length: end - toOrdinal(cycle.start_date) + 1 };
+  return { cycle, phase: 'review', index: now - end, length: toOrdinal(cycle.review_end) - end };
+}
+
+/** «اليوم 15 من 57» in the cycle, «أسبوع المراجعة، اليوم 2 من 7» in its review week: said the same on
+ *  every page (`joiner` sits between the two parts of the second). */
+export function cycleDayText({ phase, index, length }: CyclePosition, joiner = '، '): string {
+  const day = `اليوم ${fmt.num(index)} من ${fmt.num(length)}`;
+  return phase === 'review' ? `أسبوع المراجعة${joiner}${day}` : day;
 }
 
 /** The length of cycle `no` in days, from the mirror: the home page and the goals page say the same
@@ -67,9 +89,9 @@ function cycleLine(goals: GoalsOut, today: Day): string {
   const first = [...goals.cycles].sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
   if (first === undefined) return NOTHING_DUE;
   if (toOrdinal(today) < toOrdinal(first.start_date)) return `تبدأ الدورة ${fmt.num(first.cycle_no)} في ${fmt.day(first.start_date)}`;
-  const current = currentCycle(goals, today);
-  if (current === undefined) return NOTHING_DUE;
-  return `الدورة ${fmt.num(current.cycle.cycle_no)}: اليوم ${fmt.num(current.index)} من ${fmt.num(current.length)} · ${current.cycle.theme}`;
+  const position = cyclePosition(goals, today);
+  if (position === undefined) return NOTHING_DUE;
+  return `الدورة ${fmt.num(position.cycle.cycle_no)}: ${cycleDayText(position)} · ${position.cycle.theme}`;
 }
 
 /** «1877 يوماً»: the count of days is written without a grouping comma, as the design's line is. */

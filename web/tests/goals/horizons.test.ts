@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { dueReport, relativeDays } from '../../src/goals/due';
-import { cycleLengthOf, horizonLines } from '../../src/goals/horizons';
+import { cycleLengthOf, cyclePosition, horizonLines } from '../../src/goals/horizons';
 import { EMPTY_GOALS, goals, milestone, TODAY } from '../helpers/goals-fixtures';
 
 const lines = (over: Parameters<typeof horizonLines>[0]) => Object.fromEntries(horizonLines(over).map((l) => [l.key, l.text]));
@@ -131,5 +131,49 @@ describe('cycleLengthOf: one length for the cycle, whoever says it (Task 24)', (
   it('is undefined for a cycle the mirror does not have, so a page says no length instead of a guess', () => {
     expect(cycleLengthOf(goals(), 99)).toBeUndefined();
     expect(cycleLengthOf(EMPTY_GOALS, 1)).toBeUndefined();
+  });
+});
+
+describe('the review week after a cycle (Task 25, I-1): the server counts it in the cycle, so the web does', () => {
+  const at = (today: string) => cyclePosition(goals(), today);
+  const cycleLine = (today: string) => lines({ goals: goals(), today, openPriorities: 0, habitsLeft: 0 }).cycle;
+
+  it('day 57 of cycle 1 (2026-12-26) is the last working day: 57 of 57', () => {
+    expect(at('2026-12-26')).toMatchObject({ phase: 'work', index: 57, length: 57 });
+    expect(at('2026-12-26')?.cycle.cycle_no).toBe(1);
+    expect(cycleLine('2026-12-26')).toBe('الدورة 1: اليوم 57 من 57 · التأسيس');
+  });
+
+  it('the first day of the review week (2026-12-27) is day 1 of 7 of the review, still cycle 1', () => {
+    expect(at('2026-12-27')).toMatchObject({ phase: 'review', index: 1, length: 7 });
+    expect(at('2026-12-27')?.cycle.cycle_no).toBe(1);
+    expect(cycleLine('2026-12-27')).toBe('الدورة 1: أسبوع المراجعة، اليوم 1 من 7 · التأسيس');
+  });
+
+  it('the last day of the review week (2027-01-02) is day 7 of 7', () => {
+    expect(at('2027-01-02')).toMatchObject({ phase: 'review', index: 7, length: 7 });
+    expect(cycleLine('2027-01-02')).toBe('الدورة 1: أسبوع المراجعة، اليوم 7 من 7 · التأسيس');
+  });
+
+  it('the day after (2027-01-03) is day 1 of 84 of cycle 2', () => {
+    expect(at('2027-01-03')).toMatchObject({ phase: 'work', index: 1, length: 84 });
+    expect(at('2027-01-03')?.cycle.cycle_no).toBe(2);
+    expect(cycleLine('2027-01-03')).toBe('الدورة 2: اليوم 1 من 84 · موضوع الدورة 2');
+  });
+
+  it('agrees with the server on every day of cycle 1 and its review week: the day number is the server one', () => {
+    // api/yawmi/today/assemble.py: day_in_cycle = (day - start).days + 1 from start through review_end
+    const first = Date.UTC(2026, 9, 31);
+    for (let n = 0; n < 64; n += 1) {
+      const day = new Date(first + n * 86_400_000).toISOString().slice(0, 10);
+      const p = at(day);
+      expect(p?.cycle.cycle_no).toBe(1);
+      expect(p?.phase === 'work' ? p.index : 57 + (p?.index ?? 0)).toBe(n + 1);
+    }
+  });
+
+  it('is undefined before the plan and with no cycles, so a page shows no card instead of a guess', () => {
+    expect(at('2026-10-01')).toBeUndefined();
+    expect(cyclePosition(EMPTY_GOALS, TODAY)).toBeUndefined();
   });
 });
