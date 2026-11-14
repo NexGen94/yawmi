@@ -13,7 +13,7 @@ export function sourceFiles(dir: string = src): string[] {
   return readdirSync(dir).flatMap((name) => {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) return sourceFiles(full);
-    return /\.(ts|tsx)$/.test(name) && !/\.d\.ts$/.test(name) ? [full] : [];
+    return (name.endsWith('.ts') || name.endsWith('.tsx')) && !name.endsWith('.d.ts') ? [full] : [];
   });
 }
 
@@ -26,7 +26,7 @@ export function shortName(file: string): string {
 export function strings(file: string): string[] {
   const text = readFileSync(file, 'utf8');
   const out: string[] = [];
-  for (const m of text.matchAll(/(['"`])((?:\.|(?!\1).)*)\1/g)) out.push(m[2] ?? '');
+  for (const m of text.matchAll(/(['"`])((?:\\.|(?!\1).)*)\1/g)) out.push(m[2] ?? '');
   for (const m of text.matchAll(/>\s*([^<>{}\n]*[؀-ۿ][^<>{}\n]*)\s*</g)) out.push(m[1] ?? '');
   for (const m of text.matchAll(/^\s*([^<>{}\n/*]*[؀-ۿ][^<>{}\n]*)$/gm)) out.push(m[1] ?? '');
   return out.filter((s) => /[؀-ۿ]/.test(s));

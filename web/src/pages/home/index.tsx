@@ -61,7 +61,8 @@ function summaryInsight(
  *  the mirror there is no length rather than a guess. */
 function cycleText(cycle: number, day: number, goals: Parameters<typeof cycleLengthOf>[0] | undefined): string {
   const length = goals === undefined ? undefined : cycleLengthOf(goals, cycle);
-  return `الدورة ${fmt.num(cycle)} · اليوم ${fmt.num(day)}${length === undefined ? '' : ` من ${fmt.num(length)}`}`;
+  const of = length === undefined ? '' : ` من ${fmt.num(length)}`;
+  return `الدورة ${fmt.num(cycle)} · اليوم ${fmt.num(day)}${of}`;
 }
 
 export default function HomePage() {

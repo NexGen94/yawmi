@@ -21,7 +21,7 @@ const BASE = H - 2; // the baseline, with room for its hairline
 /** Bars for the last periods. Only the latest bar carries its number; each bar has a tooltip
  *  (title) with its own value. */
 export function WeekBars({ values: given, label, slots }: WeekBarsProps) {
-  const values = slots !== undefined && given.length < slots ? [...Array<number>(slots - given.length).fill(Number.NaN), ...given] : given;
+  const values = slots !== undefined && given.length < slots ? [...new Array<number>(slots - given.length).fill(Number.NaN), ...given] : given;
   const padding = values.length - given.length;
   const svgRef = useRef<SVGSVGElement>(null);
   const [w, setW] = useState(W);

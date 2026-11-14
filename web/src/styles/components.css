@@ -123,7 +123,7 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
   font-size: var(--fs-section);
 }
 
-@media (max-inline-size: 600px) {
+@media (width <= 600px) {
   .btn-start {
     inline-size: 100%;
   }
@@ -753,6 +753,7 @@ input[type='checkbox']:focus-visible {
 }
 
 .slider-input {
+  position: relative;
   appearance: none;
   inline-size: 100%;
   min-block-size: var(--hit);
@@ -789,10 +790,6 @@ input[type='checkbox']:focus-visible {
 
 :is(.hero-card, .on-ink) .slider-rail {
   border-color: var(--c-blue-light);
-}
-
-.slider-input {
-  position: relative;
 }
 
 .slider-input::-webkit-slider-runnable-track {
@@ -1060,7 +1057,7 @@ input[type='checkbox']:focus-visible {
   background: var(--c-surface);
 }
 
-@media (max-inline-size: 600px) {
+@media (width <= 600px) {
   .layer:not(.layer-drawer) {
     place-items: end stretch;
     padding: 0;

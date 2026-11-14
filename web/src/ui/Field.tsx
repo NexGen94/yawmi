@@ -57,19 +57,16 @@ function entered(type: 'date' | 'time', text: string): string {
   return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d ? typed : '';
 }
 
-/** From this share of the limit the count shows: before it, it would only be noise. */
-const COUNT_FROM = 0.8;
+function defaultInputMode(type: FieldType): 'decimal' | 'numeric' | undefined {
+  if (type === 'number') return 'decimal';
+  return type === 'date' || type === 'time' ? 'numeric' : undefined;
+}
 
-/** A labelled field. The border is --c-blue, because it carries meaning (design 5.1). */
-export function Field(props: FieldProps) {
-  const { label, value, onInput, type = 'text', multiline, hint, error, maxLength, ...rest } = props;
-  const id = useId();
-  // A date or a time is typed as text, so the page speaks Arabic and 24 hours (see `entered`). What
-  // is on screen is the draft; the value is what the page is told.
-  const textual = type === 'date' || type === 'time';
+/** The draft of a date or time field: what is on screen while it is typed, and the value the page is
+ *  told (`entered`). A value the page changes on its own (a chip fills «إلى») shows at once. */
+function useTypedText(value: string, kind: 'date' | 'time' | null, onInput: (value: string) => void) {
   const [draft, setDraft] = useState(value);
   const told = useRef(value);
-  // A value the page changed on its own (a chip fills «إلى») shows at once, in the same render.
   const external = value !== told.current;
   useEffect(() => {
     if (external) {
@@ -77,6 +74,36 @@ export function Field(props: FieldProps) {
       setDraft(value);
     }
   });
+  return {
+    props: (placeholder: string, given: string | undefined) => ({
+      dir: 'ltr',
+      value: external ? value : draft,
+      placeholder: given ?? placeholder,
+      autoComplete: 'off',
+      min: undefined,
+      max: undefined,
+      step: undefined,
+      onInput: (event: Event) => {
+        const text = (event.currentTarget as HTMLInputElement).value;
+        setDraft(text);
+        const out = kind === null ? text : entered(kind, text);
+        told.current = out;
+        onInput(out);
+      },
+    }),
+  };
+}
+
+/** From this share of the limit the count shows: before it, it would only be noise. */
+const COUNT_FROM = 0.8;
+
+/** A labelled field. The border is --c-blue, because it carries meaning (design 5.1). */
+export function Field(props: FieldProps) {
+  const { label, value, onInput, type = 'text', multiline, hint, error, maxLength, ...rest } = props;
+  const id = useId();
+  // A date or a time is typed as text, so the page speaks Arabic and 24 hours (see `entered`).
+  const textual = type === 'date' || type === 'time';
+  const typed = useTypedText(value, textual ? (type as 'date' | 'time') : null, onInput);
   const counted = maxLength !== undefined && value.length >= maxLength * COUNT_FROM ? maxLength : null;
   const described =
     [hint && `${id}-hint`, counted !== null && `${id}-count`, error && `${id}-error`].filter(Boolean).join(' ') || undefined;
@@ -98,26 +125,9 @@ export function Field(props: FieldProps) {
     ...shared,
     type: textual ? 'text' : type,
     class: 'field-input',
-    inputMode: rest.inputMode ?? (type === 'number' ? 'decimal' : textual ? 'numeric' : undefined),
+    inputMode: rest.inputMode ?? defaultInputMode(type),
     onInput: (event: Event) => take(event.currentTarget as HTMLInputElement),
-    ...(textual
-      ? {
-          dir: 'ltr',
-          value: external ? value : draft,
-          placeholder: rest.placeholder ?? (type === 'time' ? 'ساعة:دقيقة' : 'سنة-شهر-يوم'),
-          autoComplete: 'off',
-          min: undefined,
-          max: undefined,
-          step: undefined,
-          onInput: (event: Event) => {
-            const text = (event.currentTarget as HTMLInputElement).value;
-            setDraft(text);
-            const out = entered(type as 'date' | 'time', text);
-            told.current = out;
-            onInput(out);
-          },
-        }
-      : {}),
+    ...(textual ? typed.props(type === 'time' ? 'ساعة:دقيقة' : 'سنة-شهر-يوم', rest.placeholder) : {}),
   } as InputHTMLAttributes<HTMLInputElement>;
   const echo = type === 'date' && value !== '' && entered('date', value) !== '' ? fmt.day(value) : null;
   return (

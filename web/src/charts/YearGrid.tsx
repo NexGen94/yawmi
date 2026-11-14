@@ -53,17 +53,13 @@ export function YearGrid({ year, days, label }: YearGridProps) {
   // it in a line under the grid; the list below the key says every recorded day to a keyboard.
   const [picked, setPicked] = useState<Day | null>(null);
   const pick = (event: MouseEvent): void => {
-    const day = (event.target as Element).closest('[data-day]')?.getAttribute('data-day');
+    const day = ((event.target as Element).closest('[data-day]') as HTMLElement | SVGElement | null)?.dataset.day;
     if (day) setPicked(day);
   };
   const pickedScore = picked === null ? undefined : scores.get(picked);
-  const readout =
-    picked === null
-      ? ''
-      : pickedScore === undefined
-        ? `${fmt.dayShort(picked)}: بلا تسجيل للمزاج`
-        : `${fmt.dayShort(picked)}: ${fmt.num(pickedScore)}`;
-  const recorded = [...days].sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
+  let readout = '';
+  if (picked !== null) readout = `${fmt.dayShort(picked)}: ${pickedScore === undefined ? 'بلا تسجيل للمزاج' : fmt.num(pickedScore)}`;
+  const recorded = [...days].sort((a, b) => b.day.localeCompare(a.day));
 
   const cells = [];
   for (let k = 0; k < length; k += 1) {

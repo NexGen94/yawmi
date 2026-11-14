@@ -49,7 +49,7 @@ export function monthCommitment({ habits, logs, month, today, weekStart }: Commi
     // was logged: the months before that stay as they were, and one with no log at all stays out.
     const lastLogged = habit.active ? null : lastLoggedDay(logs, habit.code);
     if (!habit.active && lastLogged === null) continue;
-    const to = [last, habit.end_day ?? last, lastLogged ?? last].reduce((a, b) => (a < b ? a : b));
+    const to = [last, habit.end_day ?? last, lastLogged ?? last].reduce((a, b) => (a < b ? a : b), last);
     const from = habit.start_day > first ? habit.start_day : first;
     if (from > to) continue;
     for (const day of scheduledDays(prepared.spec, from, to)) {
