@@ -399,7 +399,9 @@ a:where(:not(.btn, .nav-link, .skip-link)):hover {
 
 .segmented {
   display: inline-flex;
-  flex-wrap: nowrap;
+  /* A track of four holds on one line at 390 in the app's font; a wider fallback font (offline, before
+     the font loads) must not push the page sideways, so it may wrap rather than overflow. */
+  flex-wrap: wrap;
   gap: var(--sp-1);
   inline-size: fit-content;
   max-inline-size: 100%;

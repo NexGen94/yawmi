@@ -186,8 +186,10 @@
 }
 
 .focus-plan .btn[aria-pressed='true'] {
-  background: var(--c-ink);
-  color: var(--c-surface);
+  /* The pressed state of a toggle: a quiet button with a heavier ink border. The navy fill is the one
+     prominent button of a view (Task 24). */
+  border-color: var(--c-ink);
+  box-shadow: inset 0 0 0 1px var(--c-ink);
 }
 
 .focus-tools {

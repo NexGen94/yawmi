@@ -38,3 +38,13 @@ describe('red is for failures and what needs attention, never for a state', () =
     ]);
   });
 });
+
+describe('the navy fill belongs to the one prominent button (Task 24, design review #3)', () => {
+  it('a pressed toggle on the plans list of the focus page is a quiet button with a border, not a navy one', () => {
+    const css = readFileSync(new URL('../src/pages/focus/focus.css', import.meta.url), 'utf8');
+    const rule = css.split('}').map((b) => b.split('{')).find(([head]) => (head ?? '').includes(".focus-plan .btn[aria-pressed='true']"))?.[1] ?? '';
+    expect(rule).not.toBe('');
+    expect(rule).not.toContain('background: var(--c-ink)');
+    expect(rule).toContain('box-shadow');
+  });
+});

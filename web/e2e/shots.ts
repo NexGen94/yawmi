@@ -14,7 +14,18 @@ export async function expectNoHorizontalScroll(page: Page): Promise<void> {
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,
   }));
-  expect(scrollWidth, 'the page is wider than the window').toBeLessThanOrEqual(clientWidth);
+  const wide =
+    scrollWidth <= clientWidth
+      ? []
+      : await page.evaluate(
+          (limit) =>
+            [...document.querySelectorAll<HTMLElement>('body *')]
+              .filter((el) => el.getBoundingClientRect().right > limit + 1 && !el.closest('[data-scroller], .goals-switch, .timeline-scroll, .table-scroll'))
+              .slice(0, 6)
+              .map((el) => `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]} right=${Math.round(el.getBoundingClientRect().right)}`),
+          clientWidth,
+        );
+  expect(scrollWidth, `the page is wider than the window: ${wide.join('; ')}`).toBeLessThanOrEqual(clientWidth);
 }
 
 /** No link is in the browser's own blue (or visited purple): every link has the app's colour. The
@@ -74,7 +85,14 @@ export async function expectTargets44(page: Page): Promise<void> {
  *  dialog was cut by the bottom of the window at 1280x800 and 390x844). */
 export async function expectLayerFits(page: Page): Promise<void> {
   // Measured at rest: the panel slides in for 200 ms.
-  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))));
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity) // a skeleton shimmer never ends
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  );
   const report = await page.evaluate(() => {
     const panel = document.querySelector<HTMLElement>('.dialog, .drawer');
     if (!panel) return { found: false, problems: [] as string[] };

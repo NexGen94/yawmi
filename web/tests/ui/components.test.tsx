@@ -405,10 +405,11 @@ describe('Segmented with many options (Task 24)', () => {
     expect(within(group).getAllByRole('radio')).toHaveLength(5);
   });
 
-  it('a track never wraps, and the chips of five or more do', () => {
+  it('a track is held inside its container (it wraps only as a fallback), and the chips of five or more wrap by design', () => {
     const rule = (selector: string): string =>
       css.split('}').map((block) => block.split('{')).find(([head]) => (head ?? '').trim().endsWith(selector))?.[1] ?? '';
-    expect(rule('.segmented')).toContain('flex-wrap: nowrap');
+    expect(rule('.segmented')).toContain('max-inline-size: 100%');
+    expect(rule('.segmented')).toContain('flex-wrap: wrap');
     expect(rule('.segmented-chips')).toContain('flex-wrap: wrap');
     expect(rule('.segmented-chips')).not.toContain('background: var(--c-blue-pale)');
   });

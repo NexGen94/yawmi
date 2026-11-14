@@ -15,7 +15,9 @@ import { toDomainLogs, type HabitLogOut } from '../../data/pending';
 import { habitSpecOf } from '../../habits/spec';
 import type { HabitOut } from '../../habits/types';
 
-/** The days of the grid: one cycle of the plan. */
+/** The days of the grid when the length of the cycle is not known: 56, the plan's default of eight
+ *  weeks. The cycles of the mirror are not all that long (the first is 57 days, the rest 84), so the
+ *  page passes the length the mirror gives, the same one the home and goals pages say. */
 export const GRID_DAYS = 56;
 const WEEK_START = 'sun';
 
@@ -24,10 +26,16 @@ const WEEK_START = 'sun';
  * day in the cycle (the plan does not say, or says something that is not one of its 56 days) it is
  * the last 56 days ending today, and `cycle` is false so the page can title it as that.
  */
-export function gridStart(today: Day, dayInCycle: number | null | undefined): { first: Day; cycle: boolean } {
-  const inCycle = typeof dayInCycle === 'number' && Number.isInteger(dayInCycle) && dayInCycle >= 1 && dayInCycle <= GRID_DAYS;
+export function gridStart(
+  today: Day,
+  dayInCycle: number | null | undefined,
+  length: number = GRID_DAYS,
+): { first: Day; cycle: boolean; days: number } {
+  const inCycle = typeof dayInCycle === 'number' && Number.isInteger(dayInCycle) && dayInCycle >= 1 && dayInCycle <= length;
+  // In the cycle the grid is the whole cycle; outside it, the last 56 days ending today.
+  const days = inCycle ? length : GRID_DAYS;
   const back = inCycle ? dayInCycle - 1 : GRID_DAYS - 1;
-  return { first: fromOrdinal(toOrdinal(today) - back), cycle: inCycle };
+  return { first: fromOrdinal(toOrdinal(today) - back), cycle: inCycle, days };
 }
 
 export interface GridDay {
@@ -38,7 +46,7 @@ export interface GridDay {
 }
 
 /**
- * Each of the `GRID_DAYS` days from `first`, oldest first:
+ * Each of the `length` days (56 by default) from `first`, oldest first:
  * - `future`: after today;
  * - `off`: not scheduled (before the start, after the end, or off the habit's days);
  * - `skipped`: a skip or a vacation;
@@ -48,12 +56,12 @@ export interface GridDay {
  * An abstain habit is the other way round: a scheduled day is kept (`done`) unless a slip is logged,
  * and a slip is `missed`.
  */
-export function dayStates(habit: HabitOut, logs: readonly HabitLogOut[], first: Day, today: Day): GridDay[] {
+export function dayStates(habit: HabitOut, logs: readonly HabitLogOut[], first: Day, today: Day, length: number = GRID_DAYS): GridDay[] {
   const spec = habitSpecOf(habit, today);
   const abstain = habit.polarity === 'abstain';
   const byDay = new Map(logs.filter((l) => l.habit_code === habit.code).map((l) => [l.day, l]));
   const days: GridDay[] = [];
-  for (let ord = toOrdinal(first); ord < toOrdinal(first) + GRID_DAYS; ord += 1) {
+  for (let ord = toOrdinal(first); ord < toOrdinal(first) + length; ord += 1) {
     const day = fromOrdinal(ord);
     const cell: GridDay = { day, state: stateOf(day) };
     if (day === today) {

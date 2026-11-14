@@ -10,7 +10,8 @@ import { combine } from '../../data/combine';
 import { toDomainLogs } from '../../data/pending';
 import { useQuery } from '../../data/query';
 import { fromOrdinal, toOrdinal } from '../../domain/days';
-import { useOnline } from '../../goals/data';
+import { useGoals, useOnline } from '../../goals/data';
+import { cycleLengthOf } from '../../goals/horizons';
 import { amount, lateWord, PERIOD_WORD } from '../../habits/amount';
 import { abstainNote } from '../../habits/HabitRow';
 import { type HabitTodayItem, useHabitsToday } from '../../habits/useHabitsToday';
@@ -131,6 +132,7 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
   const note = useLogNote(habits);
   const stored = useIndicators();
   const online = useOnline();
+  const goals = useGoals();
   const { state, stale } = combine(habits, progress);
 
   const item = habits.items.find((i) => i.habit.code === code);
@@ -142,7 +144,11 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
   const missing = state === 'ready' && (item === undefined || indicators === undefined);
   const habit = item?.habit;
   const badge = item && stateBadge(item);
-  const grid = gridStart(habits.day, habits.today?.plan.day_in_cycle);
+  // The grid is the whole cycle, as long as the mirror says it is (57 days for the first): the same
+  // number the home and goals pages give. Without the mirror it is the 56 days of the default.
+  const plan = habits.today?.plan;
+  const cycleLength = goals.data === undefined || plan?.cycle == null ? undefined : cycleLengthOf(goals.data, plan.cycle);
+  const grid = gridStart(habits.day, plan?.day_in_cycle, cycleLength);
   const gridNote = habit && gridNoteOf(habit);
   // Not on a day the habit is not scheduled, as on the list.
   const live = item !== undefined && item.dueToday && item.state !== 'archived' && item.state !== 'ended' && item.state !== 'upcoming';
@@ -222,7 +228,7 @@ export default function HabitDetailPage({ params }: HabitDetailProps) {
                   </p>
                 </Card>
                 <Card title={grid.cycle ? 'أيام الدورة' : 'آخر 56 يوماً'}>
-                  <Heatmap label={grid.cycle ? 'أيام الدورة' : 'آخر 56 يوماً'} days={dayStates(habit, habits.logs, grid.first, habits.day)} />
+                  <Heatmap label={grid.cycle ? 'أيام الدورة' : 'آخر 56 يوماً'} days={dayStates(habit, habits.logs, grid.first, habits.day, grid.days)} />
                   {habit.period !== 'day' && (
                     <PeriodMarks period={habit.period} marks={periodMarks(habit, habits.logs, grid.first, habits.day)} />
                   )}

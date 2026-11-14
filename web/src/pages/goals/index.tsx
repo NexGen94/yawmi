@@ -74,8 +74,18 @@ export default function GoalsPage() {
     }
     if (centred.current === view) return;
     centred.current = view;
-    const chip = box.querySelector<HTMLElement>('[aria-checked="true"]');
-    if (chip) centerInScroller(box, chip);
+    const centre = (): void => {
+      const chip = box.querySelector<HTMLElement>('[aria-checked="true"]');
+      if (chip) centerInScroller(box, chip);
+    };
+    centre();
+    // The labels change width when the font arrives (offline, or on a slow load): centre again, so
+    // that the chosen chip is not left where it was before the labels grew.
+    let alive = true;
+    void document.fonts?.ready.then(() => alive && centre());
+    return () => {
+      alive = false;
+    };
   }, [view, switchShown]);
 
   const choose = (next: { view?: View; table?: GoalTable }): void => {

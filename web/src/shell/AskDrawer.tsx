@@ -1,7 +1,8 @@
 import type { ComponentType } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { onAskOpen } from '../ask/controller';
+import type { AskPanelProps } from '../pages/ask/AskPanel';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { Skeleton } from '../ui/Skeleton';
@@ -16,7 +17,9 @@ function askPageField(): HTMLElement | null {
  *  the first load. On the /ask page the shortcut only moves the focus to the field that is there. */
 export function AskDrawer() {
   const [open, setOpen] = useState(false);
-  const [Panel, setPanel] = useState<ComponentType | null>(null);
+  const [Panel, setPanel] = useState<ComponentType<AskPanelProps> | null>(null);
+  const submit = useRef<(() => void) | null>(null);
+  const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [nonce, setNonce] = useState(0);
 
@@ -56,9 +59,20 @@ export function AskDrawer() {
   }, [open, Panel]);
 
   return (
-    <Drawer open={open} title="اسأل" onClose={() => setOpen(false)}>
+    <Drawer
+      open={open}
+      title="اسأل"
+      onClose={() => setOpen(false)}
+      actions={
+        Panel !== null ? (
+          <Button variant="primary" disabled={busy} onClick={() => submit.current?.()}>
+            سؤال
+          </Button>
+        ) : undefined
+      }
+    >
       {Panel !== null ? (
-        <Panel />
+        <Panel pinned={{ submitRef: submit, onBusy: setBusy }} />
       ) : failed ? (
         <div class="state-message" role="alert">
           <p class="state-text">تعذّر التحميل</p>
