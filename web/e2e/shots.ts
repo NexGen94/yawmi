@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { settleAnimations } from './a11y';
+
 /** A full-page screenshot to `<folder>/<project>/<name>.png`, the folder being `e2e/screenshots`
  *  (ignored by Git; the workflow uploads it as an artifact) or `YAWMI_SHOTS_DIR` when that is set. */
 export async function shot(page: Page, name: string): Promise<void> {
@@ -85,17 +87,7 @@ export async function expectTargets44(page: Page): Promise<void> {
  *  dialog was cut by the bottom of the window at 1280x800 and 390x844). */
 export async function expectLayerFits(page: Page): Promise<void> {
   // Measured at rest: the panel slides in for 200 ms.
-  await page.evaluate(() =>
-    Promise.race([
-      Promise.all(
-        document
-          .getAnimations()
-          .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity) // a skeleton shimmer never ends
-          .map((a) => a.finished.catch(() => undefined)),
-      ),
-      new Promise((resolve) => setTimeout(resolve, 1500)), // a long animation (a timer, a plant) does not hold the test
-    ]),
-  );
+  await settleAnimations(page);
   const report = await page.evaluate(() => {
     const panel = document.querySelector<HTMLElement>('.dialog, .drawer');
     if (!panel) return { found: false, problems: [] as string[] };
