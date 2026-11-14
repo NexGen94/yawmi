@@ -73,6 +73,8 @@ export async function expectTargets44(page: Page): Promise<void> {
  *  body scrolls, the buttons never sit below the fold (Task 24: the Save button of the indicator
  *  dialog was cut by the bottom of the window at 1280x800 and 390x844). */
 export async function expectLayerFits(page: Page): Promise<void> {
+  // Measured at rest: the panel slides in for 200 ms.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))));
   const report = await page.evaluate(() => {
     const panel = document.querySelector<HTMLElement>('.dialog, .drawer');
     if (!panel) return { found: false, problems: [] as string[] };
