@@ -1,5 +1,5 @@
 import { expectNoSeriousA11y } from './a11y';
-import { expect, riyadhToday, SYNC_TIMEOUT, test } from './fixtures';
+import { clockStartInsideDay, expect, riyadhDay, riyadhToday, SYNC_TIMEOUT, test } from './fixtures';
 import { expectNoHorizontalScroll, shot } from './shots';
 
 interface SessionList {
@@ -20,11 +20,14 @@ test('a session starts, survives a reload, runs past its time and ends; the serv
   projectName,
 }) => {
   const marker = `خطوة ${projectName} ${Date.now()}`;
-  const today = riyadhToday();
+  const start = clockStartInsideDay();
+  const today = riyadhDay(start);
 
   // The page's clock is a fake one that keeps time with the real one: the session is run past its
-  // planned time by moving it, not by waiting. It must be in place before the page loads.
-  await page.clock.install();
+  // planned time by moving it, not by waiting. It must be in place before the page loads. It starts
+  // at the real time, but not in the last two hours of the Riyadh day: the thirty-one minutes it is
+  // moved by must not carry the page over midnight, where «today» is another day than the session's.
+  await page.clock.install({ time: start });
   await page.goto('/focus');
   await expect(page.getByRole('heading', { level: 1, name: 'التركيز' })).toBeVisible();
 

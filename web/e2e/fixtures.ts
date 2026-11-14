@@ -76,9 +76,31 @@ export async function openEveningForm(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'إغلاق اليوم' })).toBeVisible();
 }
 
-/** Today's date in Riyadh, `YYYY-MM-DD`: the plan's day, whatever the machine's zone. */
+/** The date in Riyadh of an instant, `YYYY-MM-DD`: the plan's day, whatever the machine's zone. */
+export function riyadhDay(at: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' }).format(at);
+}
+
+/** Today's date in Riyadh, `YYYY-MM-DD`. */
 export function riyadhToday(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' }).format(new Date());
+  return riyadhDay(new Date());
+}
+
+const HOUR_MS = 3_600_000;
+const RIYADH_OFFSET_MS = 3 * HOUR_MS;
+
+/**
+ * Where a test that moves the page's clock a long way (half an hour or more) starts it: the real
+ * time, but never later than 22:00 in Riyadh. A session belongs to the day it started on (the
+ * server's `day` and the app's overlay of the outbox agree). A clock that crosses Riyadh midnight
+ * during the test moves the page's «today» to the next day while the session stays on the first, so
+ * the score of the day correctly reads nothing. Capping the start keeps the whole test inside one
+ * Riyadh day at any hour it is run (F-069). The instant is still in the past, which the server accepts.
+ * `YAWMI_E2E_NOW` (an ISO instant) stands in for the real time, to run the test as at another hour.
+ */
+export function clockStartInsideDay(now: Date = new Date(process.env.YAWMI_E2E_NOW?.trim() || Date.now())): Date {
+  const dayStartMs = Math.floor((now.getTime() + RIYADH_OFFSET_MS) / (24 * HOUR_MS)) * 24 * HOUR_MS - RIYADH_OFFSET_MS;
+  return new Date(Math.min(now.getTime(), dayStartMs + 22 * HOUR_MS));
 }
 
 interface Fixtures {
