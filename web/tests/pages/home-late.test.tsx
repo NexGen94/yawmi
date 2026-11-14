@@ -97,14 +97,20 @@ async function renderHome(setup: Setup = {}): Promise<ReturnType<typeof withIndi
 
 const late = (): HTMLElement => screen.getByRole('region', { name: 'المتأخر وغير المنجز' });
 
-/** Three milestones of O1 past their day and a fourth later; none done, so the outcome is under its pace. */
+/** Three milestones of O1 past their day and a fourth later; none done, so the outcome is under its pace,
+ *  and it is listed by those milestones. O2 has one milestone due today and open: under its pace
+ *  with no milestone of its own past its day, so the goal itself is listed (Task 25, I-2). */
 const OVERDUE: GoalsOut = plan({
-  outcomes: [outcome('O1', { milestones_total: 4, milestones_done: 0, milestones_due: 3 })],
+  outcomes: [
+    outcome('O1', { milestones_total: 4, milestones_done: 0, milestones_due: 3 }),
+    outcome('O2', { milestones_total: 1, milestones_done: 0, milestones_due: 1 }),
+  ],
   milestones: [
     milestone('m1', 'أولى متأخرة', { outcome_code: 'O1', due_date: '2026-11-02' }),
     milestone('m2', 'ثانية متأخرة', { outcome_code: 'O1', due_date: '2026-11-05' }),
     milestone('m3', 'ثالثة متأخرة', { outcome_code: 'O1', due_date: '2026-11-08' }),
     milestone('m4', 'قادمة', { outcome_code: 'O1', due_date: '2027-01-01' }),
+    milestone('m5', 'اليوم', { outcome_code: 'O2', due_date: '2026-11-10' }),
   ],
 });
 /** No milestone and no outcome: nothing can be late in the plan. */
@@ -124,7 +130,7 @@ describe('home: «المتأخر وغير المنجز»', () => {
     fireEvent.click(within(late()).getByRole('button', { name: 'عرض الكل (6)' }));
     const all = within(late()).getAllByRole('listitem');
     expect(all).toHaveLength(6);
-    expect(all[5]?.textContent).toContain('الصحة الجسدية');
+    expect(all[5]?.textContent).toContain('الصحة النفسية العالية');
     expect(within(late()).queryByRole('button', { name: /عرض الكل/ })).toBeNull();
   });
 
@@ -140,6 +146,17 @@ describe('home: «المتأخر وغير المنجز»', () => {
   it('with nothing late it says so', async () => {
     const calm = habit('calm', 'هادئة', { start_day: '2026-11-09' });
     await renderHome({ habits: [calm], logs: [logRow('calm', '2026-11-09'), logRow('calm', DAY)], goals: NOTHING });
+    expect(within(late()).getByText('لا متأخرات اليوم.')).toBeTruthy();
+    expect(within(late()).queryAllByRole('listitem')).toHaveLength(0);
+  });
+
+  it('I-2: an outcome whose first milestone is in 2027 is on pace, so the day with nothing else late says so', async () => {
+    const calm = habit('calm', 'هادئة', { start_day: '2026-11-09' });
+    const future: GoalsOut = plan({
+      outcomes: [outcome('O6', { milestones_total: 9, milestones_done: 0, milestones_due: 0, target_date: '2031-06-30' })],
+      milestones: Array.from({ length: 9 }, (_, i) => milestone(`f${i}`, `محطة ${i}`, { outcome_code: 'O6', due_date: '2027-06-30' })),
+    });
+    await renderHome({ habits: [calm], logs: [logRow('calm', '2026-11-09'), logRow('calm', DAY)], goals: future });
     expect(within(late()).getByText('لا متأخرات اليوم.')).toBeTruthy();
     expect(within(late()).queryAllByRole('listitem')).toHaveLength(0);
   });
