@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from goals_harness import GoalsBackend
 
 from yawmi.goals.models import PaceOut, PaceReading
-from yawmi.goals.pace import pace_line
+from yawmi.goals.pace import milestone_pace, pace_line
 
 START, DUE = date(2026, 11, 1), date(2026, 12, 31)
 
@@ -46,10 +46,59 @@ def test_a_degenerate_span_expects_the_target_from_the_start() -> None:
     assert expected == 5.0
 
 
-@pytest.mark.parametrize("current", [0, 1.5, 7])
+@pytest.mark.parametrize("current", [0, 1.5, 2.5])
 def test_projection_scales_linearly(current: float) -> None:
     _, projected, _ = pace_line(START, 0, DUE, 12, date(2026, 11, 16), current)
     assert projected == pytest.approx(current * 4)
+
+
+def test_the_projection_is_clamped_to_the_target() -> None:
+    # 7 in 15 days of a 60-day line would extend to 28 against a target of 12 (Task 25, M-5)
+    _, projected, _ = pace_line(START, 0, DUE, 12, date(2026, 11, 16), 7)
+    assert projected == 12.0
+
+
+def test_the_reviewed_case_one_of_two_on_the_third_day_projects_the_target_not_145() -> None:
+    # the final review reproduced 145.15 against a target of 2: 1 in 14 days of a 1887-day line
+    expected, projected, on_pace = pace_line(
+        date(2026, 10, 31), 0, date(2031, 12, 31), 2, date(2026, 11, 13), 1
+    )
+    assert projected == 2.0
+    assert on_pace is True and expected < 0.02
+
+
+def test_a_projection_below_the_target_is_left_alone() -> None:
+    _, projected, _ = pace_line(START, 0, DUE, 12, date(2026, 11, 16), 2)
+    assert projected == 8.0
+
+
+def test_a_descending_line_is_not_clamped() -> None:
+    # a target under the start value has no ceiling to clamp to; the projection is the line's
+    _, projected, _ = pace_line(START, 10, DUE, 4, date(2026, 11, 16), 8)
+    assert projected == pytest.approx(10 + (8 - 10) * 60 / 15)
+
+
+# --- the milestone basis (Task 25, I-2): expected today is the milestones due on or before today -----
+
+
+def test_no_milestone_due_yet_is_on_pace() -> None:
+    assert milestone_pace(due=0, done=0) == (0.0, None, True)
+
+
+def test_one_due_and_done_is_on_pace() -> None:
+    assert milestone_pace(due=1, done=1) == (1.0, None, True)
+
+
+def test_one_due_and_not_done_is_behind() -> None:
+    assert milestone_pace(due=1, done=0) == (1.0, None, False)
+
+
+def test_a_milestone_done_ahead_of_its_day_covers_one_due() -> None:
+    assert milestone_pace(due=1, done=2) == (1.0, None, True)
+
+
+def test_nothing_to_measure_is_not_judged() -> None:
+    assert milestone_pace(due=0, done=None) == (0.0, None, None)
 
 
 # --- the model and the route -------------------------------------------------------------------
@@ -118,7 +167,8 @@ async def test_a_cumulative_kpi_is_the_basis_of_the_pace(
     )
     assert body["current_value"] == 2 and body["days_left"] == 51
     assert body["expected_today"] == pytest.approx(12 * 10 / 61)
-    assert body["projected_end"] == pytest.approx(2 * 61 / 10)
+    # 2 in 10 days of a 61-day line extends to 12.2, past its target of 12: the projection stops at the target
+    assert body["projected_end"] == 12.0
     assert body["on_pace"] is True
     assert body["readings"] == [
         {"day": "2026-11-01", "value": 1},
@@ -148,14 +198,71 @@ async def test_an_outcome_without_a_usable_kpi_is_paced_by_its_milestones(
     await b.kpi("walks_week", "O3", direction="down", target=3)  # descending: not a pace basis
     await b.kpi("books_done", "O3", direction="up", target=None)  # no single target
     for i in range(4):
-        await b.milestone(f"m{i}", "O3", done=i < 3, due=date(2026, 12, 1))
+        await b.milestone(f"m{i}", "O3", done=i < 3, due=date(2026, 11, 1))
     await b.milestone("other", "O1", done=True)
     body = (await pace(client, "O3")).json()
     assert (body["basis"], body["kpi_code"], body["unit"]) == ("milestones", None, None)
     assert (body["current_value"], body["target_value"]) == (3, 4)
     assert body["start_day"] == "2026-10-31" and body["readings"] == []
-    assert body["expected_today"] == pytest.approx(4 * 10 / 61)
+    # all four fell due on the 1st (today is the 10th) and one is open: behind, with no projection
+    assert body["expected_today"] == 4 and body["projected_end"] is None
+    assert body["on_pace"] is False
+
+
+async def test_an_outcome_whose_first_milestone_is_in_2027_is_on_pace_until_it_is_due(
+    client: httpx.AsyncClient, goals_backend: GoalsBackend
+) -> None:
+    """The reviewed scenario: nine milestones, the first due 2027-06-30, none done (today 2026-11-10)."""
+    b = goals_backend
+    await b.outcome("O6", target=date(2031, 6, 30))
+    for i in range(9):
+        await b.milestone(f"m{i}", "O6", due=date(2027, 6, 30 - i % 3))
+    body = (await pace(client, "O6")).json()
+    assert (body["basis"], body["current_value"], body["target_value"]) == ("milestones", 0, 9)
+    assert body["expected_today"] == 0 and body["projected_end"] is None
     assert body["on_pace"] is True
+
+
+async def test_no_milestone_due_yet_is_on_pace_even_without_a_due_day(
+    client: httpx.AsyncClient, goals_backend: GoalsBackend
+) -> None:
+    b = goals_backend
+    await b.outcome("O5", target=date(2031, 12, 31))
+    await b.milestone("undated", "O5")  # no due day: it is never due
+    body = (await pace(client, "O5")).json()
+    assert (body["expected_today"], body["on_pace"]) == (0, True)
+
+
+async def test_one_milestone_due_and_done_is_on_pace(
+    client: httpx.AsyncClient, goals_backend: GoalsBackend
+) -> None:
+    b = goals_backend
+    await b.outcome("O5", target=date(2031, 12, 31))
+    await b.milestone("a", "O5", due=date(2026, 11, 9), done=True)
+    await b.milestone("b", "O5", due=date(2027, 1, 1))
+    body = (await pace(client, "O5")).json()
+    assert (body["current_value"], body["expected_today"], body["on_pace"]) == (1, 1, True)
+
+
+async def test_one_milestone_due_yesterday_and_open_is_behind(
+    client: httpx.AsyncClient, goals_backend: GoalsBackend
+) -> None:
+    b = goals_backend
+    await b.outcome("O5", target=date(2031, 12, 31))
+    await b.milestone("a", "O5", due=date(2026, 11, 9))
+    await b.milestone("b", "O5", due=date(2027, 1, 1))
+    body = (await pace(client, "O5")).json()
+    assert (body["current_value"], body["expected_today"], body["on_pace"]) == (0, 1, False)
+
+
+async def test_a_milestone_due_today_counts_as_due(
+    client: httpx.AsyncClient, goals_backend: GoalsBackend
+) -> None:
+    b = goals_backend
+    await b.outcome("O5", target=date(2031, 12, 31))
+    await b.milestone("a", "O5", due=date(2026, 11, 10))
+    body = (await pace(client, "O5")).json()
+    assert (body["expected_today"], body["on_pace"]) == (1, False)
 
 
 async def test_an_outcome_with_nothing_to_measure_has_no_current_value(
