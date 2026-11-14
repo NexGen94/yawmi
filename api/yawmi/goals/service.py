@@ -14,7 +14,7 @@ from yawmi.domain.periods import WeekStart
 from yawmi.goals.assemble import build_goals, overlay
 from yawmi.goals.edits_store import EditStore
 from yawmi.goals.models import GoalsOut, PaceOut, PaceReading
-from yawmi.goals.pace import pace_line
+from yawmi.goals.pace import milestone_pace, pace_line
 from yawmi.goals.reader import GoalsReader, KpiRow, MilestoneFullRow
 from yawmi.goals.tasks_store import GoalTaskStore
 from yawmi.indicators.store import IndicatorStore
@@ -109,10 +109,13 @@ async def load_pace(
     """The pace of outcome `ref`, or `None` if the mirror has no such outcome.
 
     The basis is a cumulative KPI of the outcome (`kpi_code` if it names one, else the first by
-    code) or, with none, the milestones: done over all, from the plan's start. With nothing to
-    measure (no usable KPI and no milestone) the current value, the projection and `on_pace` are
-    `None`: an empty mirror is never reported as on pace. The milestones are the shown ones, with
-    the goal edits laid over the mirror (`shown_milestones`).
+    code), whose expectation is the linear pace line, or, with none, the milestones: done over
+    all, and the expectation is the count of milestones due on or before today (`milestone_pace`,
+    design §9.4 as ruled in Task 25: the line over all of them marked every such outcome behind
+    from the second day). With nothing to measure (no usable KPI and no milestone) the current
+    value, the projection and `on_pace` are `None`: an empty mirror is never reported as on pace.
+    The milestones are the shown ones, with the goal edits laid over the mirror
+    (`shown_milestones`).
     """
     outcome = next((o for o in await goals.outcomes() if o.code == ref), None)
     if outcome is None:
@@ -134,11 +137,14 @@ async def load_pace(
         ]
         current = readings[-1].value if readings else None
         target, unit = float(chosen.target), chosen.unit
+        expected, projected, on_pace = pace_line(start_day, 0.0, due_day, target, today, current)
     else:
         mine = [m for m in await shown_milestones(goals, edits) if m.outcome_code == ref]
-        current = float(sum(1 for m in mine if m.done)) if mine else None
+        done = sum(1 for m in mine if m.done)
+        current = float(done) if mine else None
         target = float(len(mine))
-    expected, projected, on_pace = pace_line(start_day, 0.0, due_day, target, today, current)
+        due = sum(1 for m in mine if m.due_date is not None and m.due_date <= today)
+        expected, projected, on_pace = milestone_pace(due, done if mine else None)
     return PaceOut(
         basis="kpi" if chosen is not None else "milestones",
         kpi_code=chosen.code if chosen is not None else None,

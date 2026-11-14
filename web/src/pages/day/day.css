@@ -349,6 +349,25 @@
   color: var(--c-ink-2);
 }
 
+.day-rules,
+.day-reminders {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-body);
+  overflow-wrap: anywhere;
+}
+
+.day-context-link {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
+  font-size: var(--fs-note);
+}
+
 @media (width < 900px) {
   .day-form {
     padding: var(--sp-4);

@@ -47,7 +47,8 @@ export function paceSentence(pace: PaceOut, label: string): string {
 
 /** The expected line (dashed, from the start value to the target) and the actual one (solid, from the
  *  readings), between the start day and the due day. With no reading only the expected line is drawn,
- *  and the chart says so; with nothing to measure there is no line at all. */
+ *  and the chart says so; with nothing to measure there is no line at all. Over milestones nothing is
+ *  expected to climb on a line: the dashed line is level, at the count due today (`expected_today`). */
 export function PaceLine({ pace, label }: PaceLineProps) {
   if (!(pace.target_value > 0)) {
     return <svg class="chart pace" role="img" aria-label={`${label}: لا شيء يُقاس بعد`} viewBox={`0 0 ${W} 40`} focusable="false" />;
@@ -70,6 +71,7 @@ export function PaceLine({ pace, label }: PaceLineProps) {
   const dotX = xOf(pace.today);
   const dotY = hasValue ? yOf(pace.current_value as number) : 0;
   const expectedY = yOf(pace.expected_today);
+  const byMilestones = pace.basis === 'milestones';
   // the word «الفعلي» sits on the side of the dot away from the expected line, and never below the
   // baseline, where the start date is
   const below = dotY > expectedY && dotY + 18 < yOf(0);
@@ -82,12 +84,12 @@ export function PaceLine({ pace, label }: PaceLineProps) {
       <line
         class="pace-expected"
         x1={right}
-        y1={yOf(pace.start_value)}
+        y1={byMilestones ? expectedY : yOf(pace.start_value)}
         x2={left}
-        y2={yOf(pace.target_value)}
+        y2={byMilestones ? expectedY : yOf(pace.target_value)}
         stroke-dasharray="7 5"
       />
-      <text class="pace-word" x={left} y={yOf(pace.target_value) - 10} text-anchor="middle" direction="rtl">
+      <text class="pace-word" x={left} y={(byMilestones ? expectedY : yOf(pace.target_value)) - 10} text-anchor="middle" direction="rtl">
         المتوقع
       </text>
       <text class="pace-end" x={left} y={yOf(pace.target_value) + 18} text-anchor="middle" direction="rtl">

@@ -61,7 +61,16 @@ export type LateItem =
       doneDue: number;
       totalDue: number;
     }
-  | { kind: 'goal_pace'; ref: string; title: string; current: number; expected: number; projected: number; target: number };
+  | {
+      kind: 'goal_pace';
+      ref: string;
+      title: string;
+      current: number;
+      expected: number;
+      /** `null` on the milestone basis: a count of dated milestones has no line to extend. */
+      projected: number | null;
+      target: number;
+    };
 
 // ---------- the words ----------
 
@@ -117,6 +126,7 @@ export function impactSentence(item: LateItem): string {
       return `${late} ${item.outcomeCode}: أُنجز ${fmt.num(item.doneDue)} من ${fmt.num(item.totalDue)} محطة حان موعدها.`;
     }
     case 'goal_pace':
+      if (item.projected === null) return `القيمة ${valueNum(item.current)} والمتوقع اليوم ${valueNum(item.expected)} من ${valueNum(item.target)} محطة.`;
       return `القيمة ${valueNum(item.current)} والمتوقع اليوم ${paceNum(item.expected)}. بالوتيرة الحالية يُبلغ ${paceNum(shownEnd(item.projected, item.target))} من ${valueNum(item.target)} عند الموعد.`;
   }
 }
@@ -230,10 +240,18 @@ function habitItems(input: LateInput): LateItem[] {
   return items;
 }
 
-/** An outcome behind the straight line from the start of its basis to its due day (design 9.4). The
- *  basis is the server's (`paceBasis`): a cumulative KPI of the outcome, else its milestones. */
-function paceItem(outcome: GoalOutcome, today: Day): LateItem | null {
+/** An outcome behind its pace (design 9.4). The basis is the server's (`paceBasis`): a cumulative KPI
+ *  of the outcome, behind the straight line from its start to its due day; else its milestones,
+ *  behind when fewer are done than are due. An outcome behind on its milestones has a milestone past
+ *  its day, which is a row of this list already: it is one row, not two, unless the only one due is
+ *  due today (`overdue` holds the outcomes with a row of their own). */
+function paceItem(outcome: GoalOutcome, today: Day, overdue: ReadonlySet<string>): LateItem | null {
   const basis = paceBasis(outcome, today);
+  if (basis.kind === 'milestones') {
+    const { current, expected, target } = basis;
+    if (current === null || expected === null || current >= expected || overdue.has(outcome.code)) return null;
+    return { kind: 'goal_pace', ref: outcome.code, title: outcome.title, current, expected, projected: null, target };
+  }
   const start = toOrdinal(basis.start);
   const due = toOrdinal(basis.due);
   const now = toOrdinal(today);
@@ -257,6 +275,7 @@ function paceItem(outcome: GoalOutcome, today: Day): LateItem | null {
 export function lateItems(input: LateInput): LateItem[] {
   const { goals, today } = input;
   const milestones = goals === undefined ? [] : milestoneItems(goals, today);
-  const paces = goals === undefined ? [] : goals.outcomes.flatMap((o) => paceItem(o, today) ?? []);
+  const overdue = new Set(milestones.flatMap((m) => (m.kind === 'milestone' ? [m.outcomeCode] : [])));
+  const paces = goals === undefined ? [] : goals.outcomes.flatMap((o) => paceItem(o, today, overdue) ?? []);
   return [...milestones, ...habitItems(input), ...paces];
 }

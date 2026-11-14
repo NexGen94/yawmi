@@ -143,6 +143,8 @@ export interface ServerData {
   progress?: Record<string, ProgressOut>;
   /** `GET /v1/settings` (the keys given over the defaults); without it the settings are unread (404). */
   settings?: Record<string, unknown>;
+  /** `GET /v1/goals`; without it the plan is unread (404). */
+  goals?: unknown;
 }
 
 const json = (body: unknown, status = 200): Response =>
@@ -176,6 +178,8 @@ export function routeFetch(
         return json({ entries: data.journal ?? [] });
       case '/v1/reviews':
         return json({ items: data.reviews ?? [] });
+      case '/v1/goals':
+        return data.goals ? json(data.goals) : json({ detail: 'not found' }, 404);
       case '/v1/settings':
         return data.settings
           ? json({ ai_checkin: 'evening', ai_lines: 2, ai_tone: 'direct', digits: 'latn', mission: '', vision: '', ...data.settings })

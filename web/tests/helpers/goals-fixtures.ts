@@ -93,23 +93,24 @@ export function card(page_id: string, title: string, over: Partial<CardFull> = {
 const DAY_MS = 86_400_000;
 const isoOf = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
-/** 21 cycles from the plan start: the first is 57 days (the story's), the others eight weeks. */
+/** 21 cycles as the mirror writes them: the first is 57 days (the story's), the others 84 days; each is
+ *  followed by a review week of 7 days, and the next cycle starts the day after it. */
 export function cycles(): CycleOut[] {
-  const first = Date.UTC(2026, 9, 31);
   const out: CycleOut[] = [];
+  let start = Date.UTC(2026, 9, 31);
   for (let n = 1; n <= 21; n += 1) {
-    const start = n === 1 ? first : first + (57 + (n - 2) * 56) * DAY_MS;
-    const end = n === 1 ? first + 56 * DAY_MS : start + 55 * DAY_MS;
+    const end = start + (n === 1 ? 56 : 83) * DAY_MS;
     out.push({
       cycle_no: n,
       stage_no: Math.ceil(n / 5),
       start_date: isoOf(start),
       end_date: isoOf(end),
-      review_start: isoOf(end - 6 * DAY_MS),
-      review_end: isoOf(end),
+      review_start: isoOf(end + DAY_MS),
+      review_end: isoOf(end + 7 * DAY_MS),
       theme: n === 1 ? 'التأسيس' : `موضوع الدورة ${n}`,
       gate: '',
     });
+    start = end + 8 * DAY_MS;
   }
   return out;
 }

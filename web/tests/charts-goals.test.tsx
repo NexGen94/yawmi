@@ -231,6 +231,25 @@ describe('PaceLine', () => {
     expect(label).toContain('المتوقع اليوم 3');
   });
 
+  it('over milestones the expected value is marked as given: level at today, not a line to the target (Task 25, I-2)', () => {
+    const { container } = drawPace({
+      basis: 'milestones',
+      kpi_code: null,
+      unit: null,
+      readings: [],
+      current_value: 0,
+      target_value: 9,
+      expected_today: 0,
+      projected_end: null,
+      on_pace: true,
+    });
+    const expected = container.querySelector('.pace-expected') as Element;
+    expect(expected).toBeTruthy();
+    expect(expected.getAttribute('y1')).toBe(expected.getAttribute('y2'));
+    const words = Array.from(container.querySelectorAll('text')).map((t) => t.textContent);
+    expect(words).toContain('المتوقع');
+  });
+
   it('draws a lone value (a pace over milestones has no readings) as a dot at today', () => {
     const { container } = drawPace({ basis: 'milestones', kpi_code: null, unit: null, readings: [] });
     expect(container.querySelector('.pace-actual')).toBeNull();

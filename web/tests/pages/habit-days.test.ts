@@ -42,6 +42,14 @@ describe('the grid follows the length of the cycle (Task 24, design review #8)',
     expect(grid.days).toBe(84);
   });
 
+  it('in the review week after a cycle (day 58 to 64 of a 57-day cycle) the grid is the cycle that just ended, whole (Task 25, I-1)', () => {
+    expect(gridStart('2026-12-27', 58, 57)).toEqual({ first: '2026-10-31', cycle: true, days: 57 });
+    expect(gridStart('2026-12-28', 59, 57)).toEqual({ first: '2026-10-31', cycle: true, days: 57 });
+    expect(gridStart('2027-01-02', 64, 57)).toEqual({ first: '2026-10-31', cycle: true, days: 57 });
+    // past the review week the plan says something that is not a day of the cycle: the last 56 days
+    expect(gridStart('2027-01-03', 65, 57).cycle).toBe(false);
+  });
+
   it('without a length (no mirror yet) it is the 56 days it always was', () => {
     expect(gridStart(TODAY, 11)).toEqual({ first: '2026-10-31', cycle: true, days: 56 });
     expect(gridStart(TODAY, null)).toEqual({ first: '2026-09-16', cycle: false, days: 56 });

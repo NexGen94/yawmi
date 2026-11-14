@@ -171,12 +171,17 @@ describe('impactSentence: the eight sentences of design 9.2', () => {
 describe('lateItems', () => {
   it('orders the milestones, then the habits, then the goals, oldest milestone first', () => {
     const goals = plan({
-      outcomes: [outcome('O1', { milestones_total: 4, milestones_done: 0, milestones_due: 2 })],
+      outcomes: [
+        outcome('O1', { milestones_total: 4, milestones_done: 0, milestones_due: 2 }),
+        // due today and open: behind its pace, with no milestone of its own past its day (Task 25, I-2)
+        outcome('O2', { milestones_total: 1, milestones_done: 0, milestones_due: 1 }),
+      ],
       milestones: [
         milestone('new', 'أحدث', { outcome_code: 'O1', due_date: '2026-11-09' }),
         milestone('old', 'أقدم', { outcome_code: 'O1', due_date: '2026-11-05' }),
         milestone('future', 'قادمة', { outcome_code: 'O1', due_date: '2026-11-20' }),
         milestone('closed', 'منجزة', { outcome_code: 'O1', due_date: '2026-11-01', done: true }),
+        milestone('today', 'اليوم', { outcome_code: 'O2', due_date: '2026-11-10' }),
       ],
     });
     const daily = habit('daily', 'تمرين', { start_day: '2026-10-10' });
@@ -270,7 +275,7 @@ describe('goal_pace follows the basis rule of the server (Task 13)', () => {
     ...over,
   });
   const behind = (code: string, kpis: ReturnType<typeof kpi>[]) =>
-    outcome(code, { milestones_total: 2, milestones_done: 0, kpis, target_date: '2031-12-31' });
+    outcome(code, { milestones_total: 2, milestones_done: 0, milestones_due: 1, kpis, target_date: '2031-12-31' });
   const goalsOf = (...outcomes: ReturnType<typeof behind>[]) => plan({ outcomes, milestones: [] });
 
   it('an outcome whose KPIs are not cumulative is paced on its milestones, as the server does', () => {
@@ -329,5 +334,72 @@ describe('goal_pace follows the basis rule of the server (Task 13)', () => {
     expect(lateOf(TUESDAY, [], [], goalsOf(o))).toEqual([]);
     const old = behind('O5', [kpi('measured_projects', 5, { latest: { day: '2026-10-01', value: 0 } })]);
     expect(lateOf(TUESDAY, [], [], goalsOf(old))).toEqual([]);
+  });
+});
+
+describe('goal_pace on the milestone basis: expected today is the milestones due (Task 25, I-2)', () => {
+  const FIRST_IN_2027 = Array.from({ length: 9 }, (_, i) =>
+    milestone(`o6-${i}`, `محطة ${i}`, { outcome_code: 'O6', due_date: `2027-06-${String(30 - (i % 3)).padStart(2, '0')}` }),
+  );
+
+  it('the reviewed scenario: nine milestones, the first due in 2027, none done, is on pace, so nothing is late', () => {
+    const goals = plan({
+      outcomes: [outcome('O6', { milestones_total: 9, milestones_done: 0, milestones_due: 0, target_date: '2031-06-30' })],
+      milestones: FIRST_IN_2027,
+    });
+    expect(lateOf('2026-11-01', [], [], goals)).toEqual([]);
+    expect(lateOf(TUESDAY, [], [], goals)).toEqual([]);
+  });
+
+  it('no milestone due yet is on pace even with nothing done', () => {
+    const goals = plan({ outcomes: [outcome('O5', { milestones_total: 2, milestones_done: 0, milestones_due: 0 })], milestones: [] });
+    expect(lateOf(TUESDAY, [], [], goals)).toEqual([]);
+  });
+
+  it('one due and done is on pace', () => {
+    const goals = plan({
+      outcomes: [outcome('O5', { milestones_total: 2, milestones_done: 1, milestones_due: 1 })],
+      milestones: [
+        milestone('a', 'منجزة', { outcome_code: 'O5', due_date: '2026-11-09', done: true }),
+        milestone('b', 'قادمة', { outcome_code: 'O5', due_date: '2027-01-01' }),
+      ],
+    });
+    expect(lateOf(TUESDAY, [], [], goals)).toEqual([]);
+  });
+
+  it('one due yesterday and open is behind, and it is one row: the milestone, not the goal as well', () => {
+    const goals = plan({
+      outcomes: [outcome('O5', { milestones_total: 2, milestones_done: 0, milestones_due: 1 })],
+      milestones: [
+        milestone('a', 'فائتة', { outcome_code: 'O5', due_date: '2026-11-09' }),
+        milestone('b', 'قادمة', { outcome_code: 'O5', due_date: '2027-01-01' }),
+      ],
+    });
+    expect(lateOf(TUESDAY, [], [], goals).map((i) => i.kind)).toEqual(['milestone']);
+  });
+
+  it('one due today and open is behind the pace of the server, and the goal says so without a projection', () => {
+    const goals = plan({
+      outcomes: [outcome('O5', { milestones_total: 2, milestones_done: 0, milestones_due: 1 })],
+      milestones: [
+        milestone('a', 'اليوم', { outcome_code: 'O5', due_date: TUESDAY }),
+        milestone('b', 'قادمة', { outcome_code: 'O5', due_date: '2027-01-01' }),
+      ],
+    });
+    const items = lateOf(TUESDAY, [], [], goals);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: 'goal_pace', ref: 'O5', current: 0, expected: 1, projected: null, target: 2 });
+    expect(impactSentence(items[0] as LateItem)).toBe('القيمة 0 والمتوقع اليوم 1 من 2 محطة.');
+  });
+
+  it('a milestone done ahead of its day covers one that is due: on pace', () => {
+    const goals = plan({
+      outcomes: [outcome('O5', { milestones_total: 2, milestones_done: 1, milestones_due: 1 })],
+      milestones: [
+        milestone('a', 'اليوم', { outcome_code: 'O5', due_date: TUESDAY }),
+        milestone('b', 'منجزة مبكراً', { outcome_code: 'O5', due_date: '2027-01-01', done: true }),
+      ],
+    });
+    expect(lateOf(TUESDAY, [], [], goals)).toEqual([]);
   });
 });

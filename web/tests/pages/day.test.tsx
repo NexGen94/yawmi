@@ -30,15 +30,18 @@ import {
   evening,
   go,
   json,
+  memoryItem,
   offline,
   openDay,
   pendingOf,
   RoutedDay,
   stubApi,
+  settingsBody,
   stubEvening,
   todayOut,
   type,
 } from './day-helpers';
+import { goals } from '../helpers/goals-fixtures';
 import { morningInsight } from '../helpers/today-fixtures';
 
 beforeEach(() => {
@@ -235,6 +238,81 @@ describe('the context column', () => {
     expect(within(column).getByText('(السبب العميق)')).toBeTruthy();
     expect(within(column).getByText('(القواعد الدائمة)')).toBeTruthy();
     expect(within(column).getByText('O4')).toBeTruthy();
+  });
+});
+
+describe('the context column: the lenses and the reminder times (Task 25, I-3)', () => {
+  const column = () => screen.getByRole('complementary', { name: 'السياق' });
+  const open = async (data: Parameters<typeof stubApi>[0]) => {
+    stubApi(data);
+    await openDay('/day/morning');
+    await screen.findByRole('button', { name: 'حفظ الصباح' });
+  };
+
+  it('with lenses set it lists the text of the active ones, and not the inactive ones or the notes', async () => {
+    await open({
+      settings: settingsBody(),
+      memory: [
+        memoryItem('rule', 'القراءة قبل الشاشة', true, '00000000-0000-7000-8000-000000000001'),
+        memoryItem('rule', 'عدسة موقوفة', false, '00000000-0000-7000-8000-000000000002'),
+        memoryItem('note', 'ملاحظة محفوظة', true, '00000000-0000-7000-8000-000000000003'),
+      ],
+    });
+    await waitFor(() => expect(within(column()).getByText('القراءة قبل الشاشة')).toBeTruthy());
+    expect(within(column()).queryByText('عدسة موقوفة')).toBeNull();
+    expect(within(column()).queryByText('ملاحظة محفوظة')).toBeNull();
+    expect(within(column()).queryByText('(القواعد الدائمة)')).toBeNull();
+  });
+
+  it('with no lens it keeps the empty placeholder, and points to the settings', async () => {
+    await open({ settings: settingsBody(), memory: [memoryItem('note', 'ملاحظة فقط')] });
+    await waitFor(() => expect(within(column()).getByText('(القواعد الدائمة)')).toBeTruthy());
+    const links = within(column()).getAllByRole('link', { name: 'الإعدادات' });
+    expect(links.every((a) => a.getAttribute('href') === '/settings')).toBe(true);
+  });
+
+  it('with reminders set it lists their times and days, and the late notice when it is on', async () => {
+    await open({
+      settings: settingsBody({
+        late_notice_enabled: true,
+        late_notice_time: '20:00',
+        day_reminders: {
+          morning: { time: '07:00', days_mask: 127 },
+          evening: { time: '21:30', days_mask: 0b0011111 },
+          weekly: { time: '10:00', days_mask: 0b1000000 },
+        },
+      }),
+      memory: [],
+    });
+    await waitFor(() => expect(within(column()).getByText('الصباح 07:00 · كل يوم')).toBeTruthy());
+    expect(within(column()).getByText('المساء 21:30 · الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس')).toBeTruthy();
+    expect(within(column()).getByText('المراجعة 10:00 · السبت')).toBeTruthy();
+    expect(within(column()).getByText('إشعار المتأخرات 20:00')).toBeTruthy();
+    expect(within(column()).queryByText('(لم تُضبط بعد)')).toBeNull();
+  });
+
+  it('with no reminder set (and the late notice off) it keeps the empty placeholder', async () => {
+    await open({ settings: settingsBody({ day_reminders: {} }), memory: [] });
+    await waitFor(() => expect(within(column()).getByText('(لم تُضبط بعد)')).toBeTruthy());
+    expect(within(column()).queryByText(/07:00/)).toBeNull();
+  });
+
+  it('with the settings unread it does not claim that nothing is set', async () => {
+    await open({});
+    await waitFor(() => expect(within(column()).getByText('(تعذّرت قراءة الإعدادات)')).toBeTruthy());
+    expect(within(column()).queryByText('(لم تُضبط بعد)')).toBeNull();
+  });
+
+  it('says the review week of the cycle in the words of the other pages (Task 25, I-1)', async () => {
+    vi.setSystemTime(new Date('2026-12-28T09:00:00Z'));
+    await open({
+      today: todayOut({ day: '2026-12-28', plan: { cycle: 1, day_in_cycle: 59, focus_outcomes: [] } }),
+      settings: settingsBody(),
+      memory: [],
+      goals: goals(),
+    });
+    await waitFor(() => expect(within(column()).getByText('الدورة 1 · أسبوع المراجعة · اليوم 2 من 7')).toBeTruthy());
+    expect(within(column()).queryByText(/59/)).toBeNull();
   });
 });
 

@@ -19,21 +19,28 @@ import type { HabitOut } from '../../habits/types';
  *  weeks. The cycles of the mirror are not all that long (the first is 57 days, the rest 84), so the
  *  page passes the length the mirror gives, the same one the home and goals pages say. */
 export const GRID_DAYS = 56;
+/** The review week after each cycle, which the server counts in the cycle. */
+const REVIEW_WEEK_DAYS = 7;
 const WEEK_START = 'sun';
 
 /**
  * The first day of the grid. In the plan's cycle it is day 1: `today - (dayInCycle - 1)`. Without a
- * day in the cycle (the plan does not say, or says something that is not one of its 56 days) it is
+ * day in the cycle (the plan does not say, or says something that is not one of its days) it is
  * the last 56 days ending today, and `cycle` is false so the page can title it as that.
+ *
+ * In the review week after a cycle the server's day number runs on past the cycle's length (58 to 64
+ * for the first cycle), so with the length given the grid stays the cycle that just ended, whole.
  */
 export function gridStart(
   today: Day,
   dayInCycle: number | null | undefined,
-  length: number = GRID_DAYS,
+  length?: number,
 ): { first: Day; cycle: boolean; days: number } {
-  const inCycle = typeof dayInCycle === 'number' && Number.isInteger(dayInCycle) && dayInCycle >= 1 && dayInCycle <= length;
-  // In the cycle the grid is the whole cycle; outside it, the last 56 days ending today.
-  const days = inCycle ? length : GRID_DAYS;
+  const cycleDays = length ?? GRID_DAYS;
+  const reach = length === undefined ? cycleDays : cycleDays + REVIEW_WEEK_DAYS;
+  const inCycle = typeof dayInCycle === 'number' && Number.isInteger(dayInCycle) && dayInCycle >= 1 && dayInCycle <= reach;
+  // In the cycle (or its review week) the grid is the whole cycle; outside it, the last 56 days ending today.
+  const days = inCycle ? cycleDays : GRID_DAYS;
   const back = inCycle ? dayInCycle - 1 : GRID_DAYS - 1;
   return { first: fromOrdinal(toOrdinal(today) - back), cycle: inCycle, days };
 }
